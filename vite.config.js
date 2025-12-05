@@ -12,48 +12,48 @@ export default defineConfig({
     {
       name: 'copy-files',
       closeBundle() {
-        // Copy create_shortcut.bat to dist folder
+        // Copy install_app.bat to dist folder
         try {
           copyFileSync(
-            resolve(__dirname, 'scripts/create_shorcut.bat'),
-            resolve(__dirname, 'dist/create_shortcut.bat')
+            resolve(__dirname, 'scripts/install_app.bat'),
+            resolve(__dirname, 'dist/install_app.bat')
           )
-          console.log('✓ Copied create_shortcut.bat to dist/')
+          console.log('✓ Copied install_app.bat to dist/')
         } catch (err) {
-          console.warn('⚠ Could not copy create_shortcut.bat:', err.message)
-        }
-        
-        // Copy create_shortcut.sh to dist folder
-        try {
-          copyFileSync(
-            resolve(__dirname, 'scripts/create_shortcut.sh'),
-            resolve(__dirname, 'dist/create_shortcut.sh')
-          )
-          console.log('✓ Copied create_shortcut.sh to dist/')
-        } catch (err) {
-          console.warn('⚠ Could not copy create_shortcut.sh:', err.message)
+          console.warn('⚠ Could not copy install_app.bat:', err.message)
         }
 
-        // Copy set_default_app.bat to dist folder
+        // Copy install_app.sh to dist folder
         try {
           copyFileSync(
-            resolve(__dirname, 'scripts/set_default_app.bat'),
-            resolve(__dirname, 'dist/set_default_app.bat')
+            resolve(__dirname, 'scripts/install_app.sh'),
+            resolve(__dirname, 'dist/install_app.sh')
           )
-          console.log('✓ Copied set_default_app.bat to dist/')
+          console.log('✓ Copied install_app.sh to dist/')
         } catch (err) {
-          console.warn('⚠ Could not copy set_default_app.bat:', err.message)
+          console.warn('⚠ Could not copy install_app.sh:', err.message)
         }
 
-        // Copy set_default_app.sh to dist folder
+        // Copy uninstall_app.bat to dist folder
         try {
           copyFileSync(
-            resolve(__dirname, 'scripts/set_default_app.sh'),
-            resolve(__dirname, 'dist/set_default_app.sh')
+            resolve(__dirname, 'scripts/uninstall_app.bat'),
+            resolve(__dirname, 'dist/uninstall_app.bat')
           )
-          console.log('✓ Copied set_default_app.sh to dist/')
+          console.log('✓ Copied uninstall_app.bat to dist/')
         } catch (err) {
-          console.warn('⚠ Could not copy set_default_app.sh:', err.message)
+          console.warn('⚠ Could not copy uninstall_app.bat:', err.message)
+        }
+
+        // Copy uninstall_app.sh to dist folder
+        try {
+          copyFileSync(
+            resolve(__dirname, 'scripts/uninstall_app.sh'),
+            resolve(__dirname, 'dist/uninstall_app.sh')
+          )
+          console.log('✓ Copied uninstall_app.sh to dist/')
+        } catch (err) {
+          console.warn('⚠ Could not copy uninstall_app.sh:', err.message)
         }
       }
     }

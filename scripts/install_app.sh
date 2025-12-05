@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# ============================================================================
+# Simple PDF Reader - Installation Script
+# ============================================================================
+
 APP_NAME="simple-pdf-reader"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -16,6 +20,7 @@ else
 fi
 
 DESKTOP_FILE="$HOME/.local/share/applications/${APP_NAME}.desktop"
+USER_DATA_DIR="$HOME/.config/simple-pdf-reader-profile"
 
 # Detect Browser
 if command -v google-chrome &> /dev/null; then
@@ -34,7 +39,12 @@ fi
 
 echo "Using browser: $BROWSER"
 
-# Create .desktop file
+# ============================================================================
+# 1. Create Desktop Entry (Shortcut & File Handler)
+# ============================================================================
+
+echo "Creating application shortcut..."
+
 mkdir -p "$HOME/.local/share/applications"
 
 cat > "$DESKTOP_FILE" << EOL
@@ -42,7 +52,7 @@ cat > "$DESKTOP_FILE" << EOL
 Type=Application
 Name=Simple PDF Reader
 Comment=View and annotate PDFs
-Exec=$BROWSER --user-data-dir="$HOME/.config/simple-pdf-reader-profile" --allow-file-access-from-files --app="file://${HTML_PATH}?file=%f"
+Exec=$BROWSER --user-data-dir="$USER_DATA_DIR" --allow-file-access-from-files --app="file://${HTML_PATH}?file=%f"
 Icon=${ICON_PATH}
 Terminal=false
 Categories=Office;Viewer;
@@ -55,8 +65,24 @@ chmod +x "$DESKTOP_FILE"
 # Update desktop database
 update-desktop-database "$HOME/.local/share/applications" 2>/dev/null
 
+echo "Shortcut created at $DESKTOP_FILE"
+
+# ============================================================================
+# 2. Set as Default App
+# ============================================================================
+
+echo "Setting as default PDF viewer..."
+
 # Set as default
 xdg-mime default ${APP_NAME}.desktop application/pdf
 
-echo "Simple PDF Reader has been registered as the default PDF viewer."
-echo "If it doesn't open automatically, right-click a PDF and select 'Open With' -> 'Simple PDF Reader'."
+echo.
+echo "============================================================================"
+echo "Installation Complete!"
+echo "============================================================================"
+echo.
+echo "Simple PDF Reader has been installed and registered."
+echo "You can find it in your applications menu."
+echo.
+echo "If it doesn't open automatically for PDFs:"
+echo "Right-click a PDF -> Open With -> Simple PDF Reader"
