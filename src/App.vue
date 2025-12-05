@@ -2,7 +2,7 @@
 import PdfReader from './components/PdfReader.vue';
 </script>
 <template>
-    <div id="app" class="bg-dark">
+    <div id="app">
         <PdfReader />
     </div>
 </template>

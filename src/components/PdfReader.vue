@@ -10,10 +10,13 @@ const pageCount = ref(0);
 const scale = 2;
 const lockView = ref(false);
 const width = ref(100);
+const zoomMode = ref('fit-width'); // 'fit-width' or 'fit-height'
 const isFileLoaded = ref(false);
 const pagesContainer = ref(null);
 const pdfReader = ref(null);
 let intersectionObserver = null;
+let lazyLoadObserver = null;
+const renderedPages = ref(new Set());
 
 const colors = [
     ['black', 'dimgray', 'gray', 'darkgray', 'silver', 'white'],
@@ -50,6 +53,37 @@ var pdfDoc = null;
 
 GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.449/build/pdf.worker.min.mjs';
 
+const scrollToPageCanvas = async (pageNumber) => {
+    if (!pdfDoc || renderedPages.value.has(pageNumber)) return;
+    
+    const page = await pdfDoc.getPage(pageNumber);
+    const viewport = page.getViewport({ scale });
+    
+    // Get canvas elements
+    const canvas = pdfCanvases.value[pageNumber - 1];
+    const drawCanvas = drawingCanvases.value[pageNumber - 1];
+    
+    if (!canvas || !drawCanvas) return;
+    
+    const ctx = canvas.getContext("2d");
+    
+    canvas.height = viewport.height;
+    canvas.width = viewport.width;
+    drawCanvas.height = viewport.height;
+    drawCanvas.width = viewport.width;
+    
+    // Initialize drawing context
+    drawingContexts[pageNumber - 1] = drawCanvas.getContext('2d');
+    
+    const renderContext = {
+        canvasContext: ctx,
+        viewport,
+    };
+    
+    await page.render(renderContext).promise;
+    renderedPages.value.add(pageNumber);
+};
+
 const renderAllPages = async () => {
     if (!pdfDoc) return;
     
@@ -63,44 +97,11 @@ const renderAllPages = async () => {
         }
     }
     
-    // Render all pages
-    for (let pageNumber = 1; pageNumber <= numPages; pageNumber++) {
-        const page = await pdfDoc.getPage(pageNumber);
-        const viewport = page.getViewport({ scale });
-        
-        // Get canvas elements
-        const canvas = pdfCanvases.value[pageNumber - 1];
-        const drawCanvas = drawingCanvases.value[pageNumber - 1];
-        
-        if (!canvas || !drawCanvas) continue;
-        
-        const ctx = canvas.getContext("2d");
-        
-        canvas.height = viewport.height;
-        canvas.width = viewport.width;
-        drawCanvas.height = viewport.height;
-        drawCanvas.width = viewport.width;
-        
-        // Initialize drawing context
-        drawingContexts[pageNumber - 1] = drawCanvas.getContext('2d');
-        
-        const renderContext = {
-            canvasContext: ctx,
-            viewport,
-        };
-        
-        await page.render(renderContext).promise;
-    }
+    // Don't render any pages here - let lazy loading handle it
 };
 
-const renderPage = (num) => {
-    // This function is kept for compatibility but not used
-    pageNum.value = num;
-    localStorage.setItem(filename.value, num);
-};
-
-const queueRenderPage = (page) => {
-    // Scroll to specific page
+// Scroll to specific page
+const scrollToPage = (page) => {
     if (page >= 1 && page <= pageCount.value) {
         const pageIndex = page - 1;
         const canvas = pdfCanvases.value[pageIndex];
@@ -110,6 +111,25 @@ const queueRenderPage = (page) => {
             localStorage.setItem(filename.value, page);
         }
     }
+};
+
+const toggleZoomMode = () => {
+    const currentPage = pageNum.value;
+    const canvas = pdfCanvases.value[currentPage - 1];
+
+    if (zoomMode.value === 'fit-width') {
+        zoomMode.value = 'fit-height';
+        const margin = scale * 56; // Account for navbar and padding
+        width.value = ((pdfReader.value.clientHeight - margin) * 100) / canvas.height;
+    } else {
+        zoomMode.value = 'fit-width';
+        width.value = 100; // Full width
+    }
+    
+    // Restore scroll position to current page after DOM updates
+    nextTick(() => {
+        scrollToPage(currentPage);
+    });
 };
 
 // Drawing functions
@@ -437,15 +457,48 @@ const loadPdfDocument = () => {
             // Wait for next tick to ensure refs are populated
             nextTick(() => {
                 renderAllPages().then(() => {
-                    // Setup intersection observer after pages are rendered
+                    // Setup observers after pages structure is ready
                     setupIntersectionObserver();
+                    setupLazyLoadObserver();
                     // Scroll to saved page
                     const savedPage = localStorage.getItem(filename.value);
                     if (savedPage) {
-                        queueRenderPage(Number(savedPage));
+                        scrollToPage(Number(savedPage));
                     }
                 });
             });
+        });
+    }
+};
+
+const setupLazyLoadObserver = () => {
+    // Clean up existing observer
+    if (lazyLoadObserver) {
+        lazyLoadObserver.disconnect();
+    }
+    
+    const options = {
+        root: pdfReader.value,
+        rootMargin: '200px', // Start loading 200px before entering viewport
+        threshold: 0.01
+    };
+    
+    lazyLoadObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                const pageNumber = parseInt(entry.target.getAttribute('data-page'));
+                if (pageNumber) {
+                    scrollToPageCanvas(pageNumber);
+                }
+            }
+        });
+    }, options);
+    
+    // Observe all page containers
+    if (pagesContainer.value) {
+        const pageContainers = pagesContainer.value.querySelectorAll('.page-container');
+        pageContainers.forEach(container => {
+            lazyLoadObserver.observe(container);
         });
     }
 };
@@ -493,17 +546,20 @@ const setupIntersectionObserver = () => {
 };
 
 onMounted(() => {
-    queueRenderPage(pageNum.value);
+    scrollToPage(pageNum.value);
 });
 
 onUnmounted(() => {
     if (intersectionObserver) {
         intersectionObserver.disconnect();
     }
+    if (lazyLoadObserver) {
+        lazyLoadObserver.disconnect();
+    }
 });
 </script>
 <template>
-    <div class="container-fluid" @contextmenu.prevent>
+    <div class="container-fluid bg-dark" @contextmenu.prevent>
         <nav class="navbar navbar-expand navbar-dark bg-dark fixed-top">
             <div class="container">
                 <!-- Filename -->
@@ -573,25 +629,25 @@ onUnmounted(() => {
                     <li class="nav-item vr bg-white mx-2"></li>
                     <!-- Pagination -->
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="isFileLoaded && queueRenderPage(1)" :class="{ disabled: !isFileLoaded || pageNum <= 1 }">
+                        <a href="#" class="nav-link" @click.prevent="isFileLoaded && scrollToPage(1)" :class="{ disabled: !isFileLoaded || pageNum <= 1 }">
                             <i class="bi bi-chevron-double-left"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="isFileLoaded && queueRenderPage(pageNum - 1)" :class="{ disabled: !isFileLoaded || pageNum <= 1 }">
+                        <a href="#" class="nav-link" @click.prevent="isFileLoaded && scrollToPage(pageNum - 1)" :class="{ disabled: !isFileLoaded || pageNum <= 1 }">
                             <i class="bi bi-chevron-left"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <input type="text" class="form-control-plaintext" :value="pageNum" @input="event => isFileLoaded && queueRenderPage(Number(event.target.value))" :disabled="!isFileLoaded" />
+                        <input type="text" class="form-control-plaintext" :value="pageNum" @input="event => isFileLoaded && scrollToPage(Number(event.target.value))" :disabled="!isFileLoaded" />
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="isFileLoaded && queueRenderPage(pageNum + 1)" :class="{ disabled: !isFileLoaded || pageNum >= pageCount }">
+                        <a href="#" class="nav-link" @click.prevent="isFileLoaded && scrollToPage(pageNum + 1)" :class="{ disabled: !isFileLoaded || pageNum >= pageCount }">
                             <i class="bi bi-chevron-right"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="isFileLoaded && queueRenderPage(pageCount)" :class="{ disabled: !isFileLoaded || pageNum >= pageCount }">
+                        <a href="#" class="nav-link" @click.prevent="isFileLoaded && scrollToPage(pageCount)" :class="{ disabled: !isFileLoaded || pageNum >= pageCount }">
                             <i class="bi bi-chevron-double-right"></i>
                         </a>
                     </li>
@@ -611,8 +667,8 @@ onUnmounted(() => {
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="isFileLoaded && (width = width === 100 ? 40 : 100)" :class="{ disabled: !isFileLoaded || lockView }">
-                            <i :class="`bi bi-arrows-expand${width == 100 ? '' : '-vertical'}`"></i>
+                        <a href="#" class="nav-link" @click.prevent="isFileLoaded && toggleZoomMode()" :class="{ disabled: !isFileLoaded || lockView }" :title="zoomMode === 'fit-width' ? 'Fit Height' : 'Fit Width'">
+                            <i :class="`bi ${zoomMode === 'fit-width' ? 'bi-arrows-vertical' : 'bi-arrows-expand'}`"></i>
                         </a>
                     </li>
                 </ul>
@@ -635,7 +691,7 @@ onUnmounted(() => {
         <div class="pdf-reader" ref="pdfReader" :class="{ 'overflow-hidden': lockView }">
             <div class="pages-container" ref="pagesContainer" :style="{ width: `${width}%` }">
                 <div v-for="page in pageCount" :key="page" class="page-container" :data-page="page">
-                    <div class="canvas-container">
+                    <div class="canvas-container" :class="{ 'canvas-loading': !renderedPages.has(page) }">
                         <canvas class="pdf-canvas" :ref="el => { if (el) pdfCanvases[page - 1] = el }"></canvas>
                         <canvas 
                             :ref="el => { if (el) drawingCanvases[page - 1] = el }"
@@ -693,6 +749,16 @@ body, #app, .container-fluid {
     flex-direction: column;
     align-items: center;
     gap: 10px;
+    width: 100%;
+}
+
+.page-number {
+    color: var(--bs-light);
+    font-size: 14px;
+    font-weight: 500;
+    background-color: rgba(0, 0, 0, 0.5);
+    padding: 5px 15px;
+    border-radius: 20px;
 }
 
 .form-control-plaintext {
@@ -712,6 +778,23 @@ body, #app, .container-fluid {
     display: inline-block;
     touch-action: pan-y pan-x;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    background-color: white;
+    width: 100%;
+}
+
+.canvas-container.canvas-loading {
+    min-height: 800px;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.canvas-container.canvas-loading::after {
+    content: 'Loading...';
+    color: #999;
+    font-size: 16px;
+    position: absolute;
 }
 
 .pdf-canvas {
