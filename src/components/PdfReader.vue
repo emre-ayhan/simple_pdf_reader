@@ -102,6 +102,8 @@ const renderAllPages = async () => {
 
 // Scroll to specific page
 const scrollToPage = (page) => {
+    if (!isFileLoaded.value) return;
+
     if (page >= 1 && page <= pageCount.value) {
         const pageIndex = page - 1;
         const canvas = pdfCanvases.value[pageIndex];
@@ -114,6 +116,7 @@ const scrollToPage = (page) => {
 };
 
 const toggleZoomMode = () => {
+    if (!isFileLoaded.value) return;
     const currentPage = pageNum.value;
     const canvas = pdfCanvases.value[currentPage - 1];
 
@@ -629,32 +632,32 @@ onUnmounted(() => {
                     <li class="nav-item vr bg-white mx-2"></li>
                     <!-- Pagination -->
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="isFileLoaded && scrollToPage(1)" :class="{ disabled: !isFileLoaded || pageNum <= 1 }">
+                        <a href="#" class="nav-link" @click.prevent="scrollToPage(1)" :class="{ disabled: !isFileLoaded || pageNum <= 1 }">
                             <i class="bi bi-chevron-double-left"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="isFileLoaded && scrollToPage(pageNum - 1)" :class="{ disabled: !isFileLoaded || pageNum <= 1 }">
+                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageNum - 1)" :class="{ disabled: !isFileLoaded || pageNum <= 1 }">
                             <i class="bi bi-chevron-left"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <input type="text" class="form-control-plaintext" :value="pageNum" @input="event => isFileLoaded && scrollToPage(Number(event.target.value))" :disabled="!isFileLoaded" />
+                        <input type="text" class="form-control-plaintext" :value="pageNum" @input="scrollToPage($event.target.value)" :disabled="!isFileLoaded" />
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="isFileLoaded && scrollToPage(pageNum + 1)" :class="{ disabled: !isFileLoaded || pageNum >= pageCount }">
+                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageNum + 1)" :class="{ disabled: !isFileLoaded || pageNum >= pageCount }">
                             <i class="bi bi-chevron-right"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="isFileLoaded && scrollToPage(pageCount)" :class="{ disabled: !isFileLoaded || pageNum >= pageCount }">
+                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageCount)" :class="{ disabled: !isFileLoaded || pageNum >= pageCount }">
                             <i class="bi bi-chevron-double-right"></i>
                         </a>
                     </li>
                     <li class="nav-item vr bg-white mx-2"></li>
                     <!-- Zoom -->
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="isFileLoaded && (width = Math.max(width - 10, 30))" :class="{ disabled: !isFileLoaded || lockView }">
+                        <a href="#" class="nav-link" @click.prevent="isFileLoaded && (width = Math.max(width - 10, 25))" :class="{ disabled: !isFileLoaded || lockView }">
                             <i class="bi bi-zoom-out"></i>
                         </a>
                     </li>
@@ -667,7 +670,7 @@ onUnmounted(() => {
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="isFileLoaded && toggleZoomMode()" :class="{ disabled: !isFileLoaded || lockView }" :title="zoomMode === 'fit-width' ? 'Fit Height' : 'Fit Width'">
+                        <a href="#" class="nav-link" @click.prevent="toggleZoomMode()" :class="{ disabled: !isFileLoaded || lockView }" :title="zoomMode === 'fit-width' ? 'Fit Height' : 'Fit Width'">
                             <i :class="`bi ${zoomMode === 'fit-width' ? 'bi-arrows-vertical' : 'bi-arrows-expand'}`"></i>
                         </a>
                     </li>
