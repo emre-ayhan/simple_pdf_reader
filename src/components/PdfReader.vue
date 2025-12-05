@@ -26,6 +26,10 @@ const savedHistoryStep = ref(-1);
 
 const addToHistory = (action) => {
     if (historyStep.value < history.value.length - 1) {
+        // If we are branching off and the saved state is in the future (or overwritten), invalidate it
+        if (savedHistoryStep.value > historyStep.value) {
+            savedHistoryStep.value = -2;
+        }
         history.value = history.value.slice(0, historyStep.value + 1);
     }
     history.value.push(markRaw(action));
