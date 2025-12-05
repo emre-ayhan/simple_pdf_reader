@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue";
+import { ref, computed, nextTick, onMounted, onUnmounted, markRaw } from "vue";
 import { GlobalWorkerOptions, getDocument } from "pdfjs-dist";
 import { PDFDocument, rgb } from "pdf-lib";
 
@@ -18,6 +18,92 @@ const pdfReader = ref(null);
 let intersectionObserver = null;
 let lazyLoadObserver = null;
 const renderedPages = ref(new Set());
+
+// History management
+const history = ref([]);
+const historyStep = ref(-1);
+const savedHistoryStep = ref(-1);
+
+const addToHistory = (action) => {
+    if (historyStep.value < history.value.length - 1) {
+        history.value = history.value.slice(0, historyStep.value + 1);
+    }
+    history.value.push(markRaw(action));
+    historyStep.value++;
+};
+
+const undo = () => {
+    if (historyStep.value < 0) return;
+    
+    const action = history.value[historyStep.value];
+    console.log('Undo action:', action.type);
+    
+    if (action.type === 'add') {
+        const strokes = strokesPerPage[action.page];
+        if (strokes) {
+            const index = strokes.indexOf(action.stroke);
+            if (index > -1) {
+                strokes.splice(index, 1);
+            } else {
+                console.warn('Stroke not found for undo');
+            }
+        }
+        redrawAllStrokes(action.page - 1);
+    } else if (action.type === 'erase') {
+        const strokes = strokesPerPage[action.page];
+        if (strokes) {
+            const toRestore = [...action.strokes].sort((a, b) => a.index - b.index);
+            toRestore.forEach(item => {
+                strokes.splice(item.index, 0, item.data);
+            });
+        }
+        redrawAllStrokes(action.page - 1);
+    } else if (action.type === 'clear') {
+        strokesPerPage = JSON.parse(JSON.stringify(action.previousState));
+        for (let i = 0; i < drawingCanvases.value.length; i++) {
+            redrawAllStrokes(i);
+        }
+    }
+    
+    historyStep.value--;
+};
+
+const redo = () => {
+    if (historyStep.value >= history.value.length - 1) return;
+    
+    historyStep.value++;
+    const action = history.value[historyStep.value];
+    
+    if (action.type === 'add') {
+        if (!strokesPerPage[action.page]) strokesPerPage[action.page] = [];
+        strokesPerPage[action.page].push(action.stroke);
+        redrawAllStrokes(action.page - 1);
+    } else if (action.type === 'erase') {
+        const strokes = strokesPerPage[action.page];
+        if (strokes) {
+            action.strokes.forEach(item => {
+                const index = strokes.indexOf(item.data);
+                if (index > -1) {
+                    strokes.splice(index, 1);
+                }
+            });
+        }
+        redrawAllStrokes(action.page - 1);
+    } else if (action.type === 'clear') {
+        strokesPerPage = {};
+        for (let i = 0; i < drawingCanvases.value.length; i++) {
+            const canvas = drawingCanvases.value[i];
+            const ctx = drawingContexts[i];
+            if (canvas && ctx) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+        }
+    }
+};
+
+const hasUnsavedChanges = computed(() => {
+    return historyStep.value !== savedHistoryStep.value;
+});
 
 const colors = [
     ['black', 'dimgray', 'gray', 'darkgray', 'silver', 'white'],
@@ -346,6 +432,7 @@ const stopDrawing = (e) => {
     
     const pageIndex = currentCanvasIndex + 1;
     
+    let newStroke = null;
     if (isDrawing.value && drawMode.value !== 'pen' && canvasSnapshot) {
         // Save shape as a stroke
         const shape = {
@@ -357,11 +444,21 @@ const stopDrawing = (e) => {
             color: drawColor.value,
             thickness: drawThickness.value
         };
-        strokesPerPage[pageIndex].push([shape]);
+        newStroke = [shape];
+        strokesPerPage[pageIndex].push(newStroke);
         canvasSnapshot = null;
     } else if (isDrawing.value && currentStroke.length > 0) {
-        strokesPerPage[pageIndex].push([...currentStroke]);
+        newStroke = [...currentStroke];
+        strokesPerPage[pageIndex].push(newStroke);
         currentStroke = [];
+    }
+
+    if (newStroke) {
+        addToHistory({
+            type: 'add',
+            page: pageIndex,
+            stroke: newStroke
+        });
     }
     
     const drawingContext = drawingContexts[currentCanvasIndex];
@@ -387,6 +484,11 @@ const onPointerLeave = (e) => {
 };
 
 const clearDrawing = () => {
+    addToHistory({
+        type: 'clear',
+        previousState: JSON.parse(JSON.stringify(strokesPerPage))
+    });
+
     // Clear all drawings on all pages
     for (let i = 0; i < drawingCanvases.value.length; i++) {
         const canvas = drawingCanvases.value[i];
@@ -456,20 +558,34 @@ const eraseAtPoint = (x, y, canvasIndex) => {
     const eraserRadius = 10;
     const pageNumber = canvasIndex + 1;
     const strokes = strokesPerPage[pageNumber] || [];
-    let strokesRemoved = false;
     
-    strokesPerPage[pageNumber] = strokes.filter(stroke => {
+    const strokesToRemove = [];
+    const keptStrokes = [];
+    
+    strokes.forEach((stroke, index) => {
+        let shouldRemove = false;
         for (let point of stroke) {
             const distance = Math.sqrt(Math.pow(point.x - x, 2) + Math.pow(point.y - y, 2));
             if (distance < eraserRadius) {
-                strokesRemoved = true;
-                return false;
+                shouldRemove = true;
+                break;
             }
         }
-        return true;
+        
+        if (shouldRemove) {
+            strokesToRemove.push({ index, data: stroke });
+        } else {
+            keptStrokes.push(stroke);
+        }
     });
     
-    if (strokesRemoved) {
+    if (strokesToRemove.length > 0) {
+        strokesPerPage[pageNumber] = keptStrokes;
+        addToHistory({
+            type: 'erase',
+            page: pageNumber,
+            strokes: strokesToRemove
+        });
         redrawAllStrokes(canvasIndex);
     }
 };
@@ -485,6 +601,12 @@ const loadPdfDocument = () => {
             pageCount.value = pdfDoc.numPages;
             pageNum.value = localStorage.getItem(filename.value) ? Number(localStorage.getItem(filename.value)) : 1;
             isFileLoaded.value = true;
+            
+            // Reset history
+            history.value = [];
+            historyStep.value = -1;
+            savedHistoryStep.value = -1;
+            strokesPerPage = {};
             
             // Wait for next tick to ensure refs are populated
             nextTick(() => {
@@ -716,6 +838,7 @@ const saveFile = async () => {
                 await writable.write(pdfBytes);
                 await writable.close();
                 console.log('PDF saved successfully with annotations to:', handle.name);
+                savedHistoryStep.value = historyStep.value;
                 return;
             } catch (err) {
                 if (err.name === 'AbortError') {
@@ -736,6 +859,7 @@ const saveFile = async () => {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         console.log('PDF downloaded with annotations');
+        savedHistoryStep.value = historyStep.value;
     } catch (error) {
         console.error('Error saving PDF:', error);
         alert('Failed to save PDF. Please try again.');
@@ -829,6 +953,18 @@ onUnmounted(() => {
                         </a>
                     </li>
                     <li class="nav-item vr bg-white mx-2"></li>
+                    <!-- Undo/Redo -->
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" @click.prevent="undo()" :class="{ disabled: !isFileLoaded || historyStep < 0 }" title="Undo">
+                            <i class="bi bi-arrow-counterclockwise"></i>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" @click.prevent="redo()" :class="{ disabled: !isFileLoaded || historyStep >= history.length - 1 }" title="Redo">
+                            <i class="bi bi-arrow-clockwise"></i>
+                        </a>
+                    </li>
+                    <li class="nav-item vr bg-white mx-2"></li>
                     <!-- Pagination -->
                     <li class="nav-item">
                         <a href="#" class="nav-link" @click.prevent="scrollToPage(1)" :class="{ disabled: !isFileLoaded || pageNum <= 1 }">
@@ -883,7 +1019,7 @@ onUnmounted(() => {
                         </a>
                     </li>
                     <li class="nav-item" title="Save File">
-                        <a href="#" class="nav-link" @click.prevent="saveFile" :class="{ disabled: !isFileLoaded }">
+                        <a href="#" class="nav-link" @click.prevent="saveFile" :class="{ disabled: !isFileLoaded || !hasUnsavedChanges }">
                             <i class="bi bi-floppy-fill"></i>
                         </a>
                     </li>
