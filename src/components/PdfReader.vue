@@ -1,8 +1,8 @@
 <script setup>
-import { ref, watch, nextTick } from "vue";
+import { ref, watch, nextTick, onMounted, onUnmounted } from "vue";
 import { GlobalWorkerOptions, getDocument } from "pdfjs-dist";
 
-const pdfCanvas = ref(null);
+const pdfCanvases = ref([]);
 const fileInput = ref(null);
 const filename = ref("PDF Reader");
 const pageNum = ref(localStorage.getItem(filename.value) ? Number(localStorage.getItem(filename.value)) : 1);
@@ -11,6 +11,9 @@ const scale = 2;
 const lockView = ref(false);
 const width = ref(100);
 const isFileLoaded = ref(false);
+const pagesContainer = ref(null);
+const pdfReader = ref(null);
+let intersectionObserver = null;
 
 const colors = [
     ['black', 'dimgray', 'gray', 'darkgray', 'silver', 'white'],
@@ -26,17 +29,17 @@ const isEraser = ref(false);
 const drawMode = ref('pen'); // 'pen', 'line', 'rectangle', 'circle'
 const drawColor = ref('blue');
 const drawThickness = ref(2);
-const drawingCanvas = ref(null);
+const drawingCanvases = ref([]);
 
-
-let drawingContext = null;
+let drawingContexts = [];
 let lastX = 0;
 let lastY = 0;
-let strokes = [];
+let strokesPerPage = {}; // Store strokes per page
 let currentStroke = [];
 let startX = 0;
 let startY = 0;
 let canvasSnapshot = null;
+let currentCanvasIndex = -1;
 
 const isMouseDown = ref(false);
 const activePointerId = ref(null);
@@ -44,52 +47,83 @@ const activePointerType = ref(null);
 const isPenHovering = ref(false);
 
 var pdfDoc = null;
-var pageRendering = ref(false);
-var pageNumPending = null;
 
 GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.449/build/pdf.worker.min.mjs';
 
-const renderPage = (num) => {
-    pageRendering.value = true;
-    pdfDoc.getPage(num).then((page) => {
+const renderAllPages = async () => {
+    if (!pdfDoc) return;
+    
+    const numPages = pdfDoc.numPages;
+    pageCount.value = numPages;
+    
+    // Initialize strokes for each page
+    for (let i = 1; i <= numPages; i++) {
+        if (!strokesPerPage[i]) {
+            strokesPerPage[i] = [];
+        }
+    }
+    
+    // Render all pages
+    for (let pageNumber = 1; pageNumber <= numPages; pageNumber++) {
+        const page = await pdfDoc.getPage(pageNumber);
         const viewport = page.getViewport({ scale });
-        const canvas = pdfCanvas.value;
+        
+        // Get canvas elements
+        const canvas = pdfCanvases.value[pageNumber - 1];
+        const drawCanvas = drawingCanvases.value[pageNumber - 1];
+        
+        if (!canvas || !drawCanvas) continue;
+        
         const ctx = canvas.getContext("2d");
-
+        
         canvas.height = viewport.height;
         canvas.width = viewport.width;
-
+        drawCanvas.height = viewport.height;
+        drawCanvas.width = viewport.width;
+        
+        // Initialize drawing context
+        drawingContexts[pageNumber - 1] = drawCanvas.getContext('2d');
+        
         const renderContext = {
             canvasContext: ctx,
             viewport,
         };
+        
+        await page.render(renderContext).promise;
+    }
+};
 
-        const renderTask = page.render(renderContext);
-
-        pageNum.value = num;
-        localStorage.setItem(filename.value, num);
-
-        renderTask.promise.then(() => {
-            pageRendering.value = false;
-            if (pageNumPending !== null) {
-                renderPage(pageNumPending);
-                pageNumPending = null;
-            }
-            // Sync drawing canvas after render
-            syncDrawingCanvas();
-        });
-    });
+const renderPage = (num) => {
+    // This function is kept for compatibility but not used
+    pageNum.value = num;
+    localStorage.setItem(filename.value, num);
 };
 
 const queueRenderPage = (page) => {
-    if (pageRendering.value) {
-        pageNumPending = page;
-    } else {
-        renderPage(page);
+    // Scroll to specific page
+    if (page >= 1 && page <= pageCount.value) {
+        const pageIndex = page - 1;
+        const canvas = pdfCanvases.value[pageIndex];
+        if (canvas) {
+            canvas.scrollIntoView({ block: 'start' });
+            pageNum.value = page;
+            localStorage.setItem(filename.value, page);
+        }
     }
 };
 
 // Drawing functions
+const getCanvasIndexFromEvent = (e) => {
+    // Find which canvas the event occurred on
+    const target = e.target;
+    for (let i = 0; i < drawingCanvases.value.length; i++) {
+        if (drawingCanvases.value[i] === target) {
+            return i;
+        }
+    }
+    return -1;
+};
+
 const startDrawing = (e) => {
     if (!isDrawing.value && !isEraser.value) return;
     
@@ -106,8 +140,16 @@ const startDrawing = (e) => {
     e.preventDefault();
     e.stopPropagation();
     
+    // Determine which canvas this event is for
+    currentCanvasIndex = getCanvasIndexFromEvent(e);
+    if (currentCanvasIndex === -1) return;
+    
+    const canvas = drawingCanvases.value[currentCanvasIndex];
+    const drawingContext = drawingContexts[currentCanvasIndex];
+    
+    if (!canvas || !drawingContext) return;
+    
     // Capture the pointer to ensure we get all events
-    const canvas = drawingCanvas.value;
     if (canvas && e.pointerId !== undefined) {
         canvas.setPointerCapture(e.pointerId);
     }
@@ -129,8 +171,13 @@ const startDrawing = (e) => {
     startX = lastX;
     startY = lastY;
     
+    const pageIndex = currentCanvasIndex + 1;
+    if (!strokesPerPage[pageIndex]) {
+        strokesPerPage[pageIndex] = [];
+    }
+    
     if (isEraser.value) {
-        eraseAtPoint(lastX, lastY);
+        eraseAtPoint(lastX, lastY, currentCanvasIndex);
     } else if (drawMode.value === 'pen') {
         currentStroke = [{
             x: lastX,
@@ -159,7 +206,13 @@ const draw = (e) => {
     e.preventDefault();
     e.stopPropagation();
     
-    const canvas = drawingCanvas.value;
+    if (currentCanvasIndex === -1) return;
+    
+    const canvas = drawingCanvases.value[currentCanvasIndex];
+    const drawingContext = drawingContexts[currentCanvasIndex];
+    
+    if (!canvas || !drawingContext) return;
+    
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
@@ -171,7 +224,7 @@ const draw = (e) => {
     const currentY = (clientY - rect.top) * scaleY;
     
     if (isEraser.value) {
-        eraseAtPoint(currentX, currentY);
+        eraseAtPoint(currentX, currentY, currentCanvasIndex);
     } else if (drawMode.value === 'pen') {
         currentStroke.push({
             x: currentX,
@@ -223,8 +276,10 @@ const stopDrawing = (e) => {
     // Only stop if it's the same pointer
     if (e && e.pointerId !== activePointerId.value) return;
     
+    if (currentCanvasIndex === -1) return;
+    
     // Release pointer capture
-    const canvas = drawingCanvas.value;
+    const canvas = drawingCanvases.value[currentCanvasIndex];
     if (canvas && e && e.pointerId !== undefined) {
         try {
             canvas.releasePointerCapture(e.pointerId);
@@ -237,6 +292,8 @@ const stopDrawing = (e) => {
     activePointerId.value = null;
     activePointerType.value = null;
     
+    const pageIndex = currentCanvasIndex + 1;
+    
     if (isDrawing.value && drawMode.value !== 'pen' && canvasSnapshot) {
         // Save shape as a stroke
         const shape = {
@@ -248,14 +305,19 @@ const stopDrawing = (e) => {
             color: drawColor.value,
             thickness: drawThickness.value
         };
-        strokes.push([shape]);
+        strokesPerPage[pageIndex].push([shape]);
         canvasSnapshot = null;
     } else if (isDrawing.value && currentStroke.length > 0) {
-        strokes.push([...currentStroke]);
+        strokesPerPage[pageIndex].push([...currentStroke]);
         currentStroke = [];
     }
     
-    drawingContext.closePath();
+    const drawingContext = drawingContexts[currentCanvasIndex];
+    if (drawingContext) {
+        drawingContext.closePath();
+    }
+    
+    currentCanvasIndex = -1;
 };
 
 const onPointerMove = (e) => {
@@ -272,25 +334,26 @@ const onPointerLeave = (e) => {
     stopDrawing(e);
 };
 
-const initDrawingCanvas = () => {
-    const canvas = drawingCanvas.value;
-    if (canvas) {
-        drawingContext = canvas.getContext('2d');
-    }
-};
-
 const clearDrawing = () => {
-    const canvas = drawingCanvas.value;
-    if (canvas && drawingContext) {
-        drawingContext.clearRect(0, 0, canvas.width, canvas.height);
-        strokes = [];
-        currentStroke = [];
+    // Clear all drawings on all pages
+    for (let i = 0; i < drawingCanvases.value.length; i++) {
+        const canvas = drawingCanvases.value[i];
+        const ctx = drawingContexts[i];
+        if (canvas && ctx) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
     }
+    strokesPerPage = {};
+    currentStroke = [];
 };
 
-const redrawAllStrokes = () => {
-    const canvas = drawingCanvas.value;
+const redrawAllStrokes = (pageIndex) => {
+    const canvas = drawingCanvases.value[pageIndex];
+    const drawingContext = drawingContexts[pageIndex];
     if (!canvas || !drawingContext) return;
+    
+    const pageNumber = pageIndex + 1;
+    const strokes = strokesPerPage[pageNumber] || [];
     
     drawingContext.clearRect(0, 0, canvas.width, canvas.height);
     
@@ -337,11 +400,13 @@ const redrawAllStrokes = () => {
     });
 };
 
-const eraseAtPoint = (x, y) => {
+const eraseAtPoint = (x, y, canvasIndex) => {
     const eraserRadius = 10;
+    const pageNumber = canvasIndex + 1;
+    const strokes = strokesPerPage[pageNumber] || [];
     let strokesRemoved = false;
     
-    strokes = strokes.filter(stroke => {
+    strokesPerPage[pageNumber] = strokes.filter(stroke => {
         for (let point of stroke) {
             const distance = Math.sqrt(Math.pow(point.x - x, 2) + Math.pow(point.y - y, 2));
             if (distance < eraserRadius) {
@@ -353,25 +418,9 @@ const eraseAtPoint = (x, y) => {
     });
     
     if (strokesRemoved) {
-        redrawAllStrokes();
+        redrawAllStrokes(canvasIndex);
     }
 };
-
-const syncDrawingCanvas = () => {
-    nextTick(() => {
-        const pdfCanvasEl = pdfCanvas.value;
-        const drawCanvasEl = drawingCanvas.value;
-        if (pdfCanvasEl && drawCanvasEl) {
-            drawCanvasEl.width = pdfCanvasEl.width;
-            drawCanvasEl.height = pdfCanvasEl.height;
-        }
-    });
-};
-
-// Watch for width changes to sync drawing canvas
-watch(width, () => {
-    syncDrawingCanvas();
-});
 
 const loadPdfDocument = () => {
     const file = fileInput.value.files[0];
@@ -384,21 +433,74 @@ const loadPdfDocument = () => {
             pageCount.value = pdfDoc.numPages;
             pageNum.value = localStorage.getItem(filename.value) ? Number(localStorage.getItem(filename.value)) : 1;
             isFileLoaded.value = true;
-            renderPage(pageNum.value);
             
-            // Initialize drawing canvas after PDF loads
-            setTimeout(() => {
-                const pdfCanvasEl = pdfCanvas.value;
-                const drawCanvasEl = drawingCanvas.value;
-                if (pdfCanvasEl && drawCanvasEl) {
-                    drawCanvasEl.width = pdfCanvasEl.width;
-                    drawCanvasEl.height = pdfCanvasEl.height;
-                    initDrawingCanvas();
-                }
-            }, 100);
+            // Wait for next tick to ensure refs are populated
+            nextTick(() => {
+                renderAllPages().then(() => {
+                    // Setup intersection observer after pages are rendered
+                    setupIntersectionObserver();
+                    // Scroll to saved page
+                    const savedPage = localStorage.getItem(filename.value);
+                    if (savedPage) {
+                        queueRenderPage(Number(savedPage));
+                    }
+                });
+            });
         });
     }
 };
+
+const setupIntersectionObserver = () => {
+    // Clean up existing observer
+    if (intersectionObserver) {
+        intersectionObserver.disconnect();
+    }
+    
+    const options = {
+        root: pdfReader.value,
+        rootMargin: '-45% 0px -45% 0px', // Trigger when middle of viewport
+        threshold: 0
+    };
+    
+    intersectionObserver = new IntersectionObserver((entries) => {
+        // Find the most visible page
+        let maxRatio = 0;
+        let mostVisiblePage = null;
+        
+        entries.forEach(entry => {
+            if (entry.isIntersecting && entry.intersectionRatio > maxRatio) {
+                maxRatio = entry.intersectionRatio;
+                mostVisiblePage = entry.target;
+            }
+        });
+        
+        if (mostVisiblePage) {
+            const pageNumber = parseInt(mostVisiblePage.getAttribute('data-page'));
+            if (pageNumber && pageNumber !== pageNum.value) {
+                pageNum.value = pageNumber;
+                localStorage.setItem(filename.value, pageNumber);
+            }
+        }
+    }, options);
+    
+    // Observe all page containers
+    if (pagesContainer.value) {
+        const pageContainers = pagesContainer.value.querySelectorAll('.page-container');
+        pageContainers.forEach(container => {
+            intersectionObserver.observe(container);
+        });
+    }
+};
+
+onMounted(() => {
+    queueRenderPage(pageNum.value);
+});
+
+onUnmounted(() => {
+    if (intersectionObserver) {
+        intersectionObserver.disconnect();
+    }
+});
 </script>
 <template>
     <div class="container-fluid" @contextmenu.prevent>
@@ -530,23 +632,27 @@ const loadPdfDocument = () => {
                 </ul>
             </div>
         </nav>
-        <div class="pdf-reader" :class="{ 'overflow-hidden': lockView }">
-            <div class="canvas-container" :style="{ width: `${width}%` }">
-                <canvas class="pdf-canvas" ref="pdfCanvas"></canvas>
-                <canvas 
-                    ref="drawingCanvas" 
-                    class="drawing-canvas"
-                    @pointerdown="startDrawing"
-                    @pointermove="onPointerMove"
-                    @pointerup="stopDrawing"
-                    @pointerleave="onPointerLeave"
-                    @pointercancel="stopDrawing"
-                    :style="{ 
-                        cursor: isDrawing ? 'crosshair' : isEraser ? 'pointer' : 'default',
-                        pointerEvents: 'auto',
-                        touchAction: lockView || isPenHovering ? 'none' : 'pan-y pan-x'
-                    }"
-                ></canvas>
+        <div class="pdf-reader" ref="pdfReader" :class="{ 'overflow-hidden': lockView }">
+            <div class="pages-container" ref="pagesContainer" :style="{ width: `${width}%` }">
+                <div v-for="page in pageCount" :key="page" class="page-container" :data-page="page">
+                    <div class="canvas-container">
+                        <canvas class="pdf-canvas" :ref="el => { if (el) pdfCanvases[page - 1] = el }"></canvas>
+                        <canvas 
+                            :ref="el => { if (el) drawingCanvases[page - 1] = el }"
+                            class="drawing-canvas"
+                            @pointerdown="startDrawing"
+                            @pointermove="onPointerMove"
+                            @pointerup="stopDrawing"
+                            @pointerleave="onPointerLeave"
+                            @pointercancel="stopDrawing"
+                            :style="{ 
+                                cursor: isDrawing ? 'crosshair' : isEraser ? 'pointer' : 'default',
+                                pointerEvents: 'auto',
+                                touchAction: lockView || isPenHovering ? 'none' : 'pan-y pan-x'
+                            }"
+                        ></canvas>
+                    </div>
+                </div>
             </div>
         </div>
         <input ref="fileInput" type="file"  accept="application/pdf" class="d-none" @change="loadPdfDocument" />
@@ -574,6 +680,21 @@ body, #app, .container-fluid {
     touch-action: none;
 }
 
+.pages-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding: 20px 0;
+}
+
+.page-container {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
 .form-control-plaintext {
     width: 50px !important;
     text-align: center;
@@ -590,11 +711,13 @@ body, #app, .container-fluid {
     position: relative;
     display: inline-block;
     touch-action: pan-y pan-x;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .pdf-canvas {
     width: 100%;
     height: auto;
+    display: block;
 }
 
 .drawing-canvas {
@@ -602,7 +725,7 @@ body, #app, .container-fluid {
     top: 0;
     left: 0;
     width: 100%;
-    height: auto;
+    height: 100%;
     pointer-events: auto;
 }
 </style>
