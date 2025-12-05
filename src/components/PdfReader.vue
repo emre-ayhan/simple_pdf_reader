@@ -41,6 +41,7 @@ let canvasSnapshot = null;
 const isMouseDown = ref(false);
 const activePointerId = ref(null);
 const activePointerType = ref(null);
+const isPenHovering = ref(false);
 
 var pdfDoc = null;
 var pageRendering = ref(false);
@@ -94,6 +95,9 @@ const startDrawing = (e) => {
     
     // Track active pointer type
     activePointerType.value = e.pointerType;
+    if (e.pointerType === 'pen') {
+        isPenHovering.value = true;
+    }
 
     // Only allow pen/stylus and mouse input, not touch
     if (e.pointerType === 'touch') return;
@@ -252,6 +256,20 @@ const stopDrawing = (e) => {
     }
     
     drawingContext.closePath();
+};
+
+const onPointerMove = (e) => {
+    if (e.pointerType === 'pen') {
+        isPenHovering.value = true;
+    }
+    draw(e);
+};
+
+const onPointerLeave = (e) => {
+    if (e.pointerType === 'pen') {
+        isPenHovering.value = false;
+    }
+    stopDrawing(e);
 };
 
 const initDrawingCanvas = () => {
@@ -506,7 +524,7 @@ const loadPdfDocument = () => {
                     </li>
                     <li class="nav-item" :title="isFileLoaded ? 'Open Another PDF' : 'Open PDF'">
                         <a href="#" class="nav-link" @click.prevent="fileInput.click()">
-                            <i class="bi bi-folder-fill"></i>
+                            <i class="bi bi-file-earmark-pdf-fill"></i>
                         </a>
                     </li>
                 </ul>
@@ -519,14 +537,14 @@ const loadPdfDocument = () => {
                     ref="drawingCanvas" 
                     class="drawing-canvas"
                     @pointerdown="startDrawing"
-                    @pointermove="draw"
+                    @pointermove="onPointerMove"
                     @pointerup="stopDrawing"
-                    @pointerleave="stopDrawing"
+                    @pointerleave="onPointerLeave"
                     @pointercancel="stopDrawing"
                     :style="{ 
                         cursor: isDrawing ? 'crosshair' : isEraser ? 'pointer' : 'default',
                         pointerEvents: 'auto',
-                        touchAction: lockView || activePointerType !== 'touch' ? 'none' : 'pan-y pan-x'
+                        touchAction: lockView || isPenHovering ? 'none' : 'pan-y pan-x'
                     }"
                 ></canvas>
             </div>
