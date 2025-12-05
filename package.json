@@ -1,0 +1,21 @@
+{
+  "name": "simple_pdf_reader",
+  "version": "1.0.0",
+  "description": "A simple PDF reader built with Vue 3",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "bootstrap": "^5.3.8",
+    "bootstrap-icons": "^1.13.1",
+    "pdfjs-dist": "^5.4.449",
+    "vue": "^3.4.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.0",
+    "vite": "^5.0.0"
+  }
+}
