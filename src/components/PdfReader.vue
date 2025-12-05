@@ -1106,12 +1106,12 @@ onUnmounted(() => {
                     <li class="nav-item vr bg-white mx-2"></li>
                     <!-- Pagination -->
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="scrollToPage(1)" :class="{ disabled: !isFileLoaded || pageNum <= 1 }">
+                        <a href="#" class="nav-link" @click.prevent="scrollToPage(1)" :class="{ disabled: !isFileLoaded || pageNum <= 1 }" title="First Page">
                             <i class="bi bi-chevron-double-left"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageNum - 1)" :class="{ disabled: !isFileLoaded || pageNum <= 1 }">
+                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageNum - 1)" :class="{ disabled: !isFileLoaded || pageNum <= 1 }" title="Previous Page">
                             <i class="bi bi-chevron-left"></i>
                         </a>
                     </li>
@@ -1119,12 +1119,12 @@ onUnmounted(() => {
                         <input type="text" class="form-control-plaintext" :value="pageNum" @input="scrollToPage($event.target.value)" :disabled="!isFileLoaded" />
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageNum + 1)" :class="{ disabled: !isFileLoaded || pageNum >= pageCount }">
+                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageNum + 1)" :class="{ disabled: !isFileLoaded || pageNum >= pageCount }" title="Next Page">
                             <i class="bi bi-chevron-right"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageCount)" :class="{ disabled: !isFileLoaded || pageNum >= pageCount }">
+                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageCount)" :class="{ disabled: !isFileLoaded || pageNum >= pageCount }" :title="`Last Page (${pageCount})`">
                             <i class="bi bi-chevron-double-right"></i>
                         </a>
                     </li>
