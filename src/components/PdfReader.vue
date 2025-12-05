@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from "vue";
 import { GlobalWorkerOptions, getDocument } from "pdfjs-dist";
+import { PDFDocument, rgb } from "pdf-lib";
 
 const pdfCanvases = ref([]);
 const fileInput = ref(null);
@@ -576,6 +577,171 @@ const setupIntersectionObserver = () => {
     }
 };
 
+const saveFile = async () => {
+    if (!pdfDoc || !fileInput.value.files[0]) return;
+
+    try {
+        // Read the original PDF file
+        const file = fileInput.value.files[0];
+        const arrayBuffer = await file.arrayBuffer();
+        const pdfLibDoc = await PDFDocument.load(arrayBuffer);
+
+        // Process each page with annotations
+        for (let pageNum = 1; pageNum <= pageCount.value; pageNum++) {
+            const strokes = strokesPerPage[pageNum];
+            if (!strokes || strokes.length === 0) continue;
+
+            const page = pdfLibDoc.getPage(pageNum - 1);
+            const { width, height } = page.getSize();
+
+            // Get the canvas dimensions for scaling
+            const canvas = pdfCanvases.value[pageNum - 1];
+            if (!canvas) continue;
+
+            const scaleX = width / canvas.width;
+            const scaleY = height / canvas.height;
+
+            // Draw each stroke on the PDF
+            strokes.forEach(stroke => {
+                if (stroke.length === 0) return;
+
+                const first = stroke[0];
+
+                // Convert color string to RGB
+                const colorMap = {
+                    'black': [0, 0, 0], 'dimgray': [0.41, 0.41, 0.41], 'gray': [0.5, 0.5, 0.5],
+                    'darkgray': [0.66, 0.66, 0.66], 'silver': [0.75, 0.75, 0.75], 'white': [1, 1, 1],
+                    'magenta': [1, 0, 1], 'red': [1, 0, 0], 'orangered': [1, 0.27, 0],
+                    'orange': [1, 0.65, 0], 'gold': [1, 0.84, 0], 'yellow': [1, 1, 0],
+                    'green': [0, 0.5, 0], 'darkgreen': [0, 0.39, 0], 'lime': [0, 1, 0],
+                    'teal': [0, 0.5, 0.5], 'cyan': [0, 1, 1], 'navy': [0, 0, 0.5],
+                    'blue': [0, 0, 1], 'darkblue': [0, 0, 0.55], 'royalblue': [0.25, 0.41, 0.88],
+                    'purple': [0.5, 0, 0.5], 'pink': [1, 0.75, 0.8],
+                    'brown': [0.65, 0.16, 0.16], 'sienna': [0.63, 0.32, 0.18],
+                    'olive': [0.5, 0.5, 0], 'maroon': [0.5, 0, 0], 'coral': [1, 0.5, 0.31],
+                    'salmon': [0.98, 0.5, 0.45]
+                };
+
+                const getColor = (colorName) => {
+                    const rgbArray = colorMap[colorName] || [0, 0, 0];
+                    return rgb(rgbArray[0], rgbArray[1], rgbArray[2]);
+                };
+
+                const color = getColor(first.color);
+                const thickness = (first.thickness || 2) * scaleX;
+
+                // Handle shapes
+                if (first.type === 'line') {
+                    const startX = first.startX * scaleX;
+                    const startY = height - (first.startY * scaleY);
+                    const endX = first.endX * scaleX;
+                    const endY = height - (first.endY * scaleY);
+
+                    page.drawLine({
+                        start: { x: startX, y: startY },
+                        end: { x: endX, y: endY },
+                        thickness: thickness,
+                        color: color,
+                        opacity: 1
+                    });
+                } else if (first.type === 'rectangle') {
+                    const x = first.startX * scaleX;
+                    const y = height - (first.startY * scaleY);
+                    const w = (first.endX - first.startX) * scaleX;
+                    const h = (first.endY - first.startY) * scaleY;
+
+                    page.drawRectangle({
+                        x: x,
+                        y: y - h,
+                        width: w,
+                        height: h,
+                        borderColor: color,
+                        borderWidth: thickness,
+                        opacity: 0
+                    });
+                } else if (first.type === 'circle') {
+                    const centerX = first.startX * scaleX;
+                    const centerY = height - (first.startY * scaleY);
+                    const radius = Math.sqrt(
+                        Math.pow((first.endX - first.startX) * scaleX, 2) +
+                        Math.pow((first.endY - first.startY) * scaleY, 2)
+                    );
+
+                    page.drawCircle({
+                        x: centerX,
+                        y: centerY,
+                        size: radius,
+                        borderColor: color,
+                        borderWidth: thickness,
+                        opacity: 0
+                    });
+                } else if (first.type === 'pen') {
+                    // Draw pen strokes as connected lines
+                    for (let i = 0; i < stroke.length - 1; i++) {
+                        const point1 = stroke[i];
+                        const point2 = stroke[i + 1];
+
+                        const x1 = point1.x * scaleX;
+                        const y1 = height - (point1.y * scaleY);
+                        const x2 = point2.x * scaleX;
+                        const y2 = height - (point2.y * scaleY);
+
+                        page.drawLine({
+                            start: { x: x1, y: y1 },
+                            end: { x: x2, y: y2 },
+                            thickness: (point1.thickness || 2) * scaleX,
+                            color: getColor(point1.color),
+                            opacity: 1
+                        });
+                    }
+                }
+            });
+        }
+
+        // Save the modified PDF
+        const pdfBytes = await pdfLibDoc.save();
+        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+        
+        // Try to use File System Access API if available (Chrome/Edge)
+        if ('showSaveFilePicker' in window) {
+            try {
+                const handle = await window.showSaveFilePicker({
+                    suggestedName: filename.value,
+                    types: [{
+                        description: 'PDF Files',
+                        accept: { 'application/pdf': ['.pdf'] }
+                    }]
+                });
+                const writable = await handle.createWritable();
+                await writable.write(pdfBytes);
+                await writable.close();
+                console.log('PDF saved successfully with annotations to:', handle.name);
+                return;
+            } catch (err) {
+                if (err.name === 'AbortError') {
+                    console.log('Save cancelled by user');
+                    return;
+                }
+                console.warn('File System Access API failed, falling back to download:', err);
+            }
+        }
+        
+        // Fallback: use download method
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename.value;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        console.log('PDF downloaded with annotations');
+    } catch (error) {
+        console.error('Error saving PDF:', error);
+        alert('Failed to save PDF. Please try again.');
+    }
+};
+
 onMounted(() => {
     scrollToPage(pageNum.value);
 });
@@ -714,6 +880,11 @@ onUnmounted(() => {
                     <li class="nav-item" :title="lockView ? 'Unlock View' : 'Lock View'">
                         <a href="#" class="nav-link" @click.prevent="isFileLoaded && (lockView = !lockView)" :class="{ disabled: !isFileLoaded }">
                             <i class="bi" :class="lockView ? 'bi-lock-fill' : 'bi-lock'"></i>
+                        </a>
+                    </li>
+                    <li class="nav-item" title="Save File">
+                        <a href="#" class="nav-link" @click.prevent="saveFile" :class="{ disabled: !isFileLoaded }">
+                            <i class="bi bi-floppy-fill"></i>
                         </a>
                     </li>
                     <li class="nav-item" :title="isFileLoaded ? 'Open Another PDF' : 'Open PDF'">
