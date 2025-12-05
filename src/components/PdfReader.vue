@@ -1005,7 +1005,7 @@ onUnmounted(() => {
                     </li>
                     <li class="nav-item">
                         <a href="#" class="nav-link" @click.prevent="toggleZoomMode()" :class="{ disabled: !isFileLoaded || lockView }" :title="zoomMode === 'fit-width' ? 'Fit Height' : 'Fit Width'">
-                            <i :class="`bi ${zoomMode === 'fit-width' ? 'bi-arrows-vertical' : 'bi-arrows-expand'}`"></i>
+                            <i :class="`bi bi-arrows-expand${zoomMode === 'fit-width' ? '-vertical' : ''}`"></i>
                         </a>
                     </li>
                 </ul>
