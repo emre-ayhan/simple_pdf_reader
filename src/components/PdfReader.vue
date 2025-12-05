@@ -870,8 +870,98 @@ const saveFile = async () => {
     }
 };
 
+const loadPdfFromUrl = (url) => {
+    // Handle Windows paths that might be passed as arguments
+    // Remove surrounding quotes if present
+    url = url.replace(/^"|"$/g, '');
+    
+    // If it looks like a Windows path (e.g. C:\...), convert to file URL
+    if (/^[a-zA-Z]:\\/.test(url) || url.startsWith('\\\\')) {
+        url = 'file:///' + url.replace(/\\/g, '/');
+    }
+    
+    console.log('Loading PDF from URL:', url);
+    
+    // Extract filename from URL
+    try {
+        const urlObj = new URL(url);
+        filename.value = decodeURIComponent(urlObj.pathname.split('/').pop());
+    } catch (e) {
+        // Fallback for simple paths or errors
+        const parts = url.split(/[/\\]/);
+        filename.value = parts[parts.length - 1] || "Document.pdf";
+    }
+
+    // Fetch the file content manually to bypass worker CORS/Protocol issues
+    // The worker (on CDN) cannot access file:// URLs, but the main thread can (with flags)
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', url, true);
+    xhr.responseType = 'arraybuffer';
+
+    xhr.onload = function() {
+        // Status 0 is expected for local files
+        if (this.status === 200 || this.status === 0) {
+            const data = this.response;
+            if (!data || data.byteLength === 0) {
+                console.error('Error loading PDF: Empty response');
+                alert('Error loading PDF: Empty response');
+                return;
+            }
+
+            getDocument({
+                data: data
+            }).promise.then((pdfDoc_) => {
+                pdfDoc = pdfDoc_;
+                
+                pageCount.value = pdfDoc.numPages;
+                pageNum.value = localStorage.getItem(filename.value) ? Number(localStorage.getItem(filename.value)) : 1;
+                isFileLoaded.value = true;
+                
+                // Reset history
+                history.value = [];
+                historyStep.value = -1;
+                savedHistoryStep.value = -1;
+                strokesPerPage = {};
+                
+                // Wait for next tick to ensure refs are populated
+                nextTick(() => {
+                    renderAllPages().then(() => {
+                        // Setup observers after pages structure is ready
+                        setupIntersectionObserver();
+                        setupLazyLoadObserver();
+                        // Scroll to saved page
+                        const savedPage = localStorage.getItem(filename.value);
+                        if (savedPage) {
+                            scrollToPage(Number(savedPage));
+                        }
+                    });
+                });
+            }).catch(error => {
+                console.error('Error parsing PDF:', error);
+                alert('Error parsing PDF: ' + error.message);
+            });
+        } else {
+            console.error('Error loading PDF: Status ' + this.status);
+            alert('Error loading PDF: Status ' + this.status);
+        }
+    };
+
+    xhr.onerror = function() {
+        console.error('Error loading PDF: Network/Access Error');
+        alert('Error loading PDF: Network/Access Error. Make sure the app was launched with --allow-file-access-from-files');
+    };
+
+    xhr.send();
+};
+
 onMounted(() => {
-    scrollToPage(pageNum.value);
+    const urlParams = new URLSearchParams(window.location.search);
+    const fileParam = urlParams.get('file');
+    if (fileParam) {
+        loadPdfFromUrl(fileParam);
+    } else {
+        scrollToPage(pageNum.value);
+    }
 });
 
 onUnmounted(() => {

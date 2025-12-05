@@ -33,6 +33,28 @@ export default defineConfig({
         } catch (err) {
           console.warn('⚠ Could not copy create_shortcut.sh:', err.message)
         }
+
+        // Copy set_default_app.bat to dist folder
+        try {
+          copyFileSync(
+            resolve(__dirname, 'scripts/set_default_app.bat'),
+            resolve(__dirname, 'dist/set_default_app.bat')
+          )
+          console.log('✓ Copied set_default_app.bat to dist/')
+        } catch (err) {
+          console.warn('⚠ Could not copy set_default_app.bat:', err.message)
+        }
+
+        // Copy set_default_app.sh to dist folder
+        try {
+          copyFileSync(
+            resolve(__dirname, 'scripts/set_default_app.sh'),
+            resolve(__dirname, 'dist/set_default_app.sh')
+          )
+          console.log('✓ Copied set_default_app.sh to dist/')
+        } catch (err) {
+          console.warn('⚠ Could not copy set_default_app.sh:', err.message)
+        }
       }
     }
   ],
