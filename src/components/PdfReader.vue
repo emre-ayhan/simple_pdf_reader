@@ -227,6 +227,23 @@ const scrollToPage = (page) => {
     }
 };
 
+const handleKeydown = (event) => {
+    // Left arrow key - previous page
+    if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        if (pageNum.value > 1) {
+            scrollToPage(pageNum.value - 1);
+        }
+    }
+    // Right arrow key - next page
+    else if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        if (pageNum.value < pageCount.value) {
+            scrollToPage(pageNum.value + 1);
+        }
+    }
+};
+
 const toggleZoomMode = () => {
     if (!isFileLoaded.value) return;
     const currentPage = pageNum.value;
@@ -996,6 +1013,9 @@ const loadPdfFromUrl = (url) => {
 };
 
 onMounted(() => {
+    // Add keyboard event listener
+    window.addEventListener('keydown', handleKeydown);
+    
     // Try to get file parameter from URL
     // Don't use URLSearchParams as it might double-decode
     const search = window.location.search;
@@ -1015,6 +1035,9 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+    // Remove keyboard event listener
+    window.removeEventListener('keydown', handleKeydown);
+    
     if (intersectionObserver) {
         intersectionObserver.disconnect();
     }
