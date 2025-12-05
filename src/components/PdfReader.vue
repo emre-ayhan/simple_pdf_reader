@@ -401,7 +401,7 @@ const loadPdfDocument = () => {
 };
 </script>
 <template>
-    <div class="container-fluid">
+    <div class="container-fluid" @contextmenu.prevent>
         <nav class="navbar navbar-expand navbar-dark bg-dark fixed-top">
             <div class="container">
                 <!-- Filename -->
