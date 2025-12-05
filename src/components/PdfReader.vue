@@ -5,7 +5,7 @@ import { PDFDocument, rgb } from "pdf-lib";
 
 const pdfCanvases = ref([]);
 const fileInput = ref(null);
-const filename = ref("PDF Reader");
+const filename = ref("Simple PDF Reader");
 const pageNum = ref(localStorage.getItem(filename.value) ? Number(localStorage.getItem(filename.value)) : 1);
 const pageCount = ref(0);
 const scale = 2;
@@ -233,7 +233,7 @@ const toggleZoomMode = () => {
 
     if (zoomMode.value === 'fit-width') {
         zoomMode.value = 'fit-height';
-        const margin = scale * 56; // Account for navbar and padding
+        const margin = scale * 40; // Account for navbar and padding
         width.value = ((pdfReader.value.clientHeight - margin) * 100) / canvas.height;
     } else {
         zoomMode.value = 'fit-width';
@@ -1000,7 +1000,7 @@ onUnmounted(() => {
 </script>
 <template>
     <div class="container-fluid bg-dark" @contextmenu.prevent @dragover.prevent="onDragOver" @drop.prevent="onDrop">
-        <nav class="navbar navbar-expand navbar-dark bg-dark fixed-top">
+        <nav class="navbar navbar-expand navbar-dark bg-dark fixed-top py-0">
             <div class="container">
                 <!-- Filename -->
                 <a class="navbar-brand" href="#" @click.prevent>{{ filename }}</a>
@@ -1186,9 +1186,9 @@ body, #app, .container-fluid {
 }
 
 .pdf-reader {
-    margin-top: 56px;
+    margin-top: 40px;
     width: 100%;
-    height: calc(100vh - 56px);
+    height: calc(100vh - 40px);
     background-color: var(--bs-secondary);
     overflow: auto;
     display: flex;
