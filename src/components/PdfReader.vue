@@ -893,11 +893,6 @@ onUnmounted(() => {
                 <!-- Toolbar -->
                 <ul class="navbar-nav mx-auto">
                     <!-- Drawing -->
-                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="(isDrawing = false, isEraser = false)" :class="{ disabled: !isFileLoaded, active: !isDrawing && !isEraser && isFileLoaded }" title="Clear All Drawing">
-                            <i class="bi bi-mouse2-fill"></i>
-                        </a>
-                    </li>
                     <li class="nav-item btn-group">
                         <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isDrawing = !isDrawing, isEraser = false, drawMode = 'pen')" :class="{ disabled: !isFileLoaded }" :style="{ color: isDrawing && drawMode === 'pen' ? drawColor : '' }">
                             <i class="bi bi-pencil-fill"></i>
