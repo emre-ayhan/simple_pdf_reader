@@ -159,6 +159,11 @@ const startDrawing = (e) => {
     // Only allow pen/stylus and mouse input, not touch
     if (e.pointerType === 'touch') return;
     
+    // Check if pen secondary button (barrel button/eraser) is pressed
+    // buttons: 1 = primary, 2 = secondary, 32 = eraser button
+    const isPenSecondaryButton = e.pointerType === 'pen' && (e.buttons === 2 || e.buttons === 32 || e.button === 5);
+    const shouldErase = isEraser.value || isPenSecondaryButton;
+    
     // Prevent default to avoid interference with touch/pen
     e.preventDefault();
     e.stopPropagation();
@@ -199,7 +204,7 @@ const startDrawing = (e) => {
         strokesPerPage[pageIndex] = [];
     }
     
-    if (isEraser.value) {
+    if (shouldErase) {
         eraseAtPoint(lastX, lastY, currentCanvasIndex);
     } else if (drawMode.value === 'pen') {
         currentStroke = [{
@@ -226,6 +231,10 @@ const draw = (e) => {
     // Block touch
     if (e.pointerType === 'touch') return;
     
+    // Check if pen secondary button is pressed for erasing
+    const isPenSecondaryButton = e.pointerType === 'pen' && (e.buttons === 2 || e.buttons === 32 || e.button === 5);
+    const shouldErase = isEraser.value || isPenSecondaryButton;
+    
     e.preventDefault();
     e.stopPropagation();
     
@@ -246,7 +255,7 @@ const draw = (e) => {
     const currentX = (clientX - rect.left) * scaleX;
     const currentY = (clientY - rect.top) * scaleY;
     
-    if (isEraser.value) {
+    if (shouldErase) {
         eraseAtPoint(currentX, currentY, currentCanvasIndex);
     } else if (drawMode.value === 'pen') {
         currentStroke.push({
