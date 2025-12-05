@@ -86,7 +86,7 @@ const queueRenderPage = (page) => {
 
 // Drawing functions
 const startDrawing = (e) => {
-    if (!lockView.value || (!isDrawing.value && !isEraser.value)) return;
+    if (!isDrawing.value && !isEraser.value) return;
     
     isMouseDown = true;
     const canvas = drawingCanvas.value;
@@ -118,7 +118,7 @@ const startDrawing = (e) => {
 };
 
 const draw = (e) => {
-    if (!lockView.value || (!isDrawing.value && !isEraser.value) || !isMouseDown) return;
+    if ((!isDrawing.value && !isEraser.value) || !isMouseDown) return;
     
     const canvas = drawingCanvas.value;
     const rect = canvas.getBoundingClientRect();
@@ -176,7 +176,7 @@ const draw = (e) => {
 };
 
 const stopDrawing = () => {
-    if (!lockView.value || (!isDrawing.value && !isEraser.value)) return;
+    if (!isDrawing.value && !isEraser.value) return;
     isMouseDown = false;
     
     if (isDrawing.value && drawMode.value !== 'pen' && canvasSnapshot) {
@@ -469,8 +469,8 @@ const loadPdfDocument = () => {
                     @mouseup="stopDrawing"
                     @mouseleave="stopDrawing"
                     :style="{ 
-                        cursor: lockView && isDrawing ? 'crosshair' : lockView && isEraser ? 'pointer' : 'default',
-                        pointerEvents: lockView ? 'auto' : 'none'
+                        cursor: isDrawing ? 'crosshair' : isEraser ? 'pointer' : 'default',
+                        pointerEvents: 'auto'
                     }"
                 ></canvas>
             </div>
