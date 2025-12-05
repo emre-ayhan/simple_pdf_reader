@@ -33,10 +33,54 @@ A feature-rich PDF reader application built with Vue 3 and Vite, containerized w
 
 ## Prerequisites
 
+### For Local Usage
+- Node.js (v16 or higher)
+- npm or yarn
+- A modern web browser (Chrome, Firefox, Edge, or Safari)
+
+### For Docker Development
 - Docker
 - Docker Compose
 
 ## Getting Started
+
+### Local Usage (Standalone)
+
+Build the application for local use without Docker:
+
+1. Install dependencies and build:
+```bash
+npm install
+npm run build
+```
+
+2. The built files will be in the `dist/` folder, including:
+   - `index.html` - The main application file
+   - `logo.ico` - Application icon
+   - `create_shortcut.bat` - Windows shortcut creator
+   - `create_shortcut.sh` - macOS shortcut creator
+
+3. Create a desktop shortcut:
+
+   **Windows:**
+   ```bash
+   cd dist
+   create_shortcut.bat
+   ```
+   This creates a Start Menu shortcut that opens the PDF reader in Chrome as a standalone app.
+
+   **macOS:**
+   ```bash
+   cd dist
+   chmod +x create_shortcut.sh
+   ./create_shortcut.sh
+   ```
+   This creates an application bundle in `~/Applications/Simple PDF Reader.app` that can be:
+   - Launched from Finder
+   - Added to your Dock
+   - Moved to `/Applications` for system-wide access
+
+4. Alternatively, open `dist/index.html` directly in your browser.
 
 ### Development
 
@@ -53,7 +97,7 @@ http://localhost:5173
 
 The app will automatically reload when you make changes to the source files.
 
-### Production Build
+### Production Build (Docker)
 
 1. Build the production Docker image:
 ```bash
