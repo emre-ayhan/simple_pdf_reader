@@ -40,7 +40,7 @@ let canvasSnapshot = null;
 
 const isMouseDown = ref(false);
 const activePointerId = ref(null);
-const activePointerType = ref('touch');
+const activePointerType = ref(null);
 
 var pdfDoc = null;
 var pageRendering = ref(false);
