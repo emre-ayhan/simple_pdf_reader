@@ -907,7 +907,14 @@ const saveFile = async () => {
 const loadPdfFromUrl = (url) => {
     // Handle Windows paths that might be passed as arguments
     // Remove surrounding quotes if present
-    url = url.replace(/^"|"$/g, '');
+    url = url.replace(/^"|"$/g, '').trim();
+    
+    // Decode URL-encoded characters (like %20 for space)
+    try {
+        url = decodeURIComponent(url);
+    } catch (e) {
+        console.warn('Could not decode URL:', e);
+    }
     
     // If it looks like a Windows path (e.g. C:\...), convert to file URL
     if (/^[a-zA-Z]:\\/.test(url) || url.startsWith('\\\\')) {
@@ -989,10 +996,19 @@ const loadPdfFromUrl = (url) => {
 };
 
 onMounted(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const fileParam = urlParams.get('file');
-    if (fileParam) {
-        loadPdfFromUrl(fileParam);
+    // Try to get file parameter from URL
+    // Don't use URLSearchParams as it might double-decode
+    const search = window.location.search;
+    console.log('Raw search string:', search);
+    
+    if (search && search.includes('file=')) {
+        // Extract file parameter manually to avoid double-decoding
+        const match = search.match(/[?&]file=([^&]*)/);
+        if (match) {
+            const fileParam = match[1];
+            console.log('File parameter extracted:', fileParam);
+            loadPdfFromUrl(fileParam);
+        }
     } else {
         scrollToPage(pageNum.value);
     }

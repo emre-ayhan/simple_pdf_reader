@@ -23,6 +23,17 @@ export default defineConfig({
           console.warn('⚠ Could not copy install_app.bat:', err.message)
         }
 
+        // Copy open_pdf.bat to dist folder
+        try {
+          copyFileSync(
+            resolve(__dirname, 'scripts/open_pdf.bat'),
+            resolve(__dirname, 'dist/open_pdf.bat')
+          )
+          console.log('✓ Copied open_pdf.bat to dist/')
+        } catch (err) {
+          console.warn('⚠ Could not copy open_pdf.bat:', err.message)
+        }
+
         // Copy install_app.sh to dist folder
         try {
           copyFileSync(
