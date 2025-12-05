@@ -14,6 +14,7 @@ const width = ref(100);
 const zoomMode = ref('fit-width'); // 'fit-width' or 'fit-height'
 const isFileLoaded = ref(false);
 const isDragging = ref(false);
+const dragCounter = ref(0);
 const pagesContainer = ref(null);
 const pdfReader = ref(null);
 let intersectionObserver = null;
@@ -595,16 +596,22 @@ const eraseAtPoint = (x, y, canvasIndex) => {
     }
 };
 
-const onDragOver = (e) => {
+const onDragEnter = (e) => {
+    dragCounter.value++;
     isDragging.value = true;
 };
 
 const onDragLeave = (e) => {
-    isDragging.value = false;
+    dragCounter.value--;
+    if (dragCounter.value <= 0) {
+        isDragging.value = false;
+        dragCounter.value = 0;
+    }
 };
 
 const onDrop = (e) => {
     isDragging.value = false;
+    dragCounter.value = 0;
     const files = e.dataTransfer.files;
     if (files.length > 0) {
         const file = files[0];
@@ -631,6 +638,8 @@ const loadPdfFile = (file) => {
             historyStep.value = -1;
             savedHistoryStep.value = -1;
             strokesPerPage = {};
+            renderedPages.value.clear();
+            drawingContexts = [];
             
             // Wait for next tick to ensure refs are populated
             nextTick(() => {
@@ -999,7 +1008,7 @@ onUnmounted(() => {
 });
 </script>
 <template>
-    <div class="container-fluid bg-dark" @contextmenu.prevent @dragover.prevent="onDragOver" @drop.prevent="onDrop">
+    <div class="container-fluid bg-dark" @contextmenu.prevent @dragenter.prevent="onDragEnter" @dragleave.prevent="onDragLeave" @dragover.prevent @drop.prevent="onDrop">
         <nav class="navbar navbar-expand navbar-dark bg-dark fixed-top py-0">
             <div class="container">
                 <!-- Filename -->
@@ -1170,7 +1179,7 @@ onUnmounted(() => {
         </div>
         <input ref="fileInput" type="file"  accept="application/pdf" class="d-none" @change="loadPdfDocument" />
 
-        <div v-if="isDragging" class="drag-overlay" @dragleave.prevent="onDragLeave" @dragover.prevent @drop.prevent="onDrop">
+        <div v-if="isDragging" class="drag-overlay">
             <div class="drag-message">
                 <i class="bi bi-file-earmark-pdf-fill display-1"></i>
                 <h3>Drop PDF here to open</h3>
@@ -1223,6 +1232,13 @@ body, #app, .container-fluid {
     background-color: rgba(0, 0, 0, 0.5);
     padding: 5px 15px;
     border-radius: 20px;
+}
+
+.navbar-brand {
+    max-width: 25%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .form-control-plaintext {
