@@ -13,6 +13,7 @@ const lockView = ref(false);
 const width = ref(100);
 const zoomMode = ref('fit-width'); // 'fit-width' or 'fit-height'
 const isFileLoaded = ref(false);
+const isDragging = ref(false);
 const pagesContainer = ref(null);
 const pdfReader = ref(null);
 let intersectionObserver = null;
@@ -594,9 +595,28 @@ const eraseAtPoint = (x, y, canvasIndex) => {
     }
 };
 
-const loadPdfDocument = () => {
-    const file = fileInput.value.files[0];
+const onDragOver = (e) => {
+    isDragging.value = true;
+};
 
+const onDragLeave = (e) => {
+    isDragging.value = false;
+};
+
+const onDrop = (e) => {
+    isDragging.value = false;
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+        const file = files[0];
+        if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+            loadPdfFile(file);
+        } else {
+            alert('Please drop a PDF file.');
+        }
+    }
+};
+
+const loadPdfFile = (file) => {
     if (file) {
         filename.value = file.name;
         const url = URL.createObjectURL(file);
@@ -627,6 +647,11 @@ const loadPdfDocument = () => {
             });
         });
     }
+};
+
+const loadPdfDocument = () => {
+    const file = fileInput.value.files[0];
+    loadPdfFile(file);
 };
 
 const setupLazyLoadObserver = () => {
@@ -974,7 +999,7 @@ onUnmounted(() => {
 });
 </script>
 <template>
-    <div class="container-fluid bg-dark" @contextmenu.prevent>
+    <div class="container-fluid bg-dark" @contextmenu.prevent @dragover.prevent="onDragOver" @drop.prevent="onDrop">
         <nav class="navbar navbar-expand navbar-dark bg-dark fixed-top">
             <div class="container">
                 <!-- Filename -->
@@ -1144,6 +1169,13 @@ onUnmounted(() => {
             </div>
         </div>
         <input ref="fileInput" type="file"  accept="application/pdf" class="d-none" @change="loadPdfDocument" />
+
+        <div v-if="isDragging" class="drag-overlay" @dragleave.prevent="onDragLeave" @dragover.prevent @drop.prevent="onDrop">
+            <div class="drag-message">
+                <i class="bi bi-file-earmark-pdf-fill display-1"></i>
+                <h3>Drop PDF here to open</h3>
+            </div>
+        </div>
     </div>
 </template>
 <style>
@@ -1242,5 +1274,24 @@ body, #app, .container-fluid {
     width: 100%;
     height: 100%;
     pointer-events: auto;
+}
+
+.drag-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+}
+
+.drag-message {
+    text-align: center;
+    pointer-events: none;
 }
 </style>

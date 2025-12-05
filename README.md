@@ -36,7 +36,7 @@ A feature-rich PDF reader application built with Vue 3 and Vite, containerized w
 ### For Local Usage
 - Node.js (v16 or higher)
 - npm or yarn
-- A modern web browser (Chrome, Firefox, Edge, or Safari)
+- **Google Chrome** or **Chromium** (Required for the standalone app mode and local file access)
 
 ### For Docker Development
 - Docker
@@ -57,30 +57,39 @@ npm run build
 2. The built files will be in the `dist/` folder, including:
    - `index.html` - The main application file
    - `logo.ico` - Application icon
-   - `create_shortcut.bat` - Windows shortcut creator
-   - `create_shortcut.sh` - macOS shortcut creator
+   - `install_app.bat` - Windows installer script
+   - `install_app.sh` - Linux installer script
+   - `uninstall_app.bat` - Windows uninstaller script
+   - `uninstall_app.sh` - Linux uninstaller script
 
-3. Create a desktop shortcut:
+3. **Install and Set as Default App:**
 
    **Windows:**
-   ```bash
-   cd dist
-   create_shortcut.bat
-   ```
-   This creates a Start Menu shortcut that opens the PDF reader in Chrome as a standalone app.
+   1. Open the `dist` folder.
+   2. Right-click `install_app.bat` and select **"Run as administrator"**.
+   3. This will:
+      - Create a Start Menu shortcut "Simple PDF Reader".
+      - Register the application as a PDF viewer.
+      - Attempt to set it as the default PDF app.
+   4. If Windows asks, select "Simple PDF Reader" as the default app.
+   5. Alternatively, right-click any PDF -> Open With -> Choose another app -> Select Simple PDF Reader -> Check "Always use this app".
 
-   **macOS:**
-   ```bash
-   cd dist
-   chmod +x create_shortcut.sh
-   ./create_shortcut.sh
-   ```
-   This creates an application bundle in `~/Applications/Simple PDF Reader.app` that can be:
-   - Launched from Finder
-   - Added to your Dock
-   - Moved to `/Applications` for system-wide access
+   **Linux:**
+   1. Open a terminal in the `dist` folder.
+   2. Run the installer:
+      ```bash
+      chmod +x install_app.sh
+      ./install_app.sh
+      ```
+   3. This will create a desktop entry and register the app as the default PDF viewer.
 
-4. Alternatively, open `dist/index.html` directly in your browser.
+4. **Uninstall:**
+
+   **Windows:**
+   - Run `dist/uninstall_app.bat` (as Administrator) to remove the shortcut and registry entries.
+
+   **Linux:**
+   - Run `dist/uninstall_app.sh` to remove the desktop entry and user data.
 
 ### Development
 
