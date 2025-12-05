@@ -12,14 +12,6 @@ const lockView = ref(false);
 const width = ref(100);
 const isFileLoaded = ref(false);
 
-// Drawing variables
-const isDrawing = ref(false);
-const isEraser = ref(false);
-const drawMode = ref('pen'); // 'pen', 'line', 'rectangle', 'circle'
-const drawColor = ref('blue');
-const drawThickness = ref(2);
-const drawingCanvas = ref(null);
-
 const colors = [
     ['black', 'dimgray', 'gray', 'darkgray', 'silver', 'white'],
     ['magenta', 'red', 'orangered', 'orange', 'gold', 'yellow'],
@@ -28,15 +20,27 @@ const colors = [
     ['brown', 'sienna', 'olive', 'maroon', 'coral', 'salmon']
 ];
 
+// Drawing variables
+const isDrawing = ref(false);
+const isEraser = ref(false);
+const drawMode = ref('pen'); // 'pen', 'line', 'rectangle', 'circle'
+const drawColor = ref('blue');
+const drawThickness = ref(2);
+const drawingCanvas = ref(null);
+
+
 let drawingContext = null;
 let lastX = 0;
 let lastY = 0;
-let isMouseDown = false;
 let strokes = [];
 let currentStroke = [];
 let startX = 0;
 let startY = 0;
 let canvasSnapshot = null;
+
+const isMouseDown = ref(false);
+const activePointerId = ref(null);
+const activePointerType = ref('touch');
 
 var pdfDoc = null;
 var pageRendering = ref(false);
@@ -88,14 +92,36 @@ const queueRenderPage = (page) => {
 const startDrawing = (e) => {
     if (!isDrawing.value && !isEraser.value) return;
     
-    isMouseDown = true;
+    // Track active pointer type
+    activePointerType.value = e.pointerType;
+
+    // Only allow pen/stylus and mouse input, not touch
+    if (e.pointerType === 'touch') return;
+    
+    // Prevent default to avoid interference with touch/pen
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Capture the pointer to ensure we get all events
     const canvas = drawingCanvas.value;
+    if (canvas && e.pointerId !== undefined) {
+        canvas.setPointerCapture(e.pointerId);
+    }
+    
+    // Track this pointer
+    activePointerId.value = e.pointerId;
+    isMouseDown.value = true;
+    
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
     
-    lastX = (e.clientX - rect.left) * scaleX;
-    lastY = (e.clientY - rect.top) * scaleY;
+    // Support pointer, touch, and mouse events
+    const clientX = e.clientX !== undefined ? e.clientX : (e.touches?.[0]?.clientX || 0);
+    const clientY = e.clientY !== undefined ? e.clientY : (e.touches?.[0]?.clientY || 0);
+    
+    lastX = (clientX - rect.left) * scaleX;
+    lastY = (clientY - rect.top) * scaleY;
     startX = lastX;
     startY = lastY;
     
@@ -118,15 +144,27 @@ const startDrawing = (e) => {
 };
 
 const draw = (e) => {
-    if ((!isDrawing.value && !isEraser.value) || !isMouseDown) return;
+    if ((!isDrawing.value && !isEraser.value) || !isMouseDown.value) return;
+    
+    // Only continue with the same pointer that started
+    if (e.pointerId !== activePointerId.value) return;
+    
+    // Block touch
+    if (e.pointerType === 'touch') return;
+    
+    e.preventDefault();
+    e.stopPropagation();
     
     const canvas = drawingCanvas.value;
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
     
-    const currentX = (e.clientX - rect.left) * scaleX;
-    const currentY = (e.clientY - rect.top) * scaleY;
+    const clientX = e.clientX !== undefined ? e.clientX : (e.touches?.[0]?.clientX || 0);
+    const clientY = e.clientY !== undefined ? e.clientY : (e.touches?.[0]?.clientY || 0);
+    
+    const currentX = (clientX - rect.left) * scaleX;
+    const currentY = (clientY - rect.top) * scaleY;
     
     if (isEraser.value) {
         eraseAtPoint(currentX, currentY);
@@ -175,9 +213,25 @@ const draw = (e) => {
     lastY = currentY;
 };
 
-const stopDrawing = () => {
+const stopDrawing = (e) => {
     if (!isDrawing.value && !isEraser.value) return;
-    isMouseDown = false;
+    
+    // Only stop if it's the same pointer
+    if (e && e.pointerId !== activePointerId.value) return;
+    
+    // Release pointer capture
+    const canvas = drawingCanvas.value;
+    if (canvas && e && e.pointerId !== undefined) {
+        try {
+            canvas.releasePointerCapture(e.pointerId);
+        } catch (err) {
+            // Ignore if capture was already released
+        }
+    }
+    
+    isMouseDown.value = false;
+    activePointerId.value = null;
+    activePointerType.value = null;
     
     if (isDrawing.value && drawMode.value !== 'pen' && canvasSnapshot) {
         // Save shape as a stroke
@@ -464,13 +518,15 @@ const loadPdfDocument = () => {
                 <canvas 
                     ref="drawingCanvas" 
                     class="drawing-canvas"
-                    @mousedown="startDrawing"
-                    @mousemove="draw"
-                    @mouseup="stopDrawing"
-                    @mouseleave="stopDrawing"
+                    @pointerdown="startDrawing"
+                    @pointermove="draw"
+                    @pointerup="stopDrawing"
+                    @pointerleave="stopDrawing"
+                    @pointercancel="stopDrawing"
                     :style="{ 
                         cursor: isDrawing ? 'crosshair' : isEraser ? 'pointer' : 'default',
-                        pointerEvents: 'auto'
+                        pointerEvents: 'auto',
+                        touchAction: lockView || activePointerType !== 'touch' ? 'none' : 'pan-y pan-x'
                     }"
                 ></canvas>
             </div>
@@ -515,6 +571,7 @@ body, #app, .container-fluid {
 .canvas-container {
     position: relative;
     display: inline-block;
+    touch-action: pan-y pan-x;
 }
 
 .pdf-canvas {
