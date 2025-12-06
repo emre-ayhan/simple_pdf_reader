@@ -36,6 +36,12 @@ const closeTab = (index) => {
 
         const lastNotClosedIndex = tabs.value.findIndex((tab, i) => !closedTabs.value.includes(tab) && i >= index);
         activeTabIndex.value = Math.max(0, lastNotClosedIndex);
+
+        if (activeTabs.value.length === 1 && isLastTabDefault.value) {
+            tabs.value = [defaultTab];
+            closedTabs.value = [];
+            activeTabIndex.value = 0;
+        }
     }
 };
 
