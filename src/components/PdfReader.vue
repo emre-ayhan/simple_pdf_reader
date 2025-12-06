@@ -152,6 +152,7 @@ let startX = 0;
 let startY = 0;
 let canvasSnapshot = null;
 let currentCanvasIndex = -1;
+let savedWidth = 100; // Save page width before entering whiteboard
 
 const isMouseDown = ref(false);
 const activePointerId = ref(null);
@@ -196,6 +197,11 @@ const scrollToPageCanvas = async (pageNumber) => {
     const drawCanvas = drawingCanvases.value[pageNumber - 1];
     
     if (!canvas || !drawCanvas) return;
+    // Reset inline styles that might have been set in whiteboard mode
+    canvas.style.width = '';
+    canvas.style.height = '';
+    drawCanvas.style.width = '';
+    drawCanvas.style.height = '';
     
     const ctx = canvas.getContext("2d");
     
@@ -758,11 +764,12 @@ const captureSelection = () => {
     whiteboardImage.value = selectedCanvas.toDataURL();
     whiteboardScale.value = 1;
     
-    // Save current PDF state
+    // Save current PDF state and zoom settings
     savedPdfDoc = pdfDoc;
     savedPageCount = pageCount.value;
     savedPageNum = pageNum.value;
     savedStrokesPerPage = JSON.parse(JSON.stringify(strokesPerPage));
+    savedWidth = width.value;
     
     // Switch to whiteboard mode
     showWhiteboard.value = true;
@@ -783,7 +790,6 @@ const captureSelection = () => {
 
 const closeWhiteboard = () => {
     showWhiteboard.value = false;
-    whiteboardImage.value = null;
     whiteboardScale.value = 1;
     
     // Restore PDF state
@@ -794,6 +800,8 @@ const closeWhiteboard = () => {
         pageNum.value = targetPage;
         isFileLoaded.value = true;
         strokesPerPage = JSON.parse(JSON.stringify(savedStrokesPerPage));
+        width.value = savedWidth; // Restore zoom width
+        whiteboardImage.value = null;
         renderedPages.value.clear();
         drawingContexts = [];
         
@@ -814,10 +822,27 @@ const closeWhiteboard = () => {
         savedPageCount = 0;
         savedPageNum = 1;
         savedStrokesPerPage = {};
+        savedWidth = 100;
+    } else if (imagePage.value) {
+        // Restore image page (preserves imagePage)
+        whiteboardImage.value = null;
+        pdfDoc = null;
+        isFileLoaded.value = true;
+        pageCount.value = 1;
+        pageNum.value = 1;
+        strokesPerPage = { 1: [] };
+        renderedPages.value.clear();
+        drawingContexts = [];
+        
+        // Re-render image page
+        nextTick(() => {
+            renderAllPages();
+        });
     } else {
-        // No PDF to return to (image-only session)
+        // No PDF or image to return to
         pdfDoc = null;
         imagePage.value = null;
+        whiteboardImage.value = null;
         isFileLoaded.value = false;
         pageCount.value = 0;
         pageNum.value = 1;
