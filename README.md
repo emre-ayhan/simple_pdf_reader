@@ -2,6 +2,13 @@
 
 A feature-rich PDF reader application built with Vue 3 and Vite, containerized with Docker. This application allows you to view PDF documents and annotate them with various drawing tools.
 
+## Whiteboard & Image Support
+
+- 🖼️ **Open images as pages**: Drop or select PNG/JPG/GIF/WebP/BMP/SVG files; they render as a single page with full drawing tools, zoom, and page persistence.
+- ✂️ **Capture to whiteboard**: Select any area of a PDF and pop it into a whiteboard for focused markup; export via download, copy-to-clipboard, or native share (where supported).
+- 🔍 **Whiteboard zoom**: Zoom in/out while preserving aspect ratio; overflow is clipped to keep the view tidy.
+- ↩️ **Exit safely**: Closing whiteboard returns you to the PDF (or the opened image) with prior zoom and page preserved.
+
 ## Features
 
 ### PDF Viewing
