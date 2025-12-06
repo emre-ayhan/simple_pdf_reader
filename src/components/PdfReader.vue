@@ -645,13 +645,13 @@ const onDrop = (e) => {
 const loadPdfFile = (file) => {
     if (file) {
         filename.value = file.name;
-        emit('file-loaded', filename.value);
         const url = URL.createObjectURL(file);
         getDocument(url).promise.then((pdfDoc_) => {
             pdfDoc = pdfDoc_;
             pageCount.value = pdfDoc.numPages;
             pageNum.value = localStorage.getItem(filename.value) ? Number(localStorage.getItem(filename.value)) : 1;
             isFileLoaded.value = true;
+            emit('file-loaded', filename.value);
             
             // Reset history
             history.value = [];
@@ -977,7 +977,8 @@ const loadPdfFromUrl = (url) => {
                 pageCount.value = pdfDoc.numPages;
                 pageNum.value = localStorage.getItem(filename.value) ? Number(localStorage.getItem(filename.value)) : 1;
                 isFileLoaded.value = true;
-                
+                emit('file-loaded', filename.value);
+
                 // Reset history
                 history.value = [];
                 historyStep.value = -1;
