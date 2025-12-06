@@ -16,6 +16,7 @@ const addTab = (filename) => {
 const addNewTab = () => {
     if (tabs.value[tabs.value.length - 1] !== defaultTab) {
         tabs.value.push(defaultTab);
+        activeTabIndex.value = tabs.value.length - 1;
     }
 };
 
