@@ -3,9 +3,11 @@ import { ref, computed, nextTick, onMounted, onUnmounted, markRaw } from "vue";
 import { GlobalWorkerOptions, getDocument } from "pdfjs-dist";
 import { PDFDocument, rgb } from "pdf-lib";
 
+const emit = defineEmits(['file-loaded']);
+
 const pdfCanvases = ref([]);
 const fileInput = ref(null);
-const filename = ref("Simple PDF Reader");
+const filename = ref(null);
 const pageNum = ref(localStorage.getItem(filename.value) ? Number(localStorage.getItem(filename.value)) : 1);
 const pageCount = ref(0);
 const scale = 2;
@@ -251,7 +253,7 @@ const toggleZoomMode = () => {
 
     if (zoomMode.value === 'fit-width') {
         zoomMode.value = 'fit-height';
-        const margin = scale * 40; // Account for navbar and padding
+        const margin = scale * 62.5; // Account for navbar and padding
         width.value = ((pdfReader.value.clientHeight - margin) * 100) / canvas.height;
     } else {
         zoomMode.value = 'fit-width';
@@ -643,6 +645,7 @@ const onDrop = (e) => {
 const loadPdfFile = (file) => {
     if (file) {
         filename.value = file.name;
+        emit('file-loaded', filename.value);
         const url = URL.createObjectURL(file);
         getDocument(url).promise.then((pdfDoc_) => {
             pdfDoc = pdfDoc_;
@@ -1045,14 +1048,15 @@ onUnmounted(() => {
         lazyLoadObserver.disconnect();
     }
 });
+
+defineExpose({
+    filename
+});
 </script>
 <template>
     <div class="container-fluid bg-dark" @contextmenu.prevent @dragenter.prevent="onDragEnter" @dragleave.prevent="onDragLeave" @dragover.prevent @drop.prevent="onDrop">
         <nav class="navbar navbar-expand navbar-dark bg-dark fixed-top py-0">
             <div class="container">
-                <!-- Filename -->
-                <a class="navbar-brand" href="#" @click.prevent>{{ filename }}</a>
-
                 <!-- Toolbar -->
                 <ul class="navbar-nav mx-auto">
                     <!-- Drawing -->
@@ -1171,10 +1175,8 @@ onUnmounted(() => {
                             <i :class="`bi bi-arrows-expand${zoomMode === 'fit-width' ? '-vertical' : ''}`"></i>
                         </a>
                     </li>
-                </ul>
-
-                <!-- Menu -->
-                <ul class="navbar-nav">
+                    <li class="nav-item vr bg-white mx-2"></li>
+                    <!-- Menu -->
                     <li class="nav-item" :title="lockView ? 'Unlock View' : 'Lock View'">
                         <a href="#" class="nav-link" @click.prevent="isFileLoaded && (lockView = !lockView)" :class="{ disabled: !isFileLoaded }">
                             <i class="bi" :class="lockView ? 'bi-lock-fill' : 'bi-lock'"></i>
@@ -1194,6 +1196,7 @@ onUnmounted(() => {
             </div>
         </nav>
         <div class="pdf-reader" ref="pdfReader" :class="{ 'overflow-hidden': lockView }">
+            <!-- Pages -->
             <div class="pages-container" ref="pagesContainer" :style="{ width: `${width}%` }">
                 <div v-for="page in pageCount" :key="page" class="page-container" :data-page="page">
                     <div class="canvas-container" :class="{ 'canvas-loading': !renderedPages.has(page) }">
@@ -1227,16 +1230,22 @@ onUnmounted(() => {
     </div>
 </template>
 <style>
-body, #app, .container-fluid {
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
+.navbar {
+    top: 28.5px !important;
+}
+
+.navbar .nav-link {
+    padding: 4px 12px !important;
+}
+
+.navbar input {
+    padding: 4px 8px !important;
 }
 
 .pdf-reader {
-    margin-top: 40px;
+    margin-top: 62.5px;
     width: 100%;
-    height: calc(100vh - 40px);
+    height: calc(100vh - 62.5px);
     background-color: var(--bs-secondary);
     overflow: auto;
     display: flex;
@@ -1271,13 +1280,6 @@ body, #app, .container-fluid {
     background-color: rgba(0, 0, 0, 0.5);
     padding: 5px 15px;
     border-radius: 20px;
-}
-
-.navbar-brand {
-    max-width: 25%;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 
 .form-control-plaintext {
