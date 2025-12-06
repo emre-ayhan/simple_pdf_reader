@@ -4,25 +4,22 @@ import NavTabs from './components/NavTabs.vue';
 import PdfReader from './components/PdfReader.vue';
 
 const fileTabs = ref(null);
-const pdfReader = ref(null);
+const reader = ref(null);
 
-const addFileTab = (filename) => {
+const handleFileLoad = (filename) => {
     if (fileTabs.value) {
-        fileTabs.value.addFile(filename);
+        fileTabs.value.addTab(filename);
     }
 };
 
-const onTabClose = (filename) => {
-    if (pdfReader.value && pdfReader.value.filename === filename) {
-        // Clean up the PDF if the closed tab's filename matches the currently loaded PDF
-        pdfReader.value.cleanupPdf();
-    }
+const handleTabClose = (filename) => {
+    
 };
 </script>
 <template>
     <div id="app">
-        <nav-tabs ref="fileTabs" @close="onTabClose">
-            <PdfReader ref="pdfReader" @file-loaded="addFileTab" />
+        <nav-tabs ref="fileTabs" @close="handleTabClose">
+            <PdfReader ref="reader" @file-loaded="handleFileLoad" />
         </nav-tabs>
     </div>
 </template>

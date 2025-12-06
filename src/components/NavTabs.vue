@@ -7,7 +7,7 @@ const defaultTab = 'Simple PDF Reader';
 const tabs = ref([defaultTab]);
 const activeTabIndex = ref(0);
 
-const addFile = (filename) => {
+const addTab = (filename) => {
     if (!tabs.value.includes(filename)) {
         tabs.value[tabs.value.length - 1] = filename;
     }
@@ -28,7 +28,7 @@ const closeTab = (index) => {
 };
 
 defineExpose({
-    addFile,
+    addTab,
     closeTab
 });
 </script>
