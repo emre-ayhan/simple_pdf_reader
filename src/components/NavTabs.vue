@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed } from 'vue';
 
-const defaultTab = 'Simple PDF Reader';
+const defaultTab = 'New Tab';
 const tabs = ref([defaultTab]);
 const activeTabIndex = ref(0);
 const closedTabs = ref([]);
