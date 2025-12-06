@@ -7,7 +7,7 @@ const fileTabs = ref(null);
 
 const handleFileLoad = (filename) => {
     if (fileTabs.value) {
-        fileTabs.value.addTab(filename);
+        fileTabs.value.setCurrentTab(filename);
     }
 };
 </script>

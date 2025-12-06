@@ -1,12 +1,13 @@
 <script setup>
 import { ref, computed } from 'vue';
 
-const defaultTab = {
+const getDefaultTab = () => ({
     name: 'New Tab',
     default: true,
     closed: false
-};
-const tabs = ref([defaultTab]);
+});
+
+const tabs = ref([getDefaultTab()]);
 const activeTabIndex = ref(0);
 
 const activeTabs = computed(() => {
@@ -17,8 +18,8 @@ const isLastTabDefault = computed(() => {
     return tabs.value[tabs.value.length - 1].default;
 });
 
-const addTab = (filename) => {
-    tabs.value[tabs.value.length - 1] = {
+const setCurrentTab = (filename) => {
+    tabs.value[activeTabIndex.value] = {
         name: filename,
         default: false,
         closed: false
@@ -27,7 +28,7 @@ const addTab = (filename) => {
 
 const addNewTab = () => {
     if (isLastTabDefault.value) return;
-    tabs.value.push(defaultTab);
+    tabs.value.push(getDefaultTab());
     activeTabIndex.value = tabs.value.length - 1;
 };
 
@@ -47,7 +48,7 @@ const closeTab = (index) => {
 };
 
 defineExpose({
-    addTab,
+    setCurrentTab,
     closeTab
 });
 </script>
