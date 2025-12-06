@@ -1110,6 +1110,12 @@ const loadPdfDocument = () => {
     }
 };
 
+const openFilePicker = () => {
+    if (fileInput.value) {
+        fileInput.value.click();
+    }
+};
+
 const setupLazyLoadObserver = () => {
     // Clean up existing observer
     if (lazyLoadObserver) {
@@ -1650,8 +1656,59 @@ defineExpose({
             </div>
         </nav>
         <div class="pdf-reader" ref="pdfReader" :class="{ 'overflow-hidden': lockView || showWhiteboard }">
-            <!-- Pages -->
-            <div class="pages-container" ref="pagesContainer" :style="{ width: showWhiteboard ? '100%' : `${width}%`, padding: showWhiteboard ? '0' : '20px 0' }">
+            <div v-if="!isFileLoaded" class="empty-state">
+                <div class="empty-card">
+                    <div class="empty-eyebrow">Simple PDF Reader</div>
+                    <h1 class="empty-title">Fast, focused reading with ink-ready tools.</h1>
+                    <p class="empty-lead">Built with Vue 3 and Vite, this reader keeps your PDFs and images quick to open, easy to mark up, and ready for sharing.</p>
+
+                    <div class="empty-actions">
+                        <button class="btn btn-primary" @click.prevent="openFilePicker">Open PDF or Image</button>
+                        <span class="empty-hint">or drop a file anywhere</span>
+                    </div>
+
+                    <div class="empty-grid">
+                        <div class="empty-section">
+                            <div class="empty-section-title">Whiteboard & Image Support</div>
+                            <ul>
+                                <li>Open images as pages with full drawing, zoom, and persistence.</li>
+                                <li>Capture any PDF area into a whiteboard for focused markup and exports.</li>
+                                <li>Zoom whiteboards in and out while keeping aspect ratio tidy.</li>
+                                <li>Exit whiteboard safely and return to your exact page and zoom.</li>
+                            </ul>
+                        </div>
+                        <div class="empty-section">
+                            <div class="empty-section-title">PDF Viewing</div>
+                            <ul>
+                                <li>Load local PDFs and keep your last viewed page.</li>
+                                <li>Navigate pages quickly with keyboard or toolbar controls.</li>
+                                <li>Adjust zoom with fit-width or fit-height modes.</li>
+                                <li>Responsive layout tuned for desktop and mobile.</li>
+                            </ul>
+                        </div>
+                        <div class="empty-section">
+                            <div class="empty-section-title">Drawing & Annotation Tools</div>
+                            <ul>
+                                <li>Pen, line, rectangle, circle, and eraser tools with 30 colors.</li>
+                                <li>Adjustable stroke thickness and undo/redo history.</li>
+                                <li>Stylus-ready pointer support for smooth inking.</li>
+                                <li>One-click clear when you need a fresh slate.</li>
+                            </ul>
+                        </div>
+                        <div class="empty-section">
+                            <div class="empty-section-title">Technical Features</div>
+                            <ul>
+                                <li>PDF.js rendering with lazy loading for speed.</li>
+                                <li>Bootstrap 5 UI with Bootstrap Icons.</li>
+                                <li>Docker and Nginx ready for production deploys.</li>
+                                <li>LocalStorage-powered page persistence.</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div v-else class="pages-container" ref="pagesContainer" :style="{ width: showWhiteboard ? '100%' : `${width}%`, padding: showWhiteboard ? '0' : '20px 0' }">
                 <div v-for="page in pageCount" :key="page" class="page-container" :data-page="page">
                     <div class="canvas-container" :class="{ 'whiteboard-mode': showWhiteboard, 'canvas-loading': !renderedPages.has(page) }">
                         <canvas class="pdf-canvas" :ref="el => { if (el) pdfCanvases[page - 1] = el }"></canvas>
@@ -1834,5 +1891,95 @@ defineExpose({
 .drag-message {
     text-align: center;
     pointer-events: none;
+}
+
+.empty-state {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 24px;
+}
+
+.empty-card {
+    width: 100%;
+    max-width: 1080px;
+    background: linear-gradient(145deg, #0f172a 0%, #0a1b2b 55%, #0b2538 100%);
+    color: var(--bs-light);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 18px 45px rgba(0, 0, 0, 0.55);
+    border-radius: 18px;
+    padding: 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.empty-eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 12px;
+    color: #7dd3fc;
+    font-weight: 700;
+}
+
+.empty-title {
+    font-size: clamp(26px, 3vw, 34px);
+    margin: 0;
+    color: #e8edf5;
+}
+
+.empty-lead {
+    max-width: 760px;
+    color: #c6d0de;
+    margin: 0;
+    font-size: 16px;
+    line-height: 1.6;
+}
+
+.empty-actions {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+}
+
+.empty-hint {
+    color: #9fb3c8;
+    font-size: 14px;
+}
+
+.empty-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 18px;
+    margin-top: 4px;
+}
+
+.empty-section {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 16px;
+    height: 100%;
+}
+
+.empty-section-title {
+    font-weight: 700;
+    margin-bottom: 10px;
+    color: #dbeafe;
+}
+
+.empty-section ul {
+    padding-left: 16px;
+    margin: 0;
+    color: #c5d5e6;
+    line-height: 1.55;
+}
+
+.empty-section li + li {
+    margin-top: 6px;
 }
 </style>
