@@ -96,6 +96,11 @@ body, #app, .container-fluid {
 }
 
 
+.nav-tabs {
+    background: linear-gradient(145deg, #0f172a 0%, #0a1b2b 55%, #0b2538 100%);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
 .nav-tabs, .nav-tabs .nav-item {
     border: 0 !important;
     margin: 0 !important;
@@ -118,13 +123,12 @@ body, #app, .container-fluid {
 
 .nav-tabs .nav-link:hover,
 .nav-tabs .nav-link:active {
-    color: var(--bs-light) !important;
+    color: #c5d5e6 !important;
 }
 
 .nav-tabs .nav-link.active {
-    background-color: var(--bs-dark) !important;
-    color: var(--bs-light) !important;
-    border-color: var(--bs-secondary) !important;
-    border-bottom: 0 !important;
+    background-color: transparent !important;
+    color: #c5d5e6 !important;
+    border-color: #c5d5e6 !important;
 }
 </style>

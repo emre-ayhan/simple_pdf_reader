@@ -1658,7 +1658,10 @@ defineExpose({
         <div class="pdf-reader" ref="pdfReader" :class="{ 'overflow-hidden': lockView || showWhiteboard }">
             <div v-if="!isFileLoaded" class="empty-state">
                 <div class="empty-card">
-                    <div class="empty-eyebrow">Simple PDF Reader</div>
+                    <div class="empty-eyebrow">
+                        <i class="bi bi-file-earmark-pdf-fill"></i>
+                        Simple PDF Reader
+                    </div>
                     <h1 class="empty-title">Fast, focused reading with ink-ready tools.</h1>
                     <p class="empty-lead">Built with Vue 3 and Vite, this reader keeps your PDFs and images quick to open, easy to mark up, and ready for sharing.</p>
 
@@ -1743,10 +1746,19 @@ defineExpose({
 <style>
 .navbar {
     top: 28.5px !important;
+    background: linear-gradient(145deg, #0f172a 0%, #0a1b2b 55%, #0b2538 100%) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .navbar .nav-link {
     padding: 4px 12px !important;
+}
+
+.navbar .nav-link:hover,
+.navbar .nav-link.active {
+    border-radius: var(--bs-border-radius-lg);
+    background-color: rgba(255, 255, 255, 0.1) !important;
+    color: #c5d5e6 !important;
 }
 
 .navbar input {
@@ -1757,7 +1769,7 @@ defineExpose({
     margin-top: 62.5px;
     width: 100%;
     height: calc(100vh - 62.5px);
-    background-color: var(--bs-secondary);
+    background-color: #9fb3c8;
     overflow: auto;
     display: flex;
     justify-content: center;
@@ -1854,7 +1866,7 @@ defineExpose({
 
 .canvas-container.canvas-loading::after {
     content: 'Loading...';
-    color: #999;
+    color: #9fb3c8;
     font-size: 16px;
     position: absolute;
 }
@@ -1893,6 +1905,16 @@ defineExpose({
     pointer-events: none;
 }
 
+.btn-primary {
+    background-color: #1985ea !important;
+    border-color: #1985ea !important;
+}
+
+.btn-primary:hover {
+    background-color: #166fca !important;
+    border-color: #166fca !important;
+}
+
 .empty-state {
     width: 100%;
     height: 100%;
@@ -1919,8 +1941,8 @@ defineExpose({
 .empty-eyebrow {
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    font-size: 12px;
-    color: #7dd3fc;
+    font-size: 16px;
+    color: #1985ea;
     font-weight: 700;
 }
 
