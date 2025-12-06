@@ -137,6 +137,7 @@ const isSelecting = ref(false);
 const showWhiteboard = ref(false);
 const whiteboardImage = ref(null);
 const whiteboardScale = ref(1);
+const imagePage = ref(null); // when opening images as a single page
 let savedPdfDoc = null;
 let savedPageCount = 0;
 let savedPageNum = 1;
@@ -261,6 +262,45 @@ const renderAllPages = async () => {
         strokesPerPage = { 1: strokesPerPage[1] || [] };
         await nextTick();
         renderWhiteboardCanvas();
+        return;
+    }
+
+    if (imagePage.value) {
+        pageCount.value = 1;
+        strokesPerPage = { 1: strokesPerPage[1] || [] };
+        await nextTick();
+
+        const canvas = pdfCanvases.value[0];
+        const drawCanvas = drawingCanvases.value[0];
+        if (canvas && drawCanvas) {
+            const img = new Image();
+            img.onload = () => {
+                // Fit image to current width setting
+                const targetWidth = (pagesContainer.value?.clientWidth || canvas.parentElement?.clientWidth || img.width);
+                const scale = targetWidth / img.width;
+                const canvasWidth = img.width * scale;
+                const canvasHeight = img.height * scale;
+
+                canvas.width = canvasWidth;
+                canvas.height = canvasHeight;
+                canvas.style.width = '100%';
+                canvas.style.height = 'auto';
+
+                drawCanvas.width = canvasWidth;
+                drawCanvas.height = canvasHeight;
+                drawCanvas.style.width = '100%';
+                drawCanvas.style.height = '100%';
+
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
+
+                drawingContexts[0] = drawCanvas.getContext('2d');
+                redrawAllStrokes(0);
+                renderedPages.value.add(1);
+            };
+            img.src = imagePage.value;
+        }
         return;
     }
     
@@ -774,6 +814,16 @@ const closeWhiteboard = () => {
         savedPageCount = 0;
         savedPageNum = 1;
         savedStrokesPerPage = {};
+    } else {
+        // No PDF to return to (image-only session)
+        pdfDoc = null;
+        imagePage.value = null;
+        isFileLoaded.value = false;
+        pageCount.value = 0;
+        pageNum.value = 1;
+        strokesPerPage = {};
+        renderedPages.value.clear();
+        drawingContexts = [];
     }
 };
 
@@ -895,6 +945,41 @@ const eraseAtPoint = (x, y, canvasIndex) => {
     }
 };
 
+const loadImageFile = (file) => {
+    if (!file) return;
+
+    filename.value = file.name || 'image';
+    const reader = new FileReader();
+    reader.onload = () => {
+        imagePage.value = reader.result;
+        whiteboardImage.value = null;
+        whiteboardScale.value = 1;
+        showWhiteboard.value = false;
+        pdfDoc = null;
+        savedPdfDoc = null;
+        savedPageCount = 0;
+        savedPageNum = 1;
+        savedStrokesPerPage = {};
+        pageCount.value = 1;
+        pageNum.value = 1;
+        isFileLoaded.value = true;
+        emit('file-loaded', filename.value);
+
+        // Reset drawing state
+        history.value = [];
+        historyStep.value = -1;
+        savedHistoryStep.value = -1;
+        strokesPerPage = { 1: [] };
+        renderedPages.value.clear();
+        drawingContexts = [];
+
+        nextTick(() => {
+            renderAllPages();
+        });
+    };
+    reader.readAsDataURL(file);
+};
+
 const onDragEnter = (e) => {
     dragCounter.value++;
     isDragging.value = true;
@@ -916,8 +1001,10 @@ const onDrop = (e) => {
         const file = files[0];
         if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
             loadPdfFile(file);
+        } else if (file.type.startsWith('image/') || file.name.toLowerCase().match(/\.(png|jpe?g|gif|webp|bmp|svg)$/)) {
+            loadImageFile(file);
         } else {
-            alert('Please drop a PDF file.');
+            alert('Please drop a PDF or image file.');
         }
     }
 };
@@ -928,6 +1015,7 @@ const loadPdfFile = (file) => {
         const url = URL.createObjectURL(file);
         getDocument(url).promise.then((pdfDoc_) => {
             pdfDoc = pdfDoc_;
+            imagePage.value = null;
             pageCount.value = pdfDoc.numPages;
             pageNum.value = localStorage.getItem(filename.value) ? Number(localStorage.getItem(filename.value)) : 1;
             isFileLoaded.value = true;
@@ -965,7 +1053,14 @@ const loadPdfFile = (file) => {
 
 const loadPdfDocument = () => {
     const file = fileInput.value.files[0];
-    loadPdfFile(file);
+    if (!file) return;
+    if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+        loadPdfFile(file);
+    } else if (file.type.startsWith('image/') || file.name.toLowerCase().match(/\.(png|jpe?g|gif|webp|bmp|svg)$/)) {
+        loadImageFile(file);
+    } else {
+        alert('Unsupported file type. Please select a PDF or image.');
+    }
 };
 
 const setupLazyLoadObserver = () => {
@@ -1490,13 +1585,13 @@ defineExpose({
                         </a>
                     </li>
                     <li v-if="!showWhiteboard" class="nav-item" title="Save File">
-                        <a href="#" class="nav-link" @click.prevent="saveFile" :class="{ disabled: !isFileLoaded || !hasUnsavedChanges }">
+                        <a href="#" class="nav-link" @click.prevent="saveFile" :class="{ disabled: !isFileLoaded || !hasUnsavedChanges || !pdfDoc }">
                             <i class="bi bi-floppy-fill"></i>
                         </a>
                     </li>
-                    <li v-if="!showWhiteboard" class="nav-item" :title="isFileLoaded ? 'Open Another PDF' : 'Open PDF'">
+                    <li v-if="!showWhiteboard" class="nav-item" :title="isFileLoaded ? 'Open Another File' : 'Open File'">
                         <a href="#" class="nav-link" @click.prevent="fileInput.click()">
-                            <i class="bi bi-file-earmark-pdf-fill"></i>
+                            <i class="bi bi-file-earmark-arrow-up"></i>
                         </a>
                     </li>
                 </ul>
@@ -1526,7 +1621,7 @@ defineExpose({
                 </div>
             </div>
         </div>
-        <input ref="fileInput" type="file"  accept="application/pdf" class="d-none" @change="loadPdfDocument" />
+        <input ref="fileInput" type="file"  accept="application/pdf,image/*" class="d-none" @change="loadPdfDocument" />
 
         <div v-if="isDragging" class="drag-overlay">
             <div class="drag-message">
