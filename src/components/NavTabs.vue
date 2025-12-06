@@ -106,13 +106,15 @@ body, #app, .container-fluid {
     padding: .25rem .75rem;
 }
 
-.nav-tabs .nav-link:hover {
+.nav-tabs .nav-link:hover,
+.nav-tabs .nav-link:active {
     color: var(--bs-light) !important;
 }
 
 .nav-tabs .nav-link.active {
     background-color: var(--bs-dark) !important;
     color: var(--bs-light) !important;
+    border-color: var(--bs-secondary) !important;
     border-bottom: 0 !important;
 }
 </style>
