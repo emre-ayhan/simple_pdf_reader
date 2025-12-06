@@ -228,16 +228,25 @@ const renderAllPages = async () => {
         if (canvas && drawCanvas && whiteboardImage.value) {
             const img = new Image();
             img.onload = () => {
-                // Use original image dimensions scaled up
-                const scale = 2; // Use scale factor like PDF rendering
-                const canvasWidth = img.width * scale;
-                const canvasHeight = img.height * scale;
-                
+                // Fit the capture into the available viewport without overflow
+                const availableWidth = (pdfReader.value?.clientWidth || window.innerWidth) - 40;
+                const availableHeight = (pdfReader.value?.clientHeight || window.innerHeight) - 40;
+                const safeWidth = Math.max(1, availableWidth);
+                const safeHeight = Math.max(1, availableHeight);
+                const fitScale = Math.max(0.01, Math.min(safeWidth / img.width, safeHeight / img.height));
+                const canvasWidth = img.width * fitScale;
+                const canvasHeight = img.height * fitScale;
+
                 canvas.width = canvasWidth;
                 canvas.height = canvasHeight;
+                canvas.style.width = `${canvasWidth}px`;
+                canvas.style.height = `${canvasHeight}px`;
+
                 drawCanvas.width = canvasWidth;
                 drawCanvas.height = canvasHeight;
-                
+                drawCanvas.style.width = `${canvasWidth}px`;
+                drawCanvas.style.height = `${canvasHeight}px`;
+
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
                 
@@ -1437,7 +1446,7 @@ defineExpose({
                     <li class="nav-item vr bg-white mx-2"></li>
 
                     <!-- Menu -->
-                    <li class="nav-item" :title="lockView ? 'Unlock View' : 'Lock View'">
+                    <li v-if="!showWhiteboard" class="nav-item" :title="lockView ? 'Unlock View' : 'Lock View'">
                         <a href="#" class="nav-link" @click.prevent="isFileLoaded && (lockView = !lockView)" :class="{ disabled: !isFileLoaded }">
                             <i class="bi" :class="lockView ? 'bi-lock-fill' : 'bi-lock'"></i>
                         </a>
@@ -1452,12 +1461,12 @@ defineExpose({
                             <i class="bi bi-x-lg"></i>
                         </a>
                     </li>
-                    <li class="nav-item" title="Save File">
+                    <li v-if="!showWhiteboard" class="nav-item" title="Save File">
                         <a href="#" class="nav-link" @click.prevent="saveFile" :class="{ disabled: !isFileLoaded || !hasUnsavedChanges }">
                             <i class="bi bi-floppy-fill"></i>
                         </a>
                     </li>
-                    <li class="nav-item" :title="isFileLoaded ? 'Open Another PDF' : 'Open PDF'">
+                    <li v-if="!showWhiteboard" class="nav-item" :title="isFileLoaded ? 'Open Another PDF' : 'Open PDF'">
                         <a href="#" class="nav-link" @click.prevent="fileInput.click()">
                             <i class="bi bi-file-earmark-pdf-fill"></i>
                         </a>
@@ -1465,7 +1474,7 @@ defineExpose({
                 </ul>
             </div>
         </nav>
-        <div class="pdf-reader" ref="pdfReader" :class="{ 'overflow-hidden': lockView }">
+        <div class="pdf-reader" ref="pdfReader" :class="{ 'overflow-hidden': lockView || showWhiteboard }">
             <!-- Pages -->
             <div class="pages-container" ref="pagesContainer" :style="{ width: showWhiteboard ? '100%' : `${width}%`, padding: showWhiteboard ? '0' : '20px 0' }">
                 <div v-for="page in pageCount" :key="page" class="page-container" :data-page="page">
@@ -1525,6 +1534,7 @@ defineExpose({
 
 .pdf-reader.overflow-hidden {
     touch-action: none;
+    overflow: hidden;
 }
 
 .pages-container {
@@ -1585,13 +1595,21 @@ defineExpose({
     width: 100%;
     height: 100%;
     padding: 20px;
+    overflow: hidden;
 }
 
 .canvas-container.whiteboard-mode .pdf-canvas {
-    width: auto;
+    width: 100%;
     height: auto;
-    max-width: 95vw;
-    max-height: 95vh;
+    max-width: 100%;
+    max-height: 100%;
+}
+
+.canvas-container.whiteboard-mode .drawing-canvas {
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
 }
 
 .canvas-container.canvas-loading {
