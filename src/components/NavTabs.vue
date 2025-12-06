@@ -1,41 +1,41 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 
 const defaultTab = 'Simple PDF Reader';
 const tabs = ref([defaultTab]);
 const activeTabIndex = ref(0);
-const reseting = ref(false);
+const closedTabs = ref([]);
+
+const activeTabs = computed(() => {
+    return tabs.value.filter(tab => !closedTabs.value.includes(tab));
+});
+
+const isLastTabDefault = computed(() => {
+    return activeTabs.value[activeTabs.value.length - 1] === defaultTab;
+});
 
 const addTab = (filename) => {
-    if (!tabs.value.includes(filename)) {
-        tabs.value[tabs.value.length - 1] = filename;
-    }
+    tabs.value[tabs.value.length - 1] = filename;
 };
 
 const addNewTab = () => {
-    if (tabs.value[tabs.value.length - 1] === defaultTab) return;
+    if (isLastTabDefault.value) return;
     tabs.value.push(defaultTab);
     activeTabIndex.value = tabs.value.length - 1;
 };
 
 const closeTab = (index) => {
-    
     if (tabs.value[index]) {
         const tab = tabs.value[index];
-        tabs.value.splice(index, 1);
-        
-        if (tabs.value.length === 1 && tab !== defaultTab) {
-            reseting.value = true;
 
-            setTimeout(() => {
-                reseting.value = false;
-                tabs.value = [defaultTab];
-                activeTabIndex.value = 0;
-            }, 0);
-            return;
+        if (tab === defaultTab) {
+            tabs.value.splice(index, 1);
+        } else {
+            closedTabs.value.push(tab);
         }
 
-        activeTabIndex.value = Math.max(0, index - 1);
+        const lastNotClosedIndex = tabs.value.findIndex((tab, i) => !closedTabs.value.includes(tab) && i >= index);
+        activeTabIndex.value = Math.max(0, lastNotClosedIndex);
     }
 };
 
@@ -47,26 +47,26 @@ defineExpose({
 <template>
     <ul class="nav nav-tabs fixed-top" id="appTabs" role="tablist">
             <template v-for="(tab, index) in tabs" :key="tab">
-                <li class="nav-item" role="presentation">
+                <li class="nav-item" role="presentation" v-if="!closedTabs.includes(tab)">
                     <button class="nav-link" :class="{ active: index === activeTabIndex }" type="button" role="tab" @click="activeTabIndex = index">
                         <div class="d-flex align-items-center">
                             <div class="text-truncate flex-fill">
                                 {{ tab }}
                             </div>
-                            <i class="bi bi-x-lg" v-if="index === activeTabIndex && tabs.length > 1" @click.stop.prevent="closeTab(index)"></i>
+                            <i class="bi bi-x-lg" v-if="index === activeTabIndex && activeTabs.length > 1" @click.stop.prevent="closeTab(index)"></i>
                         </div>
                     </button>
                 </li>
             </template>
             <li class="nav-item" role="presentation">
-                <button class="nav-link nav-add" id="add-tab" type="button" role="tab" aria-selected="false" :disabled="tabs[tabs.length - 1] === defaultTab" @click="addNewTab">
+                <button class="nav-link nav-add" id="add-tab" type="button" role="tab" aria-selected="false" :disabled="isLastTabDefault" @click="addNewTab">
                     <i class="bi bi-plus-lg"></i>
                 </button>
             </li>
         </ul>
-        <div class="tab-content" id="appTabContent" v-if="!reseting">
-            <template v-for="(_tab, index) in tabs">
-                <div class="tab-pane" :class="{ 'active show': index === activeTabIndex }" tabindex="0">
+        <div class="tab-content" id="appTabContent">
+            <template v-for="(tab, index) in tabs">
+                <div class="tab-pane" :class="{ 'active show': index === activeTabIndex }" tabindex="0" v-if="!closedTabs.includes(tab)">
                     <slot></slot>
                 </div>
             </template>

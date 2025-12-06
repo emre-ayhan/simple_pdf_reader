@@ -4,7 +4,6 @@ import NavTabs from './components/NavTabs.vue';
 import PdfReader from './components/PdfReader.vue';
 
 const fileTabs = ref(null);
-const reader = ref(null);
 
 const handleFileLoad = (filename) => {
     if (fileTabs.value) {
@@ -15,7 +14,7 @@ const handleFileLoad = (filename) => {
 <template>
     <div id="app">
         <nav-tabs ref="fileTabs">
-            <PdfReader ref="reader" @file-loaded="handleFileLoad" />
+            <PdfReader @file-loaded="handleFileLoad" />
         </nav-tabs>
     </div>
 </template>
