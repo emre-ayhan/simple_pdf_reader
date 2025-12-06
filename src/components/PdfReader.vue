@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, nextTick, onMounted, onUnmounted, markRaw } from "vue";
+import { ref, computed, nextTick, onMounted, onUnmounted, markRaw, watch } from "vue";
 import { GlobalWorkerOptions, getDocument } from "pdfjs-dist";
 import { PDFDocument, rgb } from "pdf-lib";
 
@@ -129,6 +129,18 @@ const drawColor = ref('blue');
 const drawThickness = ref(2);
 const drawingCanvases = ref([]);
 
+// Selection and Whiteboard
+const isSelectionMode = ref(false);
+const selectionStart = ref(null);
+const selectionEnd = ref(null);
+const isSelecting = ref(false);
+const showWhiteboard = ref(false);
+const whiteboardImage = ref(null);
+let savedPdfDoc = null;
+let savedPageCount = 0;
+let savedPageNum = 1;
+let savedStrokesPerPage = {};
+
 let drawingContexts = [];
 let lastX = 0;
 let lastY = 0;
@@ -146,6 +158,10 @@ const isPenHovering = ref(false);
 
 // Custom cursor
 const cursorStyle = computed(() => {
+    if (isSelectionMode.value) {
+        return 'crosshair';
+    }
+    
     if (!isDrawing.value && !isEraser.value) {
         return 'default';
     }
@@ -199,6 +215,40 @@ const scrollToPageCanvas = async (pageNumber) => {
 };
 
 const renderAllPages = async () => {
+    if (showWhiteboard.value) {
+        // Whiteboard mode: render single page with background image
+        pageCount.value = 1;
+        strokesPerPage = { 1: [] };
+        
+        await nextTick();
+        
+        const canvas = pdfCanvases.value[0];
+        const drawCanvas = drawingCanvases.value[0];
+        
+        if (canvas && drawCanvas && whiteboardImage.value) {
+            const img = new Image();
+            img.onload = () => {
+                // Use original image dimensions scaled up
+                const scale = 2; // Use scale factor like PDF rendering
+                const canvasWidth = img.width * scale;
+                const canvasHeight = img.height * scale;
+                
+                canvas.width = canvasWidth;
+                canvas.height = canvasHeight;
+                drawCanvas.width = canvasWidth;
+                drawCanvas.height = canvasHeight;
+                
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
+                
+                drawingContexts[0] = drawCanvas.getContext('2d');
+                renderedPages.value.add(1);
+            };
+            img.src = whiteboardImage.value;
+        }
+        return;
+    }
+    
     if (!pdfDoc) return;
     
     const numPages = pdfDoc.numPages;
@@ -279,7 +329,7 @@ const getCanvasIndexFromEvent = (e) => {
 };
 
 const startDrawing = (e) => {
-    if (!isDrawing.value && !isEraser.value) return;
+    if (!isDrawing.value && !isEraser.value && !isSelectionMode.value) return;
     
     // Track active pointer type
     activePointerType.value = e.pointerType;
@@ -289,6 +339,20 @@ const startDrawing = (e) => {
 
     // Only allow pen/stylus and mouse input, not touch
     if (e.pointerType === 'touch') return;
+    
+    // Handle selection mode
+    if (isSelectionMode.value) {
+        const rect = e.target.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        selectionStart.value = { x, y, canvasIndex: getCanvasIndexFromEvent(e) };
+        selectionEnd.value = { x, y };
+        isSelecting.value = true;
+        isMouseDown.value = true;
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+    }
     
     // Check if pen secondary button (barrel button/eraser) is pressed
     // buttons: 1 = primary, 2 = secondary, 32 = eraser button
@@ -354,7 +418,40 @@ const startDrawing = (e) => {
 };
 
 const draw = (e) => {
-    if ((!isDrawing.value && !isEraser.value) || !isMouseDown.value) return;
+    if ((!isDrawing.value && !isEraser.value && !isSelectionMode.value) || !isMouseDown.value) return;
+    
+    // Handle selection rectangle
+    if (isSelectionMode.value && isSelecting.value) {
+        const rect = e.target.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        selectionEnd.value = { x, y };
+        
+        // Draw selection rectangle
+        const canvas = drawingCanvases.value[selectionStart.value.canvasIndex];
+        const ctx = drawingContexts[selectionStart.value.canvasIndex];
+        if (canvas && ctx) {
+            // Scale coordinates to canvas size
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            
+            redrawAllStrokes(selectionStart.value.canvasIndex);
+            ctx.strokeStyle = '#0066ff';
+            ctx.lineWidth = 3 / scaleX; // Scale line width
+            ctx.setLineDash([10 / scaleX, 5 / scaleX]);
+            
+            const startX = selectionStart.value.x * scaleX;
+            const startY = selectionStart.value.y * scaleY;
+            const width = (x - selectionStart.value.x) * scaleX;
+            const height = (y - selectionStart.value.y) * scaleY;
+            
+            ctx.strokeRect(startX, startY, width, height);
+            ctx.setLineDash([]);
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+    }
     
     // Only continue with the same pointer that started
     if (e.pointerId !== activePointerId.value) return;
@@ -434,7 +531,20 @@ const draw = (e) => {
 };
 
 const stopDrawing = (e) => {
-    if (!isDrawing.value && !isEraser.value) return;
+    if (!isDrawing.value && !isEraser.value && !isSelectionMode.value) return;
+    
+    // Handle selection complete
+    if (isSelectionMode.value && isSelecting.value && selectionStart.value && selectionEnd.value) {
+        captureSelection();
+        isSelecting.value = false;
+        selectionStart.value = null;
+        selectionEnd.value = null;
+        isSelectionMode.value = false;
+        e.preventDefault();
+        e.stopPropagation();
+        isMouseDown.value = false;
+        return;
+    }
     
     // Only stop if it's the same pointer
     if (e && e.pointerId !== activePointerId.value) return;
@@ -525,6 +635,134 @@ const clearDrawing = () => {
     strokesPerPage = {};
     currentStroke = [];
 };
+
+const captureSelection = () => {
+    if (!selectionStart.value || !selectionEnd.value) return;
+    
+    const canvasIndex = selectionStart.value.canvasIndex;
+    const pdfCanvas = pdfCanvases.value[canvasIndex];
+    const drawCanvas = drawingCanvases.value[canvasIndex];
+    
+    if (!pdfCanvas || !drawCanvas) return;
+    
+    // Get display coordinates
+    const rect = drawCanvas.getBoundingClientRect();
+    const scaleX = pdfCanvas.width / rect.width;
+    const scaleY = pdfCanvas.height / rect.height;
+    
+    // Calculate selection rectangle in canvas coordinates
+    const x = Math.min(selectionStart.value.x, selectionEnd.value.x) * scaleX;
+    const y = Math.min(selectionStart.value.y, selectionEnd.value.y) * scaleY;
+    const width = Math.abs(selectionEnd.value.x - selectionStart.value.x) * scaleX;
+    const height = Math.abs(selectionEnd.value.y - selectionStart.value.y) * scaleY;
+    
+    // Create temporary canvas to combine PDF and drawings
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = pdfCanvas.width;
+    tempCanvas.height = pdfCanvas.height;
+    const tempCtx = tempCanvas.getContext('2d');
+    
+    // Draw PDF canvas
+    tempCtx.drawImage(pdfCanvas, 0, 0);
+    // Draw annotations canvas
+    tempCtx.drawImage(drawCanvas, 0, 0);
+    
+    // Extract selected region
+    const selectedCanvas = document.createElement('canvas');
+    selectedCanvas.width = width;
+    selectedCanvas.height = height;
+    const selectedCtx = selectedCanvas.getContext('2d');
+    selectedCtx.drawImage(tempCanvas, x, y, width, height, 0, 0, width, height);
+    
+    // Store as image and show as new page
+    whiteboardImage.value = selectedCanvas.toDataURL();
+    
+    // Save current PDF state
+    savedPdfDoc = pdfDoc;
+    savedPageCount = pageCount.value;
+    savedPageNum = pageNum.value;
+    savedStrokesPerPage = JSON.parse(JSON.stringify(strokesPerPage));
+    
+    // Switch to whiteboard mode
+    showWhiteboard.value = true;
+    pdfDoc = null; // Temporarily clear PDF doc
+    pageCount.value = 1;
+    strokesPerPage = { 1: [] };
+    renderedPages.value.clear();
+    drawingContexts = [];
+    
+    // Clear selection rectangle from original canvas
+    redrawAllStrokes(canvasIndex);
+    
+    // Render whiteboard page
+    nextTick(() => {
+        renderAllPages();
+    });
+};
+
+const closeWhiteboard = () => {
+    showWhiteboard.value = false;
+    whiteboardImage.value = null;
+    
+    // Restore PDF state
+    if (savedPdfDoc) {
+        const targetPage = savedPageNum;
+        pdfDoc = savedPdfDoc;
+        pageCount.value = savedPageCount;
+        pageNum.value = targetPage;
+        isFileLoaded.value = true;
+        strokesPerPage = JSON.parse(JSON.stringify(savedStrokesPerPage));
+        renderedPages.value.clear();
+        drawingContexts = [];
+        
+        // Re-render PDF pages
+        nextTick(() => {
+            renderAllPages().then(() => {
+                setupIntersectionObserver();
+                setupLazyLoadObserver();
+                // Scroll to saved page
+                nextTick(() => {
+                    scrollToPage(targetPage);
+                });
+            });
+        });
+        
+        // Clear saved state
+        savedPdfDoc = null;
+        savedPageCount = 0;
+        savedPageNum = 1;
+        savedStrokesPerPage = {};
+    }
+};
+
+const downloadWhiteboard = () => {
+    if (!showWhiteboard.value || !pdfCanvases.value[0] || !drawingCanvases.value[0]) return;
+    
+    const pdfCanvas = pdfCanvases.value[0];
+    const drawCanvas = drawingCanvases.value[0];
+    
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = pdfCanvas.width;
+    tempCanvas.height = pdfCanvas.height;
+    const tempCtx = tempCanvas.getContext('2d');
+    
+    // Draw white background
+    tempCtx.fillStyle = 'white';
+    tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+    
+    // Draw background image
+    tempCtx.drawImage(pdfCanvas, 0, 0);
+    // Draw annotations
+    tempCtx.drawImage(drawCanvas, 0, 0);
+    
+    // Download
+    const url = tempCanvas.toDataURL('image/png');
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'whiteboard-' + new Date().getTime() + '.png';
+    a.click();
+};
+
 
 const redrawAllStrokes = (pageIndex) => {
     const canvas = drawingCanvases.value[pageIndex];
@@ -660,6 +898,11 @@ const loadPdfFile = (file) => {
             strokesPerPage = {};
             renderedPages.value.clear();
             drawingContexts = [];
+            
+            // Close whiteboard if open
+            if (showWhiteboard.value) {
+                closeWhiteboard();
+            }
             
             // Wait for next tick to ensure refs are populated
             nextTick(() => {
@@ -1061,6 +1304,7 @@ defineExpose({
             <div class="container">
                 <!-- Toolbar -->
                 <ul class="navbar-nav mx-auto">
+
                     <!-- Drawing -->
                     <li class="nav-item btn-group">
                         <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isDrawing = !isDrawing, isEraser = false, drawMode = 'pen')" :class="{ disabled: !isFileLoaded }" :style="{ color: isDrawing && drawMode === 'pen' ? drawColor : '' }">
@@ -1120,7 +1364,13 @@ defineExpose({
                             <i class="bi bi-circle"></i>
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isSelectionMode = !isSelectionMode, isDrawing = false, isEraser = false)" :class="{ active: isSelectionMode, disabled: !isFileLoaded }" title="Select Area to Whiteboard">
+                            <i class="bi bi-scissors"></i>
+                        </a>
+                    </li>
                     <li class="nav-item vr bg-white mx-2"></li>
+
                     <!-- Undo/Redo -->
                     <li class="nav-item">
                         <a class="nav-link" href="#" @click.prevent="undo()" :class="{ disabled: !isFileLoaded || historyStep < 0 }" title="Undo">
@@ -1133,6 +1383,7 @@ defineExpose({
                         </a>
                     </li>
                     <li class="nav-item vr bg-white mx-2"></li>
+
                     <!-- Pagination -->
                     <li class="nav-item">
                         <a href="#" class="nav-link" @click.prevent="scrollToPage(1)" :class="{ disabled: !isFileLoaded || pageNum <= 1 }" title="First Page">
@@ -1158,6 +1409,7 @@ defineExpose({
                         </a>
                     </li>
                     <li class="nav-item vr bg-white mx-2"></li>
+
                     <!-- Zoom -->
                     <li class="nav-item">
                         <a href="#" class="nav-link" @click.prevent="isFileLoaded && (width = Math.max(width - 10, 25))" :class="{ disabled: !isFileLoaded || lockView }">
@@ -1178,10 +1430,21 @@ defineExpose({
                         </a>
                     </li>
                     <li class="nav-item vr bg-white mx-2"></li>
+
                     <!-- Menu -->
                     <li class="nav-item" :title="lockView ? 'Unlock View' : 'Lock View'">
                         <a href="#" class="nav-link" @click.prevent="isFileLoaded && (lockView = !lockView)" :class="{ disabled: !isFileLoaded }">
                             <i class="bi" :class="lockView ? 'bi-lock-fill' : 'bi-lock'"></i>
+                        </a>
+                    </li>
+                    <li v-if="showWhiteboard" class="nav-item" title="Download Whiteboard">
+                        <a href="#" class="nav-link" @click.prevent="downloadWhiteboard()">
+                            <i class="bi bi-download"></i>
+                        </a>
+                    </li>
+                    <li v-if="showWhiteboard" class="nav-item" title="Close Whiteboard">
+                        <a href="#" class="nav-link" @click.prevent="closeWhiteboard()">
+                            <i class="bi bi-x-lg"></i>
                         </a>
                     </li>
                     <li class="nav-item" title="Save File">
@@ -1199,9 +1462,9 @@ defineExpose({
         </nav>
         <div class="pdf-reader" ref="pdfReader" :class="{ 'overflow-hidden': lockView }">
             <!-- Pages -->
-            <div class="pages-container" ref="pagesContainer" :style="{ width: `${width}%` }">
+            <div class="pages-container" ref="pagesContainer" :style="{ width: showWhiteboard ? '100%' : `${width}%` }">
                 <div v-for="page in pageCount" :key="page" class="page-container" :data-page="page">
-                    <div class="canvas-container" :class="{ 'canvas-loading': !renderedPages.has(page) }">
+                    <div class="canvas-container" :class="{ 'whiteboard-mode': showWhiteboard, 'canvas-loading': !renderedPages.has(page) }">
                         <canvas class="pdf-canvas" :ref="el => { if (el) pdfCanvases[page - 1] = el }"></canvas>
                         <canvas 
                             :ref="el => { if (el) drawingCanvases[page - 1] = el }"
@@ -1264,6 +1527,8 @@ defineExpose({
     flex-direction: column;
     gap: 20px;
     padding: 20px 0;
+    max-width: 100%;
+    min-height: 100%;
 }
 
 .page-container {
@@ -1271,8 +1536,10 @@ defineExpose({
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     gap: 10px;
     width: 100%;
+    flex: 1;
 }
 
 .page-number {
@@ -1303,6 +1570,23 @@ defineExpose({
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     background-color: white;
     width: 100%;
+    max-width: 100%;
+}
+
+.canvas-container.whiteboard-mode {
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+    width: 100%;
+    height: 100%;
+    padding: 20px;
+}
+
+.canvas-container.whiteboard-mode .pdf-canvas {
+    width: auto;
+    height: auto;
+    max-width: 95vw;
+    max-height: 95vh;
 }
 
 .canvas-container.canvas-loading {
