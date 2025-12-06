@@ -978,6 +978,7 @@ const loadPdfFromUrl = (url) => {
                 pageNum.value = localStorage.getItem(filename.value) ? Number(localStorage.getItem(filename.value)) : 1;
                 isFileLoaded.value = true;
                 emit('file-loaded', filename.value);
+                window.history.replaceState(null, '', window.location.pathname); // Clear URL parameters
 
                 // Reset history
                 history.value = [];
