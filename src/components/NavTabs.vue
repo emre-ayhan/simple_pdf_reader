@@ -1,11 +1,10 @@
 <script setup>
 import { ref } from 'vue';
 
-const emit = defineEmits(['close']);
-
 const defaultTab = 'Simple PDF Reader';
 const tabs = ref([defaultTab]);
 const activeTabIndex = ref(0);
+const reseting = ref(false);
 
 const addTab = (filename) => {
     if (!tabs.value.includes(filename)) {
@@ -20,9 +19,22 @@ const addNewTab = () => {
 };
 
 const closeTab = (index) => {
+    
     if (tabs.value[index]) {
-        emit('close', tabs.value[index]);
+        const tab = tabs.value[index];
         tabs.value.splice(index, 1);
+        
+        if (tabs.value.length === 1 && tab !== defaultTab) {
+            reseting.value = true;
+
+            setTimeout(() => {
+                reseting.value = false;
+                tabs.value = [defaultTab];
+                activeTabIndex.value = 0;
+            }, 0);
+            return;
+        }
+
         activeTabIndex.value = Math.max(0, index - 1);
     }
 };
@@ -52,7 +64,7 @@ defineExpose({
                 </button>
             </li>
         </ul>
-        <div class="tab-content" id="myTabContent">
+        <div class="tab-content" id="appTabContent" v-if="!reseting">
             <template v-for="(_tab, index) in tabs">
                 <div class="tab-pane" :class="{ 'active show': index === activeTabIndex }" tabindex="0">
                     <slot></slot>

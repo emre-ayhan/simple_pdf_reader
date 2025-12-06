@@ -11,14 +11,10 @@ const handleFileLoad = (filename) => {
         fileTabs.value.addTab(filename);
     }
 };
-
-const handleTabClose = (filename) => {
-    
-};
 </script>
 <template>
     <div id="app">
-        <nav-tabs ref="fileTabs" @close="handleTabClose">
+        <nav-tabs ref="fileTabs">
             <PdfReader ref="reader" @file-loaded="handleFileLoad" />
         </nav-tabs>
     </div>
