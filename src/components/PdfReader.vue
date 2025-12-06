@@ -436,9 +436,9 @@ const draw = (e) => {
             const scaleY = canvas.height / rect.height;
             
             redrawAllStrokes(selectionStart.value.canvasIndex);
-            ctx.strokeStyle = '#0066ff';
-            ctx.lineWidth = 3 / scaleX; // Scale line width
-            ctx.setLineDash([10 / scaleX, 5 / scaleX]);
+            ctx.strokeStyle = '#ff0000';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 5]);
             
             const startX = selectionStart.value.x * scaleX;
             const startY = selectionStart.value.y * scaleY;
@@ -651,12 +651,17 @@ const captureSelection = () => {
     const scaleY = pdfCanvas.height / rect.height;
     
     // Calculate selection rectangle in canvas coordinates
-    const x = Math.min(selectionStart.value.x, selectionEnd.value.x) * scaleX;
-    const y = Math.min(selectionStart.value.y, selectionEnd.value.y) * scaleY;
-    const width = Math.abs(selectionEnd.value.x - selectionStart.value.x) * scaleX;
-    const height = Math.abs(selectionEnd.value.y - selectionStart.value.y) * scaleY;
+    let x = Math.min(selectionStart.value.x, selectionEnd.value.x) * scaleX;
+    let y = Math.min(selectionStart.value.y, selectionEnd.value.y) * scaleY;
+    let width = Math.abs(selectionEnd.value.x - selectionStart.value.x) * scaleX;
+    let height = Math.abs(selectionEnd.value.y - selectionStart.value.y) * scaleY;
     
-    // Create temporary canvas to combine PDF and drawings
+    // Exclude the 1px border from capture (offset by 1px on all sides)
+    const borderOffset = 1;
+    x += borderOffset;
+    y += borderOffset;
+    width = Math.max(1, width - borderOffset * 2);
+    height = Math.max(1, height - borderOffset * 2);
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = pdfCanvas.width;
     tempCanvas.height = pdfCanvas.height;
@@ -1462,7 +1467,7 @@ defineExpose({
         </nav>
         <div class="pdf-reader" ref="pdfReader" :class="{ 'overflow-hidden': lockView }">
             <!-- Pages -->
-            <div class="pages-container" ref="pagesContainer" :style="{ width: showWhiteboard ? '100%' : `${width}%` }">
+            <div class="pages-container" ref="pagesContainer" :style="{ width: showWhiteboard ? '100%' : `${width}%`, padding: showWhiteboard ? '0' : '20px 0' }">
                 <div v-for="page in pageCount" :key="page" class="page-container" :data-page="page">
                     <div class="canvas-container" :class="{ 'whiteboard-mode': showWhiteboard, 'canvas-loading': !renderedPages.has(page) }">
                         <canvas class="pdf-canvas" :ref="el => { if (el) pdfCanvases[page - 1] = el }"></canvas>
