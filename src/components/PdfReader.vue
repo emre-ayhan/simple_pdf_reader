@@ -233,7 +233,7 @@ const renderAllPages = async () => {
                 const availableHeight = (pdfReader.value?.clientHeight || window.innerHeight) - 40;
                 const safeWidth = Math.max(1, availableWidth);
                 const safeHeight = Math.max(1, availableHeight);
-                const fitScale = Math.max(0.01, Math.min(safeWidth / img.width, safeHeight / img.height));
+                const fitScale = Math.max(0.01, Math.min(1, Math.min(safeWidth / img.width, safeHeight / img.height)));
                 const canvasWidth = img.width * fitScale;
                 const canvasHeight = img.height * fitScale;
 
@@ -1379,7 +1379,7 @@ defineExpose({
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isSelectionMode = !isSelectionMode, isDrawing = false, isEraser = false)" :class="{ active: isSelectionMode, disabled: !isFileLoaded }" title="Select Area to Whiteboard">
+                        <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isSelectionMode = !isSelectionMode, isDrawing = false, isEraser = false)" :class="{ active: isSelectionMode, disabled: !isFileLoaded || showWhiteboard }" title="Select Area to Whiteboard">
                             <i class="bi bi-scissors"></i>
                         </a>
                     </li>
@@ -1400,25 +1400,25 @@ defineExpose({
 
                     <!-- Pagination -->
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="scrollToPage(1)" :class="{ disabled: !isFileLoaded || pageNum <= 1 }" title="First Page">
+                        <a href="#" class="nav-link" @click.prevent="scrollToPage(1)" :class="{ disabled: !isFileLoaded || showWhiteboard || pageNum <= 1 }" title="First Page">
                             <i class="bi bi-chevron-double-left"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageNum - 1)" :class="{ disabled: !isFileLoaded || pageNum <= 1 }" title="Previous Page">
+                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageNum - 1)" :class="{ disabled: !isFileLoaded || showWhiteboard || pageNum <= 1 }" title="Previous Page">
                             <i class="bi bi-chevron-left"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <input type="text" class="form-control-plaintext" :value="pageNum" @input="scrollToPage($event.target.value)" :disabled="!isFileLoaded" />
+                        <input type="text" class="form-control-plaintext" :value="pageNum" @input="scrollToPage($event.target.value)" :disabled="!isFileLoaded || showWhiteboard" />
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageNum + 1)" :class="{ disabled: !isFileLoaded || pageNum >= pageCount }" title="Next Page">
+                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageNum + 1)" :class="{ disabled: !isFileLoaded || showWhiteboard || pageNum >= pageCount }" title="Next Page">
                             <i class="bi bi-chevron-right"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageCount)" :class="{ disabled: !isFileLoaded || pageNum >= pageCount }" :title="`Last Page (${pageCount})`">
+                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageCount)" :class="{ disabled: !isFileLoaded || showWhiteboard || pageNum >= pageCount }" :title="`Last Page (${pageCount})`">
                             <i class="bi bi-chevron-double-right"></i>
                         </a>
                     </li>
@@ -1426,20 +1426,20 @@ defineExpose({
 
                     <!-- Zoom -->
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="isFileLoaded && (width = Math.max(width - 10, 25))" :class="{ disabled: !isFileLoaded || lockView }">
+                        <a href="#" class="nav-link" @click.prevent="isFileLoaded && (width = Math.max(width - 10, 25))" :class="{ disabled: !isFileLoaded || lockView || showWhiteboard }">
                             <i class="bi bi-zoom-out"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <input type="text" class="form-control-plaintext" v-model="width" :disabled="!isFileLoaded || lockView">
+                        <input type="text" class="form-control-plaintext" v-model="width" :disabled="!isFileLoaded || lockView || showWhiteboard">
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="isFileLoaded && (width = Math.min(width + 10, 100))" :class="{ disabled: !isFileLoaded || lockView }">
+                        <a href="#" class="nav-link" @click.prevent="isFileLoaded && (width = Math.min(width + 10, 100))" :class="{ disabled: !isFileLoaded || lockView || showWhiteboard }">
                             <i class="bi bi-zoom-in"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="toggleZoomMode()" :class="{ disabled: !isFileLoaded || lockView }" :title="zoomMode === 'fit-width' ? 'Fit Height' : 'Fit Width'">
+                        <a href="#" class="nav-link" @click.prevent="toggleZoomMode()" :class="{ disabled: !isFileLoaded || lockView || showWhiteboard }" :title="zoomMode === 'fit-width' ? 'Fit Height' : 'Fit Width'">
                             <i :class="`bi bi-arrows-expand${zoomMode === 'fit-width' ? '-vertical' : ''}`"></i>
                         </a>
                     </li>
@@ -1599,15 +1599,15 @@ defineExpose({
 }
 
 .canvas-container.whiteboard-mode .pdf-canvas {
-    width: 100%;
+    width: auto;
     height: auto;
     max-width: 100%;
     max-height: 100%;
 }
 
 .canvas-container.whiteboard-mode .drawing-canvas {
-    width: 100%;
-    height: 100%;
+    width: auto;
+    height: auto;
     max-width: 100%;
     max-height: 100%;
 }
