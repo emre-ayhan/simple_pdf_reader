@@ -26,10 +26,14 @@ const setCurrentTab = (filename) => {
     };
 };
 
-const addNewTab = () => {
-    if (isLastTabDefault.value) return;
+const addDefaultTab = () => {
     tabs.value.push(getDefaultTab());
     activeTabIndex.value = tabs.value.length - 1;
+};
+
+const addNewTab = () => {
+    if (isLastTabDefault.value) return;
+    addDefaultTab();
 };
 
 const closeTab = (index) => {
@@ -44,6 +48,10 @@ const closeTab = (index) => {
 
         const lastNotClosedIndex = tabs.value.findIndex((tab, i) => !tab.closed && i >= index);
         activeTabIndex.value = Math.max(0, lastNotClosedIndex);
+
+        if (!activeTabs.value.length) {
+            addDefaultTab();
+        }
     }
 };
 
@@ -61,7 +69,7 @@ defineExpose({
                             <div class="text-truncate flex-fill">
                                 {{ tab.name }}
                             </div>
-                            <i class="bi bi-x-lg" v-if="index === activeTabIndex && activeTabs.length > 1" @click.stop.prevent="closeTab(index)"></i>
+                            <i class="bi bi-x-lg" v-if="index === activeTabIndex && !isLastTabDefault" @click.stop.prevent="closeTab(index)"></i>
                         </div>
                     </button>
                 </li>
