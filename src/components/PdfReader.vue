@@ -136,6 +136,7 @@ const selectionEnd = ref(null);
 const isSelecting = ref(false);
 const showWhiteboard = ref(false);
 const whiteboardImage = ref(null);
+const whiteboardScale = ref(1);
 let savedPdfDoc = null;
 let savedPageCount = 0;
 let savedPageNum = 1;
@@ -214,47 +215,52 @@ const scrollToPageCanvas = async (pageNumber) => {
     renderedPages.value.add(pageNumber);
 };
 
+const renderWhiteboardCanvas = () => {
+    const canvas = pdfCanvases.value[0];
+    const drawCanvas = drawingCanvases.value[0];
+    if (!canvas || !drawCanvas || !whiteboardImage.value) return;
+
+    const img = new Image();
+    img.onload = () => {
+        // Fit capture within viewport while preserving aspect ratio; allow user-scale without exceeding 1x source
+        const availableWidth = (pdfReader.value?.clientWidth || window.innerWidth) - 40;
+        const availableHeight = (pdfReader.value?.clientHeight || window.innerHeight) - 40;
+        const safeWidth = Math.max(1, availableWidth);
+        const safeHeight = Math.max(1, availableHeight);
+        const fitScale = Math.max(0.01, Math.min(1, Math.min(safeWidth / img.width, safeHeight / img.height)));
+        // Allow zoom-in beyond the fitted size up to 4x while keeping aspect ratio
+        const targetScale = Math.max(0.01, Math.min(fitScale * whiteboardScale.value, 4));
+        const canvasWidth = img.width * targetScale;
+        const canvasHeight = img.height * targetScale;
+
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
+        canvas.style.width = `${canvasWidth}px`;
+        canvas.style.height = `${canvasHeight}px`;
+
+        drawCanvas.width = canvasWidth;
+        drawCanvas.height = canvasHeight;
+        drawCanvas.style.width = `${canvasWidth}px`;
+        drawCanvas.style.height = `${canvasHeight}px`;
+
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
+
+        drawingContexts[0] = drawCanvas.getContext('2d');
+        redrawAllStrokes(0);
+        renderedPages.value.add(1);
+    };
+    img.src = whiteboardImage.value;
+};
+
 const renderAllPages = async () => {
     if (showWhiteboard.value) {
         // Whiteboard mode: render single page with background image
         pageCount.value = 1;
-        strokesPerPage = { 1: [] };
-        
+        strokesPerPage = { 1: strokesPerPage[1] || [] };
         await nextTick();
-        
-        const canvas = pdfCanvases.value[0];
-        const drawCanvas = drawingCanvases.value[0];
-        
-        if (canvas && drawCanvas && whiteboardImage.value) {
-            const img = new Image();
-            img.onload = () => {
-                // Fit the capture into the available viewport without overflow
-                const availableWidth = (pdfReader.value?.clientWidth || window.innerWidth) - 40;
-                const availableHeight = (pdfReader.value?.clientHeight || window.innerHeight) - 40;
-                const safeWidth = Math.max(1, availableWidth);
-                const safeHeight = Math.max(1, availableHeight);
-                const fitScale = Math.max(0.01, Math.min(1, Math.min(safeWidth / img.width, safeHeight / img.height)));
-                const canvasWidth = img.width * fitScale;
-                const canvasHeight = img.height * fitScale;
-
-                canvas.width = canvasWidth;
-                canvas.height = canvasHeight;
-                canvas.style.width = `${canvasWidth}px`;
-                canvas.style.height = `${canvasHeight}px`;
-
-                drawCanvas.width = canvasWidth;
-                drawCanvas.height = canvasHeight;
-                drawCanvas.style.width = `${canvasWidth}px`;
-                drawCanvas.style.height = `${canvasHeight}px`;
-
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
-                
-                drawingContexts[0] = drawCanvas.getContext('2d');
-                renderedPages.value.add(1);
-            };
-            img.src = whiteboardImage.value;
-        }
+        renderWhiteboardCanvas();
         return;
     }
     
@@ -306,7 +312,7 @@ const handleKeydown = (event) => {
 };
 
 const toggleZoomMode = () => {
-    if (!isFileLoaded.value) return;
+    if (!isFileLoaded.value || showWhiteboard.value) return;
     const currentPage = pageNum.value;
     const canvas = pdfCanvases.value[currentPage - 1];
 
@@ -323,6 +329,26 @@ const toggleZoomMode = () => {
     nextTick(() => {
         scrollToPage(currentPage);
     });
+};
+
+const zoomOut = () => {
+    if (!isFileLoaded.value) return;
+    if (showWhiteboard.value) {
+        whiteboardScale.value = Math.max(0.1, +(whiteboardScale.value - 0.1).toFixed(2));
+        renderWhiteboardCanvas();
+    } else {
+        width.value = Math.max(width.value - 10, 25);
+    }
+};
+
+const zoomIn = () => {
+    if (!isFileLoaded.value) return;
+    if (showWhiteboard.value) {
+        whiteboardScale.value = Math.min(2, +(whiteboardScale.value + 0.1).toFixed(2));
+        renderWhiteboardCanvas();
+    } else {
+        width.value = Math.min(width.value + 10, 100);
+    }
 };
 
 // Drawing functions
@@ -690,6 +716,7 @@ const captureSelection = () => {
     
     // Store as image and show as new page
     whiteboardImage.value = selectedCanvas.toDataURL();
+    whiteboardScale.value = 1;
     
     // Save current PDF state
     savedPdfDoc = pdfDoc;
@@ -717,6 +744,7 @@ const captureSelection = () => {
 const closeWhiteboard = () => {
     showWhiteboard.value = false;
     whiteboardImage.value = null;
+    whiteboardScale.value = 1;
     
     // Restore PDF state
     if (savedPdfDoc) {
@@ -1426,15 +1454,15 @@ defineExpose({
 
                     <!-- Zoom -->
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="isFileLoaded && (width = Math.max(width - 10, 25))" :class="{ disabled: !isFileLoaded || lockView || showWhiteboard }">
+                        <a href="#" class="nav-link" @click.prevent="zoomOut()" :class="{ disabled: !isFileLoaded || lockView }">
                             <i class="bi bi-zoom-out"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <input type="text" class="form-control-plaintext" v-model="width" :disabled="!isFileLoaded || lockView || showWhiteboard">
+                        <input type="text" class="form-control-plaintext" :value="showWhiteboard ? Math.round(whiteboardScale * 100) : width" :disabled="!isFileLoaded || lockView || showWhiteboard">
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="isFileLoaded && (width = Math.min(width + 10, 100))" :class="{ disabled: !isFileLoaded || lockView || showWhiteboard }">
+                        <a href="#" class="nav-link" @click.prevent="zoomIn()" :class="{ disabled: !isFileLoaded || lockView }">
                             <i class="bi bi-zoom-in"></i>
                         </a>
                     </li>
@@ -1601,15 +1629,15 @@ defineExpose({
 .canvas-container.whiteboard-mode .pdf-canvas {
     width: auto;
     height: auto;
-    max-width: 100%;
-    max-height: 100%;
+    max-width: none;
+    max-height: none;
 }
 
 .canvas-container.whiteboard-mode .drawing-canvas {
     width: auto;
     height: auto;
-    max-width: 100%;
-    max-height: 100%;
+    max-width: none;
+    max-height: none;
 }
 
 .canvas-container.canvas-loading {
