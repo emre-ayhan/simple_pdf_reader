@@ -827,8 +827,8 @@ const closeWhiteboard = () => {
     }
 };
 
-const downloadWhiteboard = () => {
-    if (!showWhiteboard.value || !pdfCanvases.value[0] || !drawingCanvases.value[0]) return;
+const getWhiteboardCanvas = () => {
+    if (!showWhiteboard.value || !pdfCanvases.value[0] || !drawingCanvases.value[0]) return null;
     
     const pdfCanvas = pdfCanvases.value[0];
     const drawCanvas = drawingCanvases.value[0];
@@ -846,6 +846,28 @@ const downloadWhiteboard = () => {
     tempCtx.drawImage(pdfCanvas, 0, 0);
     // Draw annotations
     tempCtx.drawImage(drawCanvas, 0, 0);
+    
+    return tempCanvas;
+};
+
+const copyWhiteboardToClipboard = async () => {
+    const tempCanvas = getWhiteboardCanvas();
+    if (!tempCanvas) return;
+    
+    try {
+        const blob = await new Promise(resolve => tempCanvas.toBlob(resolve, 'image/png'));
+        if (!blob) return;
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        alert('Whiteboard copied to clipboard');
+    } catch (err) {
+        console.error('Failed to copy to clipboard:', err);
+        alert('Failed to copy to clipboard');
+    }
+};
+
+const downloadWhiteboard = () => {
+    const tempCanvas = getWhiteboardCanvas();
+    if (!tempCanvas) return;
     
     // Download
     const url = tempCanvas.toDataURL('image/png');
@@ -1572,6 +1594,11 @@ defineExpose({
                     <li v-if="!showWhiteboard" class="nav-item" :title="lockView ? 'Unlock View' : 'Lock View'">
                         <a href="#" class="nav-link" @click.prevent="isFileLoaded && (lockView = !lockView)" :class="{ disabled: !isFileLoaded }">
                             <i class="bi" :class="lockView ? 'bi-lock-fill' : 'bi-lock'"></i>
+                        </a>
+                    </li>
+                    <li v-if="showWhiteboard" class="nav-item" title="Copy to Clipboard">
+                        <a href="#" class="nav-link" @click.prevent="copyWhiteboardToClipboard()">
+                            <i class="bi bi-clipboard"></i>
                         </a>
                     </li>
                     <li v-if="showWhiteboard" class="nav-item" title="Download Whiteboard">
