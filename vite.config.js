@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { viteSingleFile } from "vite-plugin-singlefile"
-import { copyFileSync, cpSync, rmSync, existsSync, mkdirSync, createWriteStream, readdirSync, statSync } from 'fs'
+import { copyFileSync, existsSync, mkdirSync, createWriteStream, readdirSync, statSync } from 'fs'
 import { resolve, join } from 'path'
 import archiver from 'archiver'
 
@@ -12,73 +12,92 @@ export default defineConfig({
     viteSingleFile(),
     {
       name: 'copy-docs',
-      closeBundle() {
-        // Copy only index.html to docs for GitHub Pages
+      async closeBundle() {
+        const distDir = resolve(__dirname, 'dist')
+        const docsDir = resolve(__dirname, 'docs')
+
+        // Copy scripts to dist
         try {
-          const distDir = resolve(__dirname, 'dist')
-          const docsDir = resolve(__dirname, 'docs')
-          const indexPath = join(distDir, 'index.html')
-          
-          if (existsSync(indexPath)) {
-            mkdirSync(docsDir, { recursive: true })
-            copyFileSync(indexPath, join(docsDir, 'index.html'))
-            console.log('✓ Copied index.html to docs/')
-          } else {
-            console.warn('⚠ index.html not found in dist; skipping docs copy')
+          const scriptsDir = resolve(__dirname, 'scripts')
+          if (existsSync(scriptsDir) && existsSync(distDir)) {
+            const files = readdirSync(scriptsDir)
+            for (const file of files) {
+              copyFileSync(join(scriptsDir, file), join(distDir, file))
+            }
+            console.log('✓ Copied scripts to dist/')
           }
         } catch (err) {
-          console.warn('⚠ Could not copy index.html to docs:', err.message)
+          console.warn('⚠ Could not copy scripts to dist:', err.message)
         }
 
         // Create zip file inside dist
-        const createZip = async () => {
-          try {
-            const distDir = resolve(__dirname, 'dist')
-            if (!existsSync(distDir)) return
-            
-            const zipPath = resolve(distDir, 'simple-pdf-reader.zip')
-            const output = createWriteStream(zipPath)
-            const archive = archiver('zip', { zlib: { level: 9 } })
-            
-            output.on('close', () => {
-              console.log('✓ Created simple-pdf-reader.zip in dist/ (' + (archive.pointer() / 1024 / 1024).toFixed(2) + ' MB)')
+        const createZip = () => {
+          return new Promise((resolvePromise, rejectPromise) => {
+            try {
+              if (!existsSync(distDir)) {
+                resolvePromise()
+                return
+              }
               
-              // Copy zip to docs
-              const docsDir = resolve(__dirname, 'docs')
-              try {
-                copyFileSync(zipPath, resolve(docsDir, 'simple-pdf-reader.zip'))
-                console.log('✓ Copied zip to docs/')
-              } catch (err) {
-                console.warn('⚠ Could not copy zip to docs:', err.message)
+              const zipPath = resolve(distDir, 'simple-pdf-reader.zip')
+              const output = createWriteStream(zipPath)
+              const archive = archiver('zip', { zlib: { level: 9 } })
+              
+              output.on('close', () => {
+                console.log('✓ Created simple-pdf-reader.zip in dist/ (' + (archive.pointer() / 1024 / 1024).toFixed(2) + ' MB)')
+                resolvePromise()
+              })
+              
+              archive.on('error', (err) => {
+                rejectPromise(err)
+              })
+              
+              archive.pipe(output)
+              
+              // Add all files from dist except the zip itself
+              const files = readdirSync(distDir)
+              for (const file of files) {
+                if (file === 'simple-pdf-reader.zip') continue
+                const filePath = join(distDir, file)
+                const stat = statSync(filePath)
+                if (stat.isDirectory()) {
+                  archive.directory(filePath, file)
+                } else {
+                  archive.file(filePath, { name: file })
+                }
               }
-            })
-            
-            archive.on('error', (err) => {
-              throw err
-            })
-            
-            archive.pipe(output)
-            
-            // Add all files from dist except the zip itself
-            const files = readdirSync(distDir)
-            for (const file of files) {
-              if (file === 'simple-pdf-reader.zip') continue
-              const filePath = join(distDir, file)
-              const stat = statSync(filePath)
-              if (stat.isDirectory()) {
-                archive.directory(filePath, file)
-              } else {
-                archive.file(filePath, { name: file })
-              }
+              
+              archive.finalize()
+            } catch (err) {
+              rejectPromise(err)
             }
-            
-            await archive.finalize()
-          } catch (err) {
-            console.warn('⚠ Could not create zip:', err.message)
-          }
+          })
         }
         
-        createZip()
+        try {
+          await createZip()
+          
+          // Copy specific files to docs
+          if (!existsSync(docsDir)) {
+            mkdirSync(docsDir, { recursive: true })
+          }
+          
+          const filesToCopy = ['index.html', 'logo.ico', 'simple-pdf-reader.zip', 'pdf.worker.min.mjs']
+          
+          for (const file of filesToCopy) {
+            const srcPath = join(distDir, file)
+            const destPath = join(docsDir, file)
+            
+            if (existsSync(srcPath)) {
+              copyFileSync(srcPath, destPath)
+              console.log(`✓ Copied ${file} to docs/`)
+            } else {
+              console.warn(`⚠ ${file} not found in dist/`)
+            }
+          }
+        } catch (err) {
+          console.warn('⚠ Error during post-build operations:', err.message)
+        }
       }
     }
   ],
