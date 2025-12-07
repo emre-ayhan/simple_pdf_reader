@@ -26,7 +26,7 @@ const openFile = () => emit('open-file');
       <div class="empty-grid">
         <div class="empty-section">
           <div class="empty-section-title">Whiteboard & Image Support</div>
-          <ul class="d-none d-lg-block">
+          <ul>
             <li>Open images as pages with full drawing, zoom, and persistence.</li>
             <li>Capture any PDF area into a whiteboard for focused markup and exports.</li>
             <li>Zoom whiteboards in and out while keeping aspect ratio tidy.</li>
@@ -35,7 +35,7 @@ const openFile = () => emit('open-file');
         </div>
         <div class="empty-section">
           <div class="empty-section-title">PDF Viewing</div>
-          <ul class="d-none d-lg-block">
+          <ul>
             <li>Load local PDFs and keep your last viewed page.</li>
             <li>Navigate pages quickly with keyboard or toolbar controls.</li>
             <li>Adjust zoom with fit-width or fit-height modes.</li>
@@ -44,7 +44,7 @@ const openFile = () => emit('open-file');
         </div>
         <div class="empty-section">
           <div class="empty-section-title">Drawing & Annotation Tools</div>
-          <ul class="d-none d-lg-block">
+          <ul>
             <li>Pen, line, rectangle, circle, and eraser tools with 30 colors.</li>
             <li>Adjustable stroke thickness and undo/redo history.</li>
             <li>Stylus-ready pointer support for smooth inking.</li>
@@ -53,7 +53,7 @@ const openFile = () => emit('open-file');
         </div>
         <div class="empty-section">
           <div class="empty-section-title">Technical Features</div>
-          <ul class="d-none d-lg-block">
+          <ul>
             <li>PDF.js rendering with lazy loading for speed.</li>
             <li>Bootstrap 5 UI with Bootstrap Icons.</li>
             <li>Docker and Nginx ready for production deploys.</li>
