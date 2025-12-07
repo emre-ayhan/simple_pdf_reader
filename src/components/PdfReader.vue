@@ -1731,7 +1731,7 @@ defineExpose({
                         </div>
                     </div>
                     <div class="empty-download" v-if="!isInstalled">
-                        <a class="btn btn-sm btn-link link-light" href="simple-pdf-reader.zip" download>
+                        <a class="btn btn-sm btn-primary" href="simple-pdf-reader.zip" download>
                             Download
                         </a>
                     </div>
@@ -1942,6 +1942,7 @@ defineExpose({
     color: #0a1b2b !important;
     background-color: #7dd3fc !important;
     border-color: #7dd3fc !important;
+    border-radius: var(--bs-border-radius-lg) !important;
 }
 
 .btn-primary:hover {
