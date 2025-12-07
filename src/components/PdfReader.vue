@@ -1709,7 +1709,7 @@ defineExpose({
                         </div>
                     </div>
                     <div class="empty-footer">
-                        <a href="https://github.com/emre-ayhan" target="_blank" rel="noopener noreferrer" class="empty-github-link">
+                        <a href="https://github.com/emre-ayhan/simple_pdf_reader" target="_blank" rel="noopener noreferrer" class="empty-github-link">
                             <i class="bi bi-github"></i>
                             github/emre-ayhan
                         </a>
