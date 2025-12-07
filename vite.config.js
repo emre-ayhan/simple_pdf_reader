@@ -11,80 +11,26 @@ export default defineConfig({
     vue(),
     viteSingleFile(),
     {
-      name: 'copy-files',
+      name: 'copy-docs',
       closeBundle() {
-        // Copy install_app.bat to dist folder
-        try {
-          copyFileSync(
-            resolve(__dirname, 'scripts/install_app.bat'),
-            resolve(__dirname, 'dist/install_app.bat')
-          )
-          console.log('✓ Copied install_app.bat to dist/')
-        } catch (err) {
-          console.warn('⚠ Could not copy install_app.bat:', err.message)
-        }
-
-        // Copy open_pdf.bat to dist folder
-        try {
-          copyFileSync(
-            resolve(__dirname, 'scripts/open_pdf.bat'),
-            resolve(__dirname, 'dist/open_pdf.bat')
-          )
-          console.log('✓ Copied open_pdf.bat to dist/')
-        } catch (err) {
-          console.warn('⚠ Could not copy open_pdf.bat:', err.message)
-        }
-
-        // Copy install_app.sh to dist folder
-        try {
-          copyFileSync(
-            resolve(__dirname, 'scripts/install_app.sh'),
-            resolve(__dirname, 'dist/install_app.sh')
-          )
-          console.log('✓ Copied install_app.sh to dist/')
-        } catch (err) {
-          console.warn('⚠ Could not copy install_app.sh:', err.message)
-        }
-
-        // Copy uninstall_app.bat to dist folder
-        try {
-          copyFileSync(
-            resolve(__dirname, 'scripts/uninstall_app.bat'),
-            resolve(__dirname, 'dist/uninstall_app.bat')
-          )
-          console.log('✓ Copied uninstall_app.bat to dist/')
-        } catch (err) {
-          console.warn('⚠ Could not copy uninstall_app.bat:', err.message)
-        }
-
-        // Copy uninstall_app.sh to dist folder
-        try {
-          copyFileSync(
-            resolve(__dirname, 'scripts/uninstall_app.sh'),
-            resolve(__dirname, 'dist/uninstall_app.sh')
-          )
-          console.log('✓ Copied uninstall_app.sh to dist/')
-        } catch (err) {
-          console.warn('⚠ Could not copy uninstall_app.sh:', err.message)
-        }
-
-        // Mirror dist to docs for GitHub Pages
+        // Copy only index.html to docs for GitHub Pages
         try {
           const distDir = resolve(__dirname, 'dist')
           const docsDir = resolve(__dirname, 'docs')
-          if (existsSync(distDir)) {
-            rmSync(docsDir, { recursive: true, force: true })
+          const indexPath = join(distDir, 'index.html')
+          
+          if (existsSync(indexPath)) {
             mkdirSync(docsDir, { recursive: true })
-            cpSync(distDir, docsDir, { recursive: true })
-            console.log('✓ Copied dist to docs/')
+            copyFileSync(indexPath, join(docsDir, 'index.html'))
+            console.log('✓ Copied index.html to docs/')
           } else {
-            console.warn('⚠ dist folder not found; skipping docs copy')
+            console.warn('⚠ index.html not found in dist; skipping docs copy')
           }
         } catch (err) {
-          console.warn('⚠ Could not copy dist to docs:', err.message)
+          console.warn('⚠ Could not copy index.html to docs:', err.message)
         }
 
-        // Create zip file inside dist and docs
+        // Create zip file inside dist
         const createZip = async () => {
           try {
             const distDir = resolve(__dirname, 'dist')
@@ -97,11 +43,13 @@ export default defineConfig({
             output.on('close', () => {
               console.log('✓ Created simple-pdf-reader.zip in dist/ (' + (archive.pointer() / 1024 / 1024).toFixed(2) + ' MB)')
               
-              // Copy zip to docs if it exists
+              // Copy zip to docs
               const docsDir = resolve(__dirname, 'docs')
-              if (existsSync(docsDir)) {
+              try {
                 copyFileSync(zipPath, resolve(docsDir, 'simple-pdf-reader.zip'))
                 console.log('✓ Copied zip to docs/')
+              } catch (err) {
+                console.warn('⚠ Could not copy zip to docs:', err.message)
               }
             })
             
