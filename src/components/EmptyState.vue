@@ -17,7 +17,7 @@ const openFile = () => emit('open-file');
           Simple PDF Reader
         </div>
         <h1 class="empty-title">Fast, focused reading with ink-ready tools.</h1>
-        <p class="empty-lead d-none d-md-block">This reader keeps your PDFs and images quick to open, easy to mark up, and ready for sharing.</p>
+        <p class="empty-lead d-none d-md-block">This reader keeps your PDFs and Images quick to open, easy to mark up, and ready for sharing.</p>
   
         <div class="empty-actions">
           <button class="btn btn-primary" @click.prevent="openFile">Open PDF or Image</button>
