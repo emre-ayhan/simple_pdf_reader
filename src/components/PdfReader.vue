@@ -1520,7 +1520,7 @@ defineExpose({
 
                     <!-- Drawing -->
                     <li class="nav-item btn-group">
-                        <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isDrawing = !isDrawing, isEraser = false, drawMode = 'pen')" :class="{ disabled: !isFileLoaded }" :style="{ color: isDrawing && drawMode === 'pen' ? drawColor : '' }">
+                        <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isDrawing = (isDrawing && drawMode === 'pen' ? false : true), isEraser = false, drawMode = 'pen')" :class="{ disabled: !isFileLoaded }" :style="{ color: isDrawing && drawMode === 'pen' ? drawColor : '' }">
                             <i class="bi bi-pencil-fill"></i>
                         </a>
                         <a class="nav-link dropdown-toggle dropdown-toggle-split" href="#" role="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" :class="{ disabled: !isFileLoaded }"></a>
@@ -1563,17 +1563,17 @@ defineExpose({
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isDrawing = true, isEraser = false, drawMode = 'line')" :class="{ active: drawMode === 'line', disabled: !isFileLoaded }" title="Line">
+                        <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isDrawing = (isDrawing && drawMode === 'line' ? false : true), isEraser = false, drawMode = 'line')" :class="{ active: isDrawing && drawMode === 'line', disabled: !isFileLoaded }" title="Line">
                             <i class="bi bi-slash-lg"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isDrawing = true, isEraser = false, drawMode = 'rectangle')" :class="{ active: drawMode === 'rectangle', disabled: !isFileLoaded }" title="Rectangle">
+                        <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isDrawing = (isDrawing && drawMode === 'rectangle' ? false : true), isEraser = false, drawMode = 'rectangle')" :class="{ active: isDrawing && drawMode === 'rectangle', disabled: !isFileLoaded }" title="Rectangle">
                             <i class="bi bi-square"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isDrawing = true, isEraser = false, drawMode = 'circle')" :class="{ active: drawMode === 'circle', disabled: !isFileLoaded }" title="Circle">
+                        <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isDrawing = (isDrawing && drawMode === 'circle' ? false : true), isEraser = false, drawMode = 'circle')" :class="{ active: isDrawing && drawMode === 'circle', disabled: !isFileLoaded }" title="Circle">
                             <i class="bi bi-circle"></i>
                         </a>
                     </li>
