@@ -1663,7 +1663,7 @@ defineExpose({
                         Simple PDF Reader
                     </div>
                     <h1 class="empty-title">Fast, focused reading with ink-ready tools.</h1>
-                    <p class="empty-lead">Built with Vue 3 and Vite, this reader keeps your PDFs and images quick to open, easy to mark up, and ready for sharing.</p>
+                    <p class="empty-lead d-none d-md-block">This reader keeps your PDFs and images quick to open, easy to mark up, and ready for sharing.</p>
 
                     <div class="empty-actions">
                         <button class="btn btn-primary" @click.prevent="openFilePicker">Open PDF or Image</button>
@@ -1673,7 +1673,7 @@ defineExpose({
                     <div class="empty-grid">
                         <div class="empty-section">
                             <div class="empty-section-title">Whiteboard & Image Support</div>
-                            <ul>
+                            <ul class="d-none d-lg-block">
                                 <li>Open images as pages with full drawing, zoom, and persistence.</li>
                                 <li>Capture any PDF area into a whiteboard for focused markup and exports.</li>
                                 <li>Zoom whiteboards in and out while keeping aspect ratio tidy.</li>
@@ -1682,7 +1682,7 @@ defineExpose({
                         </div>
                         <div class="empty-section">
                             <div class="empty-section-title">PDF Viewing</div>
-                            <ul>
+                            <ul class="d-none d-lg-block">
                                 <li>Load local PDFs and keep your last viewed page.</li>
                                 <li>Navigate pages quickly with keyboard or toolbar controls.</li>
                                 <li>Adjust zoom with fit-width or fit-height modes.</li>
@@ -1691,7 +1691,7 @@ defineExpose({
                         </div>
                         <div class="empty-section">
                             <div class="empty-section-title">Drawing & Annotation Tools</div>
-                            <ul>
+                            <ul class="d-none d-lg-block">
                                 <li>Pen, line, rectangle, circle, and eraser tools with 30 colors.</li>
                                 <li>Adjustable stroke thickness and undo/redo history.</li>
                                 <li>Stylus-ready pointer support for smooth inking.</li>
@@ -1700,13 +1700,19 @@ defineExpose({
                         </div>
                         <div class="empty-section">
                             <div class="empty-section-title">Technical Features</div>
-                            <ul>
+                            <ul class="d-none d-lg-block">
                                 <li>PDF.js rendering with lazy loading for speed.</li>
                                 <li>Bootstrap 5 UI with Bootstrap Icons.</li>
                                 <li>Docker and Nginx ready for production deploys.</li>
                                 <li>LocalStorage-powered page persistence.</li>
                             </ul>
                         </div>
+                    </div>
+                    <div class="empty-footer">
+                        <a href="https://github.com/emre-ayhan" target="_blank" rel="noopener noreferrer" class="empty-github-link">
+                            <i class="bi bi-github"></i>
+                            github/emre-ayhan
+                        </a>
                     </div>
                 </div>
             </div>
@@ -1906,13 +1912,14 @@ defineExpose({
 }
 
 .btn-primary {
-    background-color: #1985ea !important;
-    border-color: #1985ea !important;
+    color: #0a1b2b !important;
+    background-color: #7dd3fc !important;
+    border-color: #7dd3fc !important;
 }
 
 .btn-primary:hover {
-    background-color: #166fca !important;
-    border-color: #166fca !important;
+    background-color: #38bdf8 !important;
+    border-color: #38bdf8 !important;
 }
 
 .empty-state {
@@ -1926,7 +1933,7 @@ defineExpose({
 
 .empty-card {
     width: 100%;
-    max-width: 1080px;
+    max-width: 1200px;
     background: linear-gradient(145deg, #0f172a 0%, #0a1b2b 55%, #0b2538 100%);
     color: var(--bs-light);
     border: 1px solid rgba(255, 255, 255, 0.08);
@@ -2003,5 +2010,32 @@ defineExpose({
 
 .empty-section li + li {
     margin-top: 6px;
+}
+
+.empty-footer {
+    display: flex;
+    justify-content: center;
+    margin-top: 12px;
+    padding-top: 18px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.empty-github-link {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #7dd3fc;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 14px;
+    transition: color 0.2s;
+}
+
+.empty-github-link:hover {
+    color: #dbeafe;
+}
+
+.empty-github-link i {
+    font-size: 16px;
 }
 </style>
