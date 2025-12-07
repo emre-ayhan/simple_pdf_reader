@@ -1,3 +1,4 @@
+// Global Resets
 * {
   margin: 0;
   padding: 0;
@@ -9,9 +10,19 @@ body {
     Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
   line-height: 1.6;
   color: #333;
+  overflow: hidden; // From NavTabs global style
 }
 
 #app {
   min-height: 100vh;
   background-color: #f5f5f5;
+  margin: 0; // From NavTabs global style
+  padding: 0; // From NavTabs global style
+  overflow: hidden; // From NavTabs global style
+}
+
+.container-fluid {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
 }

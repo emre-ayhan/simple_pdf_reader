@@ -1,9 +1,6 @@
 import { createApp } from 'vue'
 import App from './App.vue'
-import './style.css'
-import './scss/PdfReader.scss'
-import './scss/NavTabs.scss'
-import './scss/EmptyState.scss'
+import './scss/main.scss'
 
 // Import Bootstrap CSS and JS
 import 'bootstrap/dist/css/bootstrap.min.css'

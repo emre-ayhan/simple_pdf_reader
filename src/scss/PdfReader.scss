@@ -1,38 +1,39 @@
+@use "variables" as *;
 .navbar {
     top: 31.5px !important;
-    background: linear-gradient(145deg, #0f172a 0%, #0a1b2b 55%, #0b2538 100%) !important;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
+    background: $dark-bg-gradient !important;
+    border-bottom: 1px solid $border-color;
 
-.navbar .nav-link {
-    padding: 4px 12px !important;
-}
+    .nav-link {
+        padding: 4px 12px !important;
 
-.navbar .nav-link:hover,
-.navbar .nav-link.active {
-    border-radius: var(--bs-border-radius-lg);
-    background-color: rgba(255, 255, 255, 0.1) !important;
-    color: #c5d5e6 !important;
-}
+        &:hover,
+        &.active {
+            border-radius: var(--bs-border-radius-lg);
+            background-color: rgba(255, 255, 255, 0.1) !important;
+            color: $text-secondary !important;
+        }
+    }
 
-.navbar input {
-    padding: 4px 8px !important;
+    input {
+        padding: 4px 8px !important;
+    }
 }
 
 .pdf-reader {
-    margin-top: 65.5px;
+    margin-top: $navbar-height;
     width: 100%;
-    height: calc(100vh - 65.5px);
-    background-color: #9fb3c8;
+    height: calc(100vh - #{$navbar-height});
+    background-color: $text-muted;
     overflow: auto;
     display: flex;
     justify-content: center;
     touch-action: pan-y pan-x;
-}
 
-.pdf-reader.overflow-hidden {
-    touch-action: none;
-    overflow: hidden;
+    &.overflow-hidden {
+        touch-action: none;
+        overflow: hidden;
+    }
 }
 
 .pages-container {
@@ -70,10 +71,10 @@
     color: var(--bs-light) !important;
     border: none;
     background-color: transparent;
-}
 
-.form-control-plaintext:disabled {
-    color: var(--bs-secondary) !important;
+    &:disabled {
+        color: var(--bs-secondary) !important;
+    }
 }
 
 .canvas-container {
@@ -84,45 +85,39 @@
     background-color: white;
     width: 100%;
     max-width: 100%;
-}
 
-.canvas-container.whiteboard-mode {
-    display: flex;
-    align-items: flex-start;
-    justify-content: flex-start;
-    width: 100%;
-    height: 100%;
-    padding: 20px;
-    overflow: hidden;
-}
+    &.whiteboard-mode {
+        display: flex;
+        align-items: flex-start;
+        justify-content: flex-start;
+        width: 100%;
+        height: 100%;
+        padding: 20px;
+        overflow: hidden;
 
-.canvas-container.whiteboard-mode .pdf-canvas {
-    width: auto;
-    height: auto;
-    max-width: none;
-    max-height: none;
-}
+        .pdf-canvas,
+        .drawing-canvas {
+            width: auto;
+            height: auto;
+            max-width: none;
+            max-height: none;
+        }
+    }
 
-.canvas-container.whiteboard-mode .drawing-canvas {
-    width: auto;
-    height: auto;
-    max-width: none;
-    max-height: none;
-}
+    &.canvas-loading {
+        min-height: 800px;
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
 
-.canvas-container.canvas-loading {
-    min-height: 800px;
-    width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.canvas-container.canvas-loading::after {
-    content: 'Loading...';
-    color: #9fb3c8;
-    font-size: 16px;
-    position: absolute;
+        &::after {
+            content: 'Loading...';
+            color: $text-muted;
+            font-size: 16px;
+            position: absolute;
+        }
+    }
 }
 
 .pdf-canvas {

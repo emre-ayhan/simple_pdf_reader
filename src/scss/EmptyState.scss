@@ -1,3 +1,5 @@
+@use "variables" as *;
+@use "variables" as *;
 .empty-state {
   width: 100%;
   height: 100%;
@@ -10,9 +12,9 @@
 .empty-card {
   width: 100%;
   max-width: 1200px;
-  background: linear-gradient(145deg, #0f172a 0%, #0a1b2b 55%, #0b2538 100%);
+  background: $dark-bg-gradient;
   color: var(--bs-light);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid $border-color;
   box-shadow: 0 18px 45px rgba(0, 0, 0, 0.55);
   border-radius: 18px;
   padding: 32px;
@@ -26,19 +28,19 @@
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-size: 16px;
-  color: #1985ea;
+  color: $text-accent;
   font-weight: 700;
 }
 
 .empty-title {
   font-size: clamp(26px, 3vw, 34px);
   margin: 0;
-  color: #e8edf5;
+  color: $text-light;
 }
 
 .empty-lead {
   max-width: 760px;
-  color: #c6d0de;
+  color: $text-description;
   margin: 0;
   font-size: 16px;
   line-height: 1.6;
@@ -53,7 +55,7 @@
 }
 
 .empty-hint {
-  color: #9fb3c8;
+  color: $text-muted;
   font-size: 14px;
 }
 
@@ -70,23 +72,23 @@
   border-radius: 12px;
   padding: 16px;
   height: 100%;
-}
 
-.empty-section-title {
-  font-weight: 700;
-  margin-bottom: 10px;
-  color: #dbeafe;
-}
+  &-title {
+    font-weight: 700;
+    margin-bottom: 10px;
+    color: $text-highlight;
+  }
 
-.empty-section ul {
-  padding-left: 16px;
-  margin: 0;
-  color: #c5d5e6;
-  line-height: 1.55;
-}
+  ul {
+    padding-left: 16px;
+    margin: 0;
+    color: $text-secondary;
+    line-height: 1.55;
+  }
 
-.empty-section li + li {
-  margin-top: 6px;
+  li + li {
+    margin-top: 6px;
+  }
 }
 
 .empty-download {
@@ -103,36 +105,36 @@
   justify-content: center;
   margin-top: 12px;
   padding-top: 18px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid $border-color;
 }
 
 .empty-github-link {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #7dd3fc;
+  color: $primary;
   text-decoration: none;
   font-weight: 500;
   font-size: 14px;
   transition: color 0.2s;
-}
 
-.empty-github-link:hover {
-  color: #dbeafe;
-}
+  &:hover {
+    color: $text-highlight;
+  }
 
-.empty-github-link i {
-  font-size: 16px;
+  i {
+    font-size: 16px;
+  }
 }
 
 .btn-primary {
   color: #0a1b2b !important;
-  background-color: #7dd3fc !important;
-  border-color: #7dd3fc !important;
+  background-color: $primary !important;
+  border-color: $primary !important;
   border-radius: var(--bs-border-radius-lg) !important;
-}
 
-.btn-primary:hover {
-  background-color: #38bdf8 !important;
-  border-color: #38bdf8 !important;
+  &:hover {
+    background-color: $primary-hover !important;
+    border-color: $primary-hover !important;
+  }
 }
