@@ -1516,11 +1516,10 @@ onUnmounted(() => {
 
                     <!-- Drawing -->
                     <li class="nav-item btn-group">
-                        <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isDrawing = (isDrawing && drawMode === 'pen' ? false : true), isEraser = false, drawMode = 'pen')" :class="{ disabled: !isFileLoaded }" :style="{ color: isDrawing && drawMode === 'pen' ? drawColor : '' }">
-                            <i class="bi bi-pencil-fill"></i>
+                        <a class="nav-link" href="#" role="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" :class="{ disabled: !isFileLoaded }">
+                            <i class="bi bi-gear"></i>
                         </a>
-                        <a class="nav-link dropdown-toggle dropdown-toggle-split" href="#" role="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" :class="{ disabled: !isFileLoaded }"></a>
-                        <div class="dropdown-menu dropdown-menu-dark p-3">
+                        <div class="dropdown-menu dropdown-menu-dark rounded-3 p-3">
                             <div class="mb-3">
                                 <label class="form-label">Color</label>
                                 <template v-for="(colorGroup, groupIndex) in colors">
@@ -1552,6 +1551,11 @@ onUnmounted(() => {
                             </div>
                             <button class="btn btn-sm btn-danger w-100" @click="clearDrawing()">Clear All Drawing</button>
                         </div>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isDrawing = (isDrawing && drawMode === 'pen' ? false : true), isEraser = false, drawMode = 'pen')" :class="{ disabled: !isFileLoaded }" :style="{ color: isDrawing && drawMode === 'pen' ? drawColor : '' }">
+                            <i class="bi bi-pencil-fill"></i>
+                        </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isEraser = !isEraser, isDrawing = false)" :class="{ active: isEraser, disabled: !isFileLoaded }">

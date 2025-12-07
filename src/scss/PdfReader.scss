@@ -4,6 +4,25 @@
     background: $dark-bg-gradient !important;
     border-bottom: 1px solid $border-color;
 
+    .dropdown-menu-dark {
+        background: $dark-bg-gradient !important;
+        border: 1px solid $border-color !important;
+
+        .form-range {
+            &::-webkit-slider-thumb {
+                background-color: $primary;
+            }
+            
+            &::-moz-range-thumb {
+                background-color: $primary;
+            }
+        }
+
+        .form-label {
+            color: $primary;
+        }
+    }
+
     .nav-link {
         padding: 4px 12px !important;
 
@@ -160,9 +179,7 @@
         top: 0 !important;
         width: 64px !important;
         height: 100vh !important;
-        left: auto !important; 
-        overflow-y: auto !important;
-        overflow-x: hidden !important;
+        left: auto !important;
     
         ul {
             flex-direction: column !important;
@@ -171,6 +188,15 @@
                 width: 100% !important;
                 margin: 1rem 0 !important;
                 min-height: 1px !important;
+            }
+
+            .btn-group {
+                flex-direction: column !important;
+            }
+
+            .dropdown-menu {
+                left: auto !important;
+                right: 0 !important;
             }
         }
     }
