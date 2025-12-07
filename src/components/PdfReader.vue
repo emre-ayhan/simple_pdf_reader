@@ -1506,10 +1506,6 @@ onUnmounted(() => {
         lazyLoadObserver.disconnect();
     }
 });
-
-defineExpose({
-    filename
-});
 </script>
 <template>
     <div class="container-fluid bg-dark" @contextmenu.prevent @dragenter.prevent="onDragEnter" @dragleave.prevent="onDragLeave" @dragover.prevent @drop.prevent="onDrop">
