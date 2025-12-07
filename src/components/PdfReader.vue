@@ -377,7 +377,7 @@ const toggleZoomMode = () => {
 
     if (zoomMode.value === 'fit-width') {
         zoomMode.value = 'fit-height';
-        const margin = scale * 62.5; // Account for navbar and padding
+        const margin = scale * 65.5; // Account for navbar and padding
         width.value = ((pdfReader.value.clientHeight - margin) * 100) / canvas.height;
     } else {
         zoomMode.value = 'fit-width';
@@ -1715,7 +1715,7 @@ defineExpose({
 </template>
 <style>
 .navbar {
-    top: 28.5px !important;
+    top: 31.5px !important;
     background: linear-gradient(145deg, #0f172a 0%, #0a1b2b 55%, #0b2538 100%) !important;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -1736,9 +1736,9 @@ defineExpose({
 }
 
 .pdf-reader {
-    margin-top: 62.5px;
+    margin-top: 65.5px;
     width: 100%;
-    height: calc(100vh - 62.5px);
+    height: calc(100vh - 65.5px);
     background-color: #9fb3c8;
     overflow: auto;
     display: flex;

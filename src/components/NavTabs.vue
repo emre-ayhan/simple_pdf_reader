@@ -61,7 +61,7 @@ defineExpose({
 });
 </script>
 <template>
-    <ul class="nav nav-tabs fixed-top" id="appTabs" role="tablist">
+    <ul class="nav nav-tabs fixed-top pt-1" id="appTabs" role="tablist">
             <template v-for="(tab, index) in tabs" :key="tab">
                 <li class="nav-item" role="presentation" v-if="!tab.closed">
                     <button class="nav-link" :class="{ active: index === activeTabIndex }" type="button" role="tab" @click="activeTabIndex = index">
@@ -124,12 +124,12 @@ body, #app, .container-fluid {
 
 .nav-tabs .nav-link:hover,
 .nav-tabs .nav-link:active {
-    color: #c5d5e6 !important;
+    color: #7dd3fc !important;
 }
 
 .nav-tabs .nav-link.active {
     background-color: transparent !important;
-    color: #c5d5e6 !important;
-    border-color: #c5d5e6 !important;
+    color: #7dd3fc !important;
+    border-color: #7dd3fc !important;
 }
 </style>
