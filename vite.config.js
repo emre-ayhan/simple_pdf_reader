@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { viteSingleFile } from "vite-plugin-singlefile"
-import { copyFileSync } from 'fs'
+import { copyFileSync, cpSync, rmSync, existsSync, mkdirSync } from 'fs'
 import { resolve } from 'path'
 
 
@@ -65,6 +65,22 @@ export default defineConfig({
           console.log('✓ Copied uninstall_app.sh to dist/')
         } catch (err) {
           console.warn('⚠ Could not copy uninstall_app.sh:', err.message)
+        }
+
+        // Mirror dist to docs for GitHub Pages
+        try {
+          const distDir = resolve(__dirname, 'dist')
+          const docsDir = resolve(__dirname, 'docs')
+          if (existsSync(distDir)) {
+            rmSync(docsDir, { recursive: true, force: true })
+            mkdirSync(docsDir, { recursive: true })
+            cpSync(distDir, docsDir, { recursive: true })
+            console.log('✓ Copied dist to docs/')
+          } else {
+            console.warn('⚠ dist folder not found; skipping docs copy')
+          }
+        } catch (err) {
+          console.warn('⚠ Could not copy dist to docs:', err.message)
         }
       }
     }

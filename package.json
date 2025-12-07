@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "copy-docs": "node -e \"const fs=require('fs');const path=require('path');const src=path.resolve('dist');const dest=path.resolve('docs');fs.rmSync(dest,{recursive:true,force:true});if(fs.existsSync(src)){fs.cpSync(src,dest,{recursive:true});console.log('copied dist to docs');}else{console.error('dist not found');process.exit(1);}\"",
+    "build:docs": "npm run build && npm run copy-docs",
     "preview": "vite preview"
   },
   "dependencies": {

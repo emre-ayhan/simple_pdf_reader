@@ -15,12 +15,14 @@ const lockView = ref(false);
 const width = ref(100);
 const zoomMode = ref('fit-width'); // 'fit-width' or 'fit-height'
 const isFileLoaded = ref(false);
+const isInstalled = ref(false);
 const isDragging = ref(false);
 const dragCounter = ref(0);
 const pagesContainer = ref(null);
 const pdfReader = ref(null);
 let intersectionObserver = null;
 let lazyLoadObserver = null;
+let displayModeMedia = null;
 const renderedPages = ref(new Set());
 
 // History management
@@ -153,6 +155,16 @@ let startY = 0;
 let canvasSnapshot = null;
 let currentCanvasIndex = -1;
 let savedWidth = 100; // Save page width before entering whiteboard
+
+const updateInstalledState = () => {
+    try {
+        const standaloneMatch = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
+        const pwaStandalone = window.navigator && window.navigator.standalone;
+        isInstalled.value = !!(standaloneMatch || pwaStandalone);
+    } catch (e) {
+        isInstalled.value = false;
+    }
+};
 
 const isMouseDown = ref(false);
 const activePointerId = ref(null);
@@ -1453,6 +1465,13 @@ const loadPdfFromUrl = (url) => {
 onMounted(() => {
     // Add keyboard event listener
     window.addEventListener('keydown', handleKeydown);
+
+    // Detect installed/standalone PWA to hide download button
+    updateInstalledState();
+    if (window.matchMedia) {
+        displayModeMedia = window.matchMedia('(display-mode: standalone)');
+        displayModeMedia.addEventListener?.('change', updateInstalledState);
+    }
     
     // Try to get file parameter from URL
     // Don't use URLSearchParams as it might double-decode
@@ -1475,6 +1494,9 @@ onMounted(() => {
 onUnmounted(() => {
     // Remove keyboard event listener
     window.removeEventListener('keydown', handleKeydown);
+    if (displayModeMedia && displayModeMedia.removeEventListener) {
+        displayModeMedia.removeEventListener('change', updateInstalledState);
+    }
     
     if (intersectionObserver) {
         intersectionObserver.disconnect();
@@ -1707,6 +1729,11 @@ defineExpose({
                                 <li>LocalStorage-powered page persistence.</li>
                             </ul>
                         </div>
+                    </div>
+                    <div class="empty-download" v-if="!isInstalled">
+                        <a class="btn btn-sm btn-link link-light" href="simple-pdf-reader.zip" download>
+                            Download
+                        </a>
                     </div>
                     <div class="empty-footer">
                         <a href="https://github.com/emre-ayhan/simple_pdf_reader" target="_blank" rel="noopener noreferrer" class="empty-github-link">
@@ -1943,6 +1970,7 @@ defineExpose({
     display: flex;
     flex-direction: column;
     gap: 18px;
+    position: relative;
 }
 
 .empty-eyebrow {
@@ -2010,6 +2038,15 @@ defineExpose({
 
 .empty-section li + li {
     margin-top: 6px;
+}
+
+.empty-download {
+    position: absolute;
+    right: 24px;
+    bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .empty-footer {
