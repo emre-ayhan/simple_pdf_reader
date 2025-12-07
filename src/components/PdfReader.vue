@@ -1513,169 +1513,208 @@ defineExpose({
 </script>
 <template>
     <div class="container-fluid bg-dark" @contextmenu.prevent @dragenter.prevent="onDragEnter" @dragleave.prevent="onDragLeave" @dragover.prevent @drop.prevent="onDrop">
-        <nav class="navbar navbar-expand navbar-dark bg-dark fixed-top py-0">
+        <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top py-0">
             <div class="container">
-                <!-- Toolbar -->
-                <ul class="navbar-nav mx-auto">
+                <a class="navbar-brand d-lg-none text-primary" href="#">
+                    <i class="bi bi-file-earmark-pdf-fill"></i>
+                    Simple PDF Reader
+                </a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasNavbar" aria-controls="offcanvasNavbar" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="offcanvas offcanvas-end bg-dark" tabindex="-1" id="offcanvasNavbar" aria-labelledby="offcanvasNavbarLabel">
+                    <div class="offcanvas-header">
+                        <h5 class="offcanvas-title text-primary" id="offcanvasNavbarLabel">
+                            <i class="bi bi-file-earmark-pdf-fill"></i>
+                            Simple PDF Reader
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+                    </div>
+                    <div class="offcanvas-body">
+                        <!-- Toolbar -->
+                        <ul class="navbar-nav mx-auto">
 
-                    <!-- Drawing -->
-                    <li class="nav-item btn-group">
-                        <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isDrawing = (isDrawing && drawMode === 'pen' ? false : true), isEraser = false, drawMode = 'pen')" :class="{ disabled: !isFileLoaded }" :style="{ color: isDrawing && drawMode === 'pen' ? drawColor : '' }">
-                            <i class="bi bi-pencil-fill"></i>
-                        </a>
-                        <a class="nav-link dropdown-toggle dropdown-toggle-split" href="#" role="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" :class="{ disabled: !isFileLoaded }"></a>
-                        <div class="dropdown-menu dropdown-menu-dark p-3">
-                            <div class="mb-3">
-                                <label class="form-label">Color</label>
-                                <template v-for="(colorGroup, groupIndex) in colors">
-                                    <div class="d-flex gap-2 mb-2">
-                                        <div v-for="(color, colorIndex) in colorGroup" :key="`color-${groupIndex}-${colorIndex}`">
-                                            <input type="radio" class="btn-check" name="colors" :id="`color-${groupIndex}-${colorIndex}`" autocomplete="off" v-model="drawColor" :value="color" />
-                                            <label class="btn border rounded-circle p-3" :for="`color-${groupIndex}-${colorIndex}`" :title="color" :style="{ backgroundColor: color }" ></label>
+                            <!-- Drawing -->
+                            <li class="nav-item btn-group">
+                                <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isDrawing = (isDrawing && drawMode === 'pen' ? false : true), isEraser = false, drawMode = 'pen')" :class="{ disabled: !isFileLoaded }" :style="{ color: isDrawing && drawMode === 'pen' ? drawColor : '' }">
+                                    <i class="bi bi-pencil-fill"></i>
+                                    <span class="d-lg-none ms-2">Draw</span>
+                                </a>
+                                <a class="nav-link dropdown-toggle dropdown-toggle-split" href="#" role="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" :class="{ disabled: !isFileLoaded }"></a>
+                                <div class="dropdown-menu dropdown-menu-dark p-3">
+                                    <div class="mb-3">
+                                        <label class="form-label">Color</label>
+                                        <template v-for="(colorGroup, groupIndex) in colors">
+                                            <div class="d-flex gap-2 mb-2">
+                                                <div v-for="(color, colorIndex) in colorGroup" :key="`color-${groupIndex}-${colorIndex}`">
+                                                    <input type="radio" class="btn-check" name="colors" :id="`color-${groupIndex}-${colorIndex}`" autocomplete="off" v-model="drawColor" :value="color" />
+                                                    <label class="btn border rounded-circle p-3" :for="`color-${groupIndex}-${colorIndex}`" :title="color" :style="{ backgroundColor: color }" ></label>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        <div class="mb-2">
+                                            <svg width="100%" height="40" viewBox="0 0 200 40" preserveAspectRatio="none">
+                                                <path 
+                                                    d="M 0,20 Q 25,5 50,20 T 100,20 T 150,20 T 200,20" 
+                                                    fill="none" 
+                                                    :stroke="drawColor" 
+                                                    :stroke-width="drawThickness" 
+                                                    stroke-linecap="round"
+                                                />
+                                            </svg>
                                         </div>
                                     </div>
-                                </template>
-                                <div class="mb-2">
-                                    <svg width="100%" height="40" viewBox="0 0 200 40" preserveAspectRatio="none">
-                                        <path 
-                                            d="M 0,20 Q 25,5 50,20 T 100,20 T 150,20 T 200,20" 
-                                            fill="none" 
-                                            :stroke="drawColor" 
-                                            :stroke-width="drawThickness" 
-                                            stroke-linecap="round"
-                                        />
-                                    </svg>
+                                    <div class="mb-3">
+                                        <label class="form-label">Thickness</label>
+                                        <div class="d-flex align-items-center">
+                                            <input type="range" class="form-range" min="1" max="10" v-model="drawThickness" />
+                                            <input type="text" class="form-control-plaintext" min="1" max="10" v-model="drawThickness" readonly />
+                                        </div>
+                                    </div>
+                                    <button class="btn btn-sm btn-danger w-100" @click="clearDrawing()">Clear All Drawing</button>
                                 </div>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Thickness</label>
-                                <div class="d-flex align-items-center">
-                                    <input type="range" class="form-range" min="1" max="10" v-model="drawThickness" />
-                                    <input type="text" class="form-control-plaintext" min="1" max="10" v-model="drawThickness" readonly />
-                                </div>
-                            </div>
-                            <button class="btn btn-sm btn-danger w-100" @click="clearDrawing()">Clear All Drawing</button>
-                        </div>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isEraser = !isEraser, isDrawing = false)" :class="{ active: isEraser, disabled: !isFileLoaded }">
-                            <i class="bi bi-eraser-fill"></i>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isDrawing = (isDrawing && drawMode === 'line' ? false : true), isEraser = false, drawMode = 'line')" :class="{ active: isDrawing && drawMode === 'line', disabled: !isFileLoaded }" title="Line">
-                            <i class="bi bi-slash-lg"></i>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isDrawing = (isDrawing && drawMode === 'rectangle' ? false : true), isEraser = false, drawMode = 'rectangle')" :class="{ active: isDrawing && drawMode === 'rectangle', disabled: !isFileLoaded }" title="Rectangle">
-                            <i class="bi bi-square"></i>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isDrawing = (isDrawing && drawMode === 'circle' ? false : true), isEraser = false, drawMode = 'circle')" :class="{ active: isDrawing && drawMode === 'circle', disabled: !isFileLoaded }" title="Circle">
-                            <i class="bi bi-circle"></i>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isSelectionMode = !isSelectionMode, isDrawing = false, isEraser = false)" :class="{ active: isSelectionMode, disabled: !isFileLoaded || showWhiteboard }" title="Select Area to Whiteboard">
-                            <i class="bi bi-scissors"></i>
-                        </a>
-                    </li>
-                    <li class="nav-item vr bg-white mx-2"></li>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isEraser = !isEraser, isDrawing = false)" :class="{ active: isEraser, disabled: !isFileLoaded }">
+                                    <i class="bi bi-eraser-fill"></i>
+                                    <span class="d-lg-none ms-2">Eraser</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isDrawing = (isDrawing && drawMode === 'line' ? false : true), isEraser = false, drawMode = 'line')" :class="{ active: isDrawing && drawMode === 'line', disabled: !isFileLoaded }" title="Line">
+                                    <i class="bi bi-slash-lg"></i>
+                                    <span class="d-lg-none ms-2">Line</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isDrawing = (isDrawing && drawMode === 'rectangle' ? false : true), isEraser = false, drawMode = 'rectangle')" :class="{ active: isDrawing && drawMode === 'rectangle', disabled: !isFileLoaded }" title="Rectangle">
+                                    <i class="bi bi-square"></i>
+                                    <span class="d-lg-none ms-2">Rectangle</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isDrawing = (isDrawing && drawMode === 'circle' ? false : true), isEraser = false, drawMode = 'circle')" :class="{ active: isDrawing && drawMode === 'circle', disabled: !isFileLoaded }" title="Circle">
+                                    <i class="bi bi-circle"></i>
+                                    <span class="d-lg-none ms-2">Circle</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isSelectionMode = !isSelectionMode, isDrawing = false, isEraser = false)" :class="{ active: isSelectionMode, disabled: !isFileLoaded || showWhiteboard }" title="Select Area to Whiteboard">
+                                    <i class="bi bi-scissors"></i>
+                                    <span class="d-lg-none ms-2">Select</span>
+                                </a>
+                            </li>
+                            <li class="nav-item vr bg-white mx-2 d-none d-lg-block"></li>
 
-                    <!-- Undo/Redo -->
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="undo()" :class="{ disabled: !isFileLoaded || historyStep < 0 }" title="Undo">
-                            <i class="bi bi-arrow-counterclockwise"></i>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="redo()" :class="{ disabled: !isFileLoaded || historyStep >= history.length - 1 }" title="Redo">
-                            <i class="bi bi-arrow-clockwise"></i>
-                        </a>
-                    </li>
-                    <li class="nav-item vr bg-white mx-2"></li>
+                            <!-- Undo/Redo -->
+                            <li class="nav-item">
+                                <a class="nav-link" href="#" @click.prevent="undo()" :class="{ disabled: !isFileLoaded || historyStep < 0 }" title="Undo">
+                                    <i class="bi bi-arrow-counterclockwise"></i>
+                                    <span class="d-lg-none ms-2">Undo</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="#" @click.prevent="redo()" :class="{ disabled: !isFileLoaded || historyStep >= history.length - 1 }" title="Redo">
+                                    <i class="bi bi-arrow-clockwise"></i>
+                                    <span class="d-lg-none ms-2">Redo</span>
+                                </a>
+                            </li>
+                            <li class="nav-item vr bg-white mx-2 d-none d-lg-block"></li>
 
-                    <!-- Pagination -->
-                    <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="scrollToPage(1)" :class="{ disabled: !isFileLoaded || showWhiteboard || pageNum <= 1 }" title="First Page">
-                            <i class="bi bi-chevron-double-left"></i>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageNum - 1)" :class="{ disabled: !isFileLoaded || showWhiteboard || pageNum <= 1 }" title="Previous Page">
-                            <i class="bi bi-chevron-left"></i>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <input type="text" class="form-control-plaintext" :value="pageNum" @input="scrollToPage($event.target.value)" :disabled="!isFileLoaded || showWhiteboard" />
-                    </li>
-                    <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageNum + 1)" :class="{ disabled: !isFileLoaded || showWhiteboard || pageNum >= pageCount }" title="Next Page">
-                            <i class="bi bi-chevron-right"></i>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageCount)" :class="{ disabled: !isFileLoaded || showWhiteboard || pageNum >= pageCount }" :title="`Last Page (${pageCount})`">
-                            <i class="bi bi-chevron-double-right"></i>
-                        </a>
-                    </li>
-                    <li class="nav-item vr bg-white mx-2"></li>
+                            <!-- Pagination -->
+                            <li class="nav-item">
+                                <a href="#" class="nav-link" @click.prevent="scrollToPage(1)" :class="{ disabled: !isFileLoaded || showWhiteboard || pageNum <= 1 }" title="First Page">
+                                    <i class="bi bi-chevron-double-left"></i>
+                                    <span class="d-lg-none ms-2">First Page</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="#" class="nav-link" @click.prevent="scrollToPage(pageNum - 1)" :class="{ disabled: !isFileLoaded || showWhiteboard || pageNum <= 1 }" title="Previous Page">
+                                    <i class="bi bi-chevron-left"></i>
+                                    <span class="d-lg-none ms-2">Previous Page</span>
+                                </a>
+                            </li>
+                            <li class="nav-item d-none d-lg-block">
+                                <input type="text" class="form-control-plaintext" :value="pageNum" @input="scrollToPage($event.target.value)" :disabled="!isFileLoaded || showWhiteboard" />
+                            </li>
+                            <li class="nav-item">
+                                <a href="#" class="nav-link" @click.prevent="scrollToPage(pageNum + 1)" :class="{ disabled: !isFileLoaded || showWhiteboard || pageNum >= pageCount }" title="Next Page">
+                                    <i class="bi bi-chevron-right"></i>
+                                    <span class="d-lg-none ms-2">Next Page</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="#" class="nav-link" @click.prevent="scrollToPage(pageCount)" :class="{ disabled: !isFileLoaded || showWhiteboard || pageNum >= pageCount }" :title="`Last Page (${pageCount})`">
+                                    <i class="bi bi-chevron-double-right"></i>
+                                    <span class="d-lg-none ms-2">Last Page</span>
+                                </a>
+                            </li>
+                            <li class="nav-item vr bg-white mx-2 d-none d-lg-block"></li>
 
-                    <!-- Zoom -->
-                    <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="zoomOut()" :class="{ disabled: !isFileLoaded || lockView }">
-                            <i class="bi bi-zoom-out"></i>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <input type="text" class="form-control-plaintext" :value="showWhiteboard ? Math.round(whiteboardScale * 100) : width" :disabled="!isFileLoaded || lockView || showWhiteboard">
-                    </li>
-                    <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="zoomIn()" :class="{ disabled: !isFileLoaded || lockView }">
-                            <i class="bi bi-zoom-in"></i>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="toggleZoomMode()" :class="{ disabled: !isFileLoaded || lockView || showWhiteboard }" :title="zoomMode === 'fit-width' ? 'Fit Height' : 'Fit Width'">
-                            <i :class="`bi bi-arrows-expand${zoomMode === 'fit-width' ? '-vertical' : ''}`"></i>
-                        </a>
-                    </li>
-                    <li class="nav-item vr bg-white mx-2"></li>
+                            <!-- Zoom -->
+                            <li class="nav-item">
+                                <a href="#" class="nav-link" @click.prevent="zoomOut()" :class="{ disabled: !isFileLoaded || lockView }">
+                                    <i class="bi bi-zoom-out"></i>
+                                    <span class="d-lg-none ms-2">Zoom Out</span>
+                                </a>
+                            </li>
+                            <li class="nav-item d-none d-lg-block">
+                                <input type="text" class="form-control-plaintext" :value="showWhiteboard ? Math.round(whiteboardScale * 100) : width" :disabled="!isFileLoaded || lockView || showWhiteboard">
+                            </li>
+                            <li class="nav-item">
+                                <a href="#" class="nav-link" @click.prevent="zoomIn()" :class="{ disabled: !isFileLoaded || lockView }">
+                                    <i class="bi bi-zoom-in"></i>
+                                    <span class="d-lg-none ms-2">Zoom In</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="#" class="nav-link" @click.prevent="toggleZoomMode()" :class="{ disabled: !isFileLoaded || lockView || showWhiteboard }" :title="zoomMode === 'fit-width' ? 'Fit Height' : 'Fit Width'">
+                                    <i :class="`bi bi-arrows-expand${zoomMode === 'fit-width' ? '-vertical' : ''}`"></i>
+                                    <span class="d-lg-none ms-2">{{ zoomMode === 'fit-width' ? 'Fit Height' : 'Fit Width' }}</span>
+                                </a>
+                            </li>
+                            <li class="nav-item vr bg-white mx-2 d-none d-lg-block"></li>
 
-                    <!-- Menu -->
-                    <li v-if="!showWhiteboard" class="nav-item" :title="lockView ? 'Unlock View' : 'Lock View'">
-                        <a href="#" class="nav-link" @click.prevent="isFileLoaded && (lockView = !lockView)" :class="{ disabled: !isFileLoaded }">
-                            <i class="bi" :class="lockView ? 'bi-lock-fill' : 'bi-lock'"></i>
-                        </a>
-                    </li>
-                    <li v-if="showWhiteboard" class="nav-item" title="Copy to Clipboard">
-                        <a href="#" class="nav-link" @click.prevent="copyWhiteboardToClipboard()">
-                            <i class="bi bi-clipboard"></i>
-                        </a>
-                    </li>
-                    <li v-if="showWhiteboard" class="nav-item" title="Download Whiteboard">
-                        <a href="#" class="nav-link" @click.prevent="downloadWhiteboard()">
-                            <i class="bi bi-download"></i>
-                        </a>
-                    </li>
-                    <li v-if="showWhiteboard" class="nav-item" title="Close Whiteboard">
-                        <a href="#" class="nav-link" @click.prevent="closeWhiteboard()">
-                            <i class="bi bi-x-lg"></i>
-                        </a>
-                    </li>
-                    <li v-if="!showWhiteboard" class="nav-item" title="Save File">
-                        <a href="#" class="nav-link" @click.prevent="saveFile" :class="{ disabled: !isFileLoaded || !hasUnsavedChanges || !pdfDoc }">
-                            <i class="bi bi-floppy-fill"></i>
-                        </a>
-                    </li>
-                    <li v-if="!showWhiteboard" class="nav-item" :title="isFileLoaded ? 'Open Another File' : 'Open File'">
-                        <a href="#" class="nav-link" @click.prevent="fileInput.click()">
-                            <i class="bi bi-file-earmark-arrow-up"></i>
-                        </a>
-                    </li>
-                </ul>
+                            <!-- Menu -->
+                            <li v-if="!showWhiteboard" class="nav-item" :title="lockView ? 'Unlock View' : 'Lock View'">
+                                <a href="#" class="nav-link" @click.prevent="isFileLoaded && (lockView = !lockView)" :class="{ disabled: !isFileLoaded }">
+                                    <i class="bi" :class="lockView ? 'bi-lock-fill' : 'bi-lock'"></i>
+                                    <span class="d-lg-none ms-2">{{ lockView ? 'Unlock View' : 'Lock View' }}</span>
+                                </a>
+                            </li>
+                            <li v-if="showWhiteboard" class="nav-item" title="Copy to Clipboard">
+                                <a href="#" class="nav-link" @click.prevent="copyWhiteboardToClipboard()">
+                                    <i class="bi bi-clipboard"></i>
+                                    <span class="d-lg-none ms-2">Copy to Clipboard</span>
+                                </a>
+                            </li>
+                            <li v-if="showWhiteboard" class="nav-item" title="Download Whiteboard">
+                                <a href="#" class="nav-link" @click.prevent="downloadWhiteboard()">
+                                    <i class="bi bi-download"></i>
+                                    <span class="d-lg-none ms-2">Download</span>
+                                </a>
+                            </li>
+                            <li v-if="showWhiteboard" class="nav-item" title="Close Whiteboard">
+                                <a href="#" class="nav-link" @click.prevent="closeWhiteboard()">
+                                    <i class="bi bi-x-lg"></i>
+                                    <span class="d-lg-none ms-2">Close</span>
+                                </a>
+                            </li>
+                            <li v-if="!showWhiteboard" class="nav-item" title="Save File">
+                                <a href="#" class="nav-link" @click.prevent="saveFile" :class="{ disabled: !isFileLoaded || !hasUnsavedChanges || !pdfDoc }">
+                                    <i class="bi bi-floppy-fill"></i>
+                                    <span class="d-lg-none ms-2">Save File</span>
+                                </a>
+                            </li>
+                            <li v-if="!showWhiteboard" class="nav-item" :title="isFileLoaded ? 'Open Another File' : 'Open File'">
+                                <a href="#" class="nav-link" @click.prevent="fileInput.click()">
+                                    <i class="bi bi-file-earmark-arrow-up"></i>
+                                    <span class="d-lg-none ms-2">Open File</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
             </div>
         </nav>
         <div class="pdf-reader" ref="pdfReader" :class="{ 'overflow-hidden': lockView || showWhiteboard }">

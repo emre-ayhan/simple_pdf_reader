@@ -1,6 +1,9 @@
 @use "variables" as *;
 .navbar {
-    top: 31.5px !important;
+    @media (min-width: 992px) {
+        top: 31.5px !important;
+    }
+
     background: $dark-bg-gradient !important;
     border-bottom: 1px solid $border-color;
 

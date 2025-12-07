@@ -61,30 +61,30 @@ defineExpose({
 });
 </script>
 <template>
-    <ul class="nav nav-tabs fixed-top pt-1" id="appTabs" role="tablist">
-            <template v-for="(tab, index) in tabs" :key="tab">
-                <li class="nav-item" role="presentation" v-if="!tab.closed">
-                    <button class="nav-link" :class="{ active: index === activeTabIndex }" type="button" role="tab" @click="activeTabIndex = index">
-                        <div class="d-flex align-items-center">
-                            <div class="text-truncate flex-fill">
-                                {{ tab.name }}
-                            </div>
-                            <i class="bi bi-x-lg" v-if="index === activeTabIndex && !isLastTabDefault" @click.stop.prevent="closeTab(index)"></i>
+    <ul class="nav nav-tabs fixed-top pt-1 d-none d-lg-flex" id="appTabs" role="tablist">
+        <template v-for="(tab, index) in tabs" :key="tab">
+            <li class="nav-item" role="presentation" v-if="!tab.closed">
+                <button class="nav-link" :class="{ active: index === activeTabIndex }" type="button" role="tab" @click="activeTabIndex = index">
+                    <div class="d-flex align-items-center">
+                        <div class="text-truncate flex-fill">
+                            {{ tab.name }}
                         </div>
-                    </button>
-                </li>
-            </template>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link nav-add" id="add-tab" type="button" role="tab" aria-selected="false" :disabled="isLastTabDefault" @click="addNewTab">
-                    <i class="bi bi-plus-lg"></i>
+                        <i class="bi bi-x-lg" v-if="index === activeTabIndex && !isLastTabDefault" @click.stop.prevent="closeTab(index)"></i>
+                    </div>
                 </button>
             </li>
-        </ul>
-        <div class="tab-content" id="appTabContent">
-            <template v-for="(tab, index) in tabs">
-                <div class="tab-pane" :class="{ 'active show': index === activeTabIndex }" tabindex="0" v-if="!tab.closed">
-                    <slot></slot>
-                </div>
-            </template>
-        </div>
+        </template>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link nav-add" id="add-tab" type="button" role="tab" aria-selected="false" :disabled="isLastTabDefault" @click="addNewTab">
+                <i class="bi bi-plus-lg"></i>
+            </button>
+        </li>
+    </ul>
+    <div class="tab-content" id="appTabContent">
+        <template v-for="(tab, index) in tabs">
+            <div class="tab-pane" :class="{ 'active show': index === activeTabIndex }" tabindex="0" v-if="!tab.closed">
+                <slot></slot>
+            </div>
+        </template>
+    </div>
 </template>
