@@ -1604,7 +1604,7 @@ onUnmounted(() => {
                             <i class="bi bi-chevron-left"></i>
                         </a>
                     </li>
-                    <li class="nav-item">
+                    <li class="nav-item d-none d-lg-block">
                         <input type="text" class="form-control-plaintext" :value="pageNum" @input="scrollToPage($event.target.value)" :disabled="!isFileLoaded || showWhiteboard" />
                     </li>
                     <li class="nav-item">
@@ -1625,7 +1625,7 @@ onUnmounted(() => {
                             <i class="bi bi-zoom-out"></i>
                         </a>
                     </li>
-                    <li class="nav-item">
+                    <li class="nav-item d-none d-lg-block">
                         <input type="text" class="form-control-plaintext" :value="showWhiteboard ? Math.round(whiteboardScale * 100) : width" :disabled="!isFileLoaded || lockView || showWhiteboard">
                     </li>
                     <li class="nav-item">
