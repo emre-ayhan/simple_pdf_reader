@@ -64,7 +64,7 @@ const openFile = () => emit('open-file');
         </div>
       </div>
       <div class="empty-download" v-if="!props.isInstalled">
-        <a class="btn btn-sm btn-link link-light" href="simple-pdf-reader.zip" download>
+        <a class="btn btn-sm btn-primary" href="simple-pdf-reader.zip" download>
           Download
         </a>
       </div>
