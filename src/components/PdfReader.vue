@@ -1517,7 +1517,7 @@ onUnmounted(() => {
                     <!-- Drawing -->
                     <li class="nav-item btn-group">
                         <a class="nav-link" href="#" role="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" :class="{ disabled: !isFileLoaded }">
-                            <i class="bi bi-gear"></i>
+                            <i class="bi bi-palette-fill"></i>
                         </a>
                         <div class="dropdown-menu dropdown-menu-dark rounded-3 p-3">
                             <div class="mb-3">

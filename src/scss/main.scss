@@ -1,5 +1,6 @@
-@use 'variables';
-@use 'base';
-@use 'PdfReader';
-@use 'NavTabs';
-@use 'EmptyState';
+@import 'variables';
+@import "bootstrap/scss/bootstrap";
+@import 'base';
+@import 'PdfReader';
+@import 'NavTabs';
+@import 'EmptyState';
