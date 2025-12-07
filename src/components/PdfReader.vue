@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, nextTick, onMounted, onUnmounted, markRaw, watch } from "vue";
+import { ref, computed, nextTick, onMounted, onUnmounted, markRaw } from "vue";
 import { GlobalWorkerOptions, getDocument } from "pdfjs-dist";
 import { PDFDocument, rgb } from "pdf-lib";
 import EmptyState from "./EmptyState.vue";
