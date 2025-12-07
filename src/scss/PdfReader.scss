@@ -153,3 +153,36 @@
     text-align: center;
     pointer-events: none;
 }
+
+
+ @media (max-width: 992px) {
+    .navbar {
+        top: 0 !important;
+        width: 64px !important;
+        height: 100vh !important;
+        left: auto !important; 
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+    
+        ul {
+            flex-direction: column !important;
+                
+            .vr {
+                width: 100% !important;
+                margin: 1rem 0 !important;
+                min-height: 1px !important;
+            }
+
+            .nav-item:has(input) {
+                display: none !important;
+            }
+        }
+    }
+
+    .pdf-reader {
+        margin-top: 0;
+        margin-right: 64px;
+        width: calc(100vw - 64px);
+        height: 100vh;
+    }
+}

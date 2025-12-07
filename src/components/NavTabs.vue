@@ -69,12 +69,12 @@ defineExpose({
                         <div class="text-truncate flex-fill">
                             {{ tab.name }}
                         </div>
-                        <i class="bi bi-x-lg" v-if="index === activeTabIndex && !isLastTabDefault" @click.stop.prevent="closeTab(index)"></i>
+                        <i class="bi bi-x-lg d-none d-lg-block" v-if="index === activeTabIndex && !isLastTabDefault" @click.stop.prevent="closeTab(index)"></i>
                     </div>
                 </button>
             </li>
         </template>
-        <li class="nav-item" role="presentation">
+        <li class="nav-item d-none d-lg-block" role="presentation">
             <button class="nav-link nav-add" id="add-tab" type="button" role="tab" aria-selected="false" :disabled="isLastTabDefault" @click="addNewTab">
                 <i class="bi bi-plus-lg"></i>
             </button>
