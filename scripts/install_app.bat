@@ -1,5 +1,5 @@
 @echo off
-setlocal
+setlocal enabledelayedexpansion
 
 REM ============================================================================
 REM Simple PDF Reader - Installation Script
@@ -7,20 +7,35 @@ REM ============================================================================
 
 REM Paths
 set "CHROME_PATH=C:\Program Files\Google\Chrome\Application\chrome.exe"
+set "INSTALL_DIR=C:\Program Files\SimplePDFReader"
 set "USER_DATA_DIR=%LOCALAPPDATA%\SimplePDFReaderData"
 
-REM Determine APP_PATH and ICON_PATH based on where the script is running
+REM Determine source path (dist folder) based on where the script is running
 if exist "%~dp0index.html" (
-    REM Running from dist folder
-    set "APP_PATH=%~dp0index.html"
-    set "ICON_PATH=%~dp0logo.ico"
-    set "HELPER_SCRIPT=%~dp0open_pdf.bat"
+    REM Running from dist folder directly
+    set "DIST_DIR=%~dp0"
 ) else (
-    REM Running from scripts folder
-    set "APP_PATH=%~dp0..\index.html"
-    set "ICON_PATH=%~dp0..\logo.ico"
-    set "HELPER_SCRIPT=%~dp0open_pdf.bat"
+    REM Running from scripts folder or elsewhere - expect dist in parent
+    set "DIST_DIR=%~dp0..\dist"
 )
+
+REM Copy dist files to Program Files
+echo Creating installation directory at %INSTALL_DIR%...
+mkdir "%INSTALL_DIR%" 2>nul
+
+if not exist "%DIST_DIR%" (
+    echo Error: dist folder not found at %DIST_DIR%
+    echo Please run this script from the dist folder or ensure dist exists in the parent directory.
+    pause
+    exit /b 1
+)
+
+echo Copying application files from dist...
+xcopy "%DIST_DIR%\*" "%INSTALL_DIR%" /E /I /Y >nul
+
+set "APP_PATH=%INSTALL_DIR%\index.html"
+set "ICON_PATH=%INSTALL_DIR%\logo.ico"
+set "HELPER_SCRIPT=%INSTALL_DIR%\open_pdf.bat"
 
 REM Check if Chrome exists
 if not exist "%CHROME_PATH%" (
