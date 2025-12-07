@@ -119,6 +119,7 @@ body, #app, .container-fluid {
     border-top-right-radius: var(--bs-border-radius-lg) !important;
     color: var(--bs-secondary);
     padding: .25rem .75rem;
+    border-bottom: 0 !important;
 }
 
 .nav-tabs .nav-link:hover,
