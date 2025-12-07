@@ -61,7 +61,7 @@ defineExpose({
 });
 </script>
 <template>
-    <ul class="nav nav-tabs fixed-top pt-1 d-none d-lg-flex" id="appTabs" role="tablist">
+    <ul class="nav nav-tabs fixed-top pt-1" id="appTabs" role="tablist">
         <template v-for="(tab, index) in tabs" :key="tab">
             <li class="nav-item" role="presentation" v-if="!tab.closed">
                 <button class="nav-link" :class="{ active: index === activeTabIndex }" type="button" role="tab" @click="activeTabIndex = index">
