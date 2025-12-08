@@ -69,7 +69,7 @@ defineExpose({
                         <div class="text-truncate flex-fill">
                             {{ tab.name }}
                         </div>
-                        <i class="bi bi-x-lg d-none d-lg-block" v-if="index === activeTabIndex && !isLastTabDefault" @click.stop.prevent="closeTab(index)"></i>
+                        <i class="bi bi-x-lg d-none d-lg-block" v-if="(index === activeTabIndex && !isLastTabDefault) || activeTabs.length > 1" @click.stop.prevent="closeTab(index)"></i>
                     </div>
                 </button>
             </li>

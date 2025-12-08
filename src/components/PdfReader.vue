@@ -376,8 +376,18 @@ const scrollToPage = (page) => {
 };
 
 const handleKeydown = (event) => {
+    // Ctrl+Z - Undo
+    if ((event.ctrlKey || event.metaKey) && event.key === 'z' && !event.shiftKey) {
+        event.preventDefault();
+        undo();
+    }
+    // Ctrl+Y or Ctrl+Shift+Z - Redo
+    else if ((event.ctrlKey || event.metaKey) && (event.key === 'y' || (event.key === 'z' && event.shiftKey))) {
+        event.preventDefault();
+        redo();
+    }
     // Left arrow key - previous page
-    if (event.key === 'ArrowLeft') {
+    else if (event.key === 'ArrowLeft') {
         event.preventDefault();
         if (pageNum.value > 1) {
             scrollToPage(pageNum.value - 1);
