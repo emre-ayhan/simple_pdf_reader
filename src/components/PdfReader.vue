@@ -933,15 +933,15 @@ const captureSelection = () => {
     // Calculate selection rectangle in canvas coordinates
     let x = Math.min(selectionStart.value.x, selectionEnd.value.x) * scaleX;
     let y = Math.min(selectionStart.value.y, selectionEnd.value.y) * scaleY;
-    let width = Math.abs(selectionEnd.value.x - selectionStart.value.x) * scaleX;
-    let height = Math.abs(selectionEnd.value.y - selectionStart.value.y) * scaleY;
+    let selectedWidth = Math.abs(selectionEnd.value.x - selectionStart.value.x) * scaleX;
+    let selectedHeight = Math.abs(selectionEnd.value.y - selectionStart.value.y) * scaleY;
     
     // Exclude the 1px border from capture (offset by 1px on all sides)
     const borderOffset = 1;
     x += borderOffset;
     y += borderOffset;
-    width = Math.max(1, width - borderOffset * 2);
-    height = Math.max(1, height - borderOffset * 2);
+    selectedWidth = Math.max(1, selectedWidth - borderOffset * 2);
+    selectedHeight = Math.max(1, selectedHeight - borderOffset * 2);
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = pdfCanvas.width;
     tempCanvas.height = pdfCanvas.height;
@@ -954,10 +954,10 @@ const captureSelection = () => {
     
     // Extract selected region
     const selectedCanvas = document.createElement('canvas');
-    selectedCanvas.width = width;
-    selectedCanvas.height = height;
+    selectedCanvas.width = selectedWidth;
+    selectedCanvas.height = selectedHeight;
     const selectedCtx = selectedCanvas.getContext('2d');
-    selectedCtx.drawImage(tempCanvas, x, y, width, height, 0, 0, width, height);
+    selectedCtx.drawImage(tempCanvas, x, y, selectedWidth, selectedHeight, 0, 0, selectedWidth, selectedHeight);
     
     // Store as image and show as new page
     whiteboardImage.value = selectedCanvas.toDataURL();
