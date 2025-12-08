@@ -430,6 +430,72 @@ const zoomIn = () => {
     }
 };
 
+// Toolbar handlers
+const selectPen = () => {
+    if (!isFileLoaded.value) return;
+    cancelText();
+    isTextMode.value = false;
+    isDrawing.value = (isDrawing.value && drawMode.value === 'pen') ? false : true;
+    isEraser.value = false;
+    drawMode.value = 'pen';
+};
+
+const selectEraser = () => {
+    if (!isFileLoaded.value) return;
+    cancelText();
+    isTextMode.value = false;
+    isEraser.value = !isEraser.value;
+    isDrawing.value = false;
+};
+
+const selectLine = () => {
+    if (!isFileLoaded.value) return;
+    cancelText();
+    isTextMode.value = false;
+    isDrawing.value = (isDrawing.value && drawMode.value === 'line') ? false : true;
+    isEraser.value = false;
+    drawMode.value = 'line';
+};
+
+const selectRectangle = () => {
+    if (!isFileLoaded.value) return;
+    cancelText();
+    isTextMode.value = false;
+    isDrawing.value = (isDrawing.value && drawMode.value === 'rectangle') ? false : true;
+    isEraser.value = false;
+    drawMode.value = 'rectangle';
+};
+
+const selectCircle = () => {
+    if (!isFileLoaded.value) return;
+    cancelText();
+    isTextMode.value = false;
+    isDrawing.value = (isDrawing.value && drawMode.value === 'circle') ? false : true;
+    isEraser.value = false;
+    drawMode.value = 'circle';
+};
+
+const selectText = () => {
+    if (!isFileLoaded.value) return;
+    const next = !isTextMode.value;
+    if (!next) {
+        cancelText();
+    }
+    isTextMode.value = next;
+    isDrawing.value = false;
+    isEraser.value = false;
+    isSelectionMode.value = false;
+};
+
+const selectSelection = () => {
+    if (!isFileLoaded.value || showWhiteboard.value) return;
+    cancelText();
+    isTextMode.value = false;
+    isSelectionMode.value = !isSelectionMode.value;
+    isDrawing.value = false;
+    isEraser.value = false;
+};
+
 // Drawing functions
 const getCanvasIndexFromEvent = (e) => {
     // Find which canvas the event occurred on
@@ -1699,37 +1765,37 @@ onUnmounted(() => {
                         </div>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isDrawing = (isDrawing && drawMode === 'pen' ? false : true), isEraser = false, drawMode = 'pen')" :class="{ disabled: !isFileLoaded }" title="Freehand Draw">
+                        <a class="nav-link" href="#" @click.prevent="selectPen" :class="{ active: isDrawing && drawMode === 'pen', disabled: !isFileLoaded }" title="Freehand Draw">
                             <i class="bi bi-pencil-fill"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isEraser = !isEraser, isDrawing = false)" :class="{ active: isEraser, disabled: !isFileLoaded }" title="Eraser">
+                        <a class="nav-link" href="#" @click.prevent="selectEraser" :class="{ active: isEraser, disabled: !isFileLoaded }" title="Eraser">
                             <i class="bi bi-eraser-fill"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isDrawing = (isDrawing && drawMode === 'line' ? false : true), isEraser = false, drawMode = 'line')" :class="{ active: isDrawing && drawMode === 'line', disabled: !isFileLoaded }" title="Line">
+                        <a class="nav-link" href="#" @click.prevent="selectLine" :class="{ active: isDrawing && drawMode === 'line', disabled: !isFileLoaded }" title="Line">
                             <i class="bi bi-slash-lg"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isDrawing = (isDrawing && drawMode === 'rectangle' ? false : true), isEraser = false, drawMode = 'rectangle')" :class="{ active: isDrawing && drawMode === 'rectangle', disabled: !isFileLoaded }" title="Rectangle">
+                        <a class="nav-link" href="#" @click.prevent="selectRectangle" :class="{ active: isDrawing && drawMode === 'rectangle', disabled: !isFileLoaded }" title="Rectangle">
                             <i class="bi bi-square"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isDrawing = (isDrawing && drawMode === 'circle' ? false : true), isEraser = false, drawMode = 'circle')" :class="{ active: isDrawing && drawMode === 'circle', disabled: !isFileLoaded }" title="Circle">
+                        <a class="nav-link" href="#" @click.prevent="selectCircle" :class="{ active: isDrawing && drawMode === 'circle', disabled: !isFileLoaded }" title="Circle">
                             <i class="bi bi-circle"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="isFileLoaded && (isTextMode = !isTextMode, isDrawing = false, isEraser = false, isSelectionMode = false)" :class="{ active: isTextMode, disabled: !isFileLoaded }" title="Add Text">
+                        <a href="#" class="nav-link" @click.prevent="selectText" :class="{ active: isTextMode, disabled: !isFileLoaded }" title="Add Text">
                             <i class="bi bi-textarea-t"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isSelectionMode = !isSelectionMode, isDrawing = false, isEraser = false)" :class="{ active: isSelectionMode, disabled: !isFileLoaded || showWhiteboard }" title="Select Area to Whiteboard">
+                        <a class="nav-link" href="#" @click.prevent="selectSelection" :class="{ active: isSelectionMode, disabled: !isFileLoaded || showWhiteboard }" title="Select Area to Whiteboard">
                             <i class="bi bi-scissors"></i>
                         </a>
                     </li>
