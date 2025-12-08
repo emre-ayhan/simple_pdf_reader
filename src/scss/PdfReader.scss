@@ -172,6 +172,32 @@
     pointer-events: none;
 }
 
+.text-input-box {
+    position: fixed;
+    z-index: 9998;
+    pointer-events: all;
+}
+
+.text-input-field {
+    border: 2px dashed $primary;
+    background-color: rgba(255, 255, 255, 0.9);
+    border-radius: $border-radius-lg !important;
+    padding: 4px 8px;
+    outline: none;
+    font-family: Arial, sans-serif;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    border-radius: 2px;
+    
+    &::placeholder {
+        color: rgba(0, 0, 0, 0.4);
+    }
+    
+    &:focus {
+        border-color: lighten($primary, 10%);
+        box-shadow: 0 2px 12px rgba($primary, 0.4);
+    }
+}
+
 
  @media (max-width: 992px) {
     .navbar {

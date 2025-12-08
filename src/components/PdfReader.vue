@@ -127,10 +127,19 @@ const colors = [
 // Drawing variables
 const isDrawing = ref(false);
 const isEraser = ref(false);
-const drawMode = ref('pen'); // 'pen', 'line', 'rectangle', 'circle'
+const drawMode = ref('pen'); // 'pen', 'line', 'rectangle', 'circle', 'text'
 const drawColor = ref('blue');
 const drawThickness = ref(2);
 const drawingCanvases = ref([]);
+
+// Text mode variables
+const isTextMode = ref(false);
+const textInput = ref('');
+const textPosition = ref(null);
+const textCanvasIndex = ref(-1);
+const fontSize = ref(16);
+const isDraggingText = ref(false);
+const textboxPosition = ref(null); // Screen position for the textbox
 
 // Selection and Whiteboard
 const isSelectionMode = ref(false);
@@ -176,6 +185,10 @@ const isPenHovering = ref(false);
 const cursorStyle = computed(() => {
     if (isSelectionMode.value) {
         return 'crosshair';
+    }
+    
+    if (isTextMode.value) {
+        return 'text';
     }
     
     if (!isDrawing.value && !isEraser.value) {
@@ -423,7 +436,7 @@ const getCanvasIndexFromEvent = (e) => {
 };
 
 const startDrawing = (e) => {
-    if (!isDrawing.value && !isEraser.value && !isSelectionMode.value) return;
+    if (!isDrawing.value && !isEraser.value && !isSelectionMode.value && !isTextMode.value) return;
     
     // Track active pointer type
     activePointerType.value = e.pointerType;
@@ -433,6 +446,44 @@ const startDrawing = (e) => {
 
     // Only allow pen/stylus and mouse input, not touch
     if (e.pointerType === 'touch') return;
+    
+    // Handle text mode
+    if (isTextMode.value) {
+        const canvasIndex = getCanvasIndexFromEvent(e);
+        if (canvasIndex === -1) return;
+        
+        const canvas = drawingCanvases.value[canvasIndex];
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
+        
+        textPosition.value = { x, y };
+        textCanvasIndex.value = canvasIndex;
+        textInput.value = '';
+        
+        // Set textbox position in screen coordinates (relative to viewport)
+        // Offset by half the estimated textbox height to center vertically
+        textboxPosition.value = {
+            x: e.clientX,
+            y: e.clientY - (fontSize.value / 2) - 10
+        };
+        
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Focus will be handled by the template's text input
+        nextTick(() => {
+            const textInputEl = document.getElementById('textInputField');
+            if (textInputEl) {
+                textInputEl.focus();
+                textInputEl.select();
+            }
+        });
+        return;
+    }
     
     // Handle selection mode
     if (isSelectionMode.value) {
@@ -512,7 +563,10 @@ const startDrawing = (e) => {
 };
 
 const draw = (e) => {
-    if ((!isDrawing.value && !isEraser.value && !isSelectionMode.value) || !isMouseDown.value) return;
+    if ((!isDrawing.value && !isEraser.value && !isSelectionMode.value && !isTextMode.value) || !isMouseDown.value) return;
+    
+    // Text mode doesn't need draw event handling
+    if (isTextMode.value) return;
     
     // Handle selection rectangle
     if (isSelectionMode.value && isSelecting.value) {
@@ -625,7 +679,10 @@ const draw = (e) => {
 };
 
 const stopDrawing = (e) => {
-    if (!isDrawing.value && !isEraser.value && !isSelectionMode.value) return;
+    if (!isDrawing.value && !isEraser.value && !isSelectionMode.value && !isTextMode.value) return;
+    
+    // Text mode is handled by confirmText function
+    if (isTextMode.value) return;
     
     // Handle selection complete
     if (isSelectionMode.value && isSelecting.value && selectionStart.value && selectionEnd.value) {
@@ -710,6 +767,60 @@ const onPointerLeave = (e) => {
         isPenHovering.value = false;
     }
     stopDrawing(e);
+};
+
+const confirmText = () => {
+    if (!textInput.value.trim() || textPosition.value === null || textCanvasIndex.value === -1) {
+        cancelText();
+        return;
+    }
+    
+    const pageIndex = textCanvasIndex.value + 1;
+    if (!strokesPerPage[pageIndex]) {
+        strokesPerPage[pageIndex] = [];
+    }
+    
+    const textStroke = [{
+        x: textPosition.value.x,
+        y: textPosition.value.y - 4,
+        color: drawColor.value,
+        thickness: drawThickness.value,
+        type: 'text',
+        text: textInput.value,
+        fontSize: fontSize.value
+    }];
+    
+    strokesPerPage[pageIndex].push(textStroke);
+    
+    addToHistory({
+        type: 'add',
+        page: pageIndex,
+        stroke: textStroke
+    });
+    
+    redrawAllStrokes(textCanvasIndex.value);
+    
+    // Reset text mode
+    textInput.value = '';
+    textPosition.value = null;
+    textCanvasIndex.value = -1;
+    textboxPosition.value = null;
+};
+
+const cancelText = () => {
+    textInput.value = '';
+    textPosition.value = null;
+    textCanvasIndex.value = -1;
+    textboxPosition.value = null;
+};
+
+const handleTextboxBlur = () => {
+    // Small delay to allow clicking Add button if present
+    setTimeout(() => {
+        if (textboxPosition.value !== null) {
+            confirmText();
+        }
+    }, 150);
 };
 
 const clearDrawing = () => {
@@ -930,6 +1041,15 @@ const redrawAllStrokes = (pageIndex) => {
         if (stroke.length === 0) return;
         
         const first = stroke[0];
+        
+        // Check if it's text
+        if (first.type === 'text') {
+            drawingContext.font = `${first.fontSize}px Arial`;
+            drawingContext.fillStyle = first.color;
+            drawingContext.textBaseline = 'top';
+            drawingContext.fillText(first.text, first.x, first.y);
+            return;
+        }
         
         // Check if it's a shape
         if (first.type === 'line' || first.type === 'rectangle' || first.type === 'circle') {
@@ -1256,8 +1376,21 @@ const saveFile = async () => {
                 const color = getColor(first.color);
                 const thickness = (first.thickness || 2) * scaleX;
 
+                // Handle text
+                if (first.type === 'text') {
+                    const x = first.x * scaleX;
+                    const y = height - (first.y * scaleY);
+                    const textSize = (first.fontSize || 16) * scaleX;
+                    
+                    page.drawText(first.text, {
+                        x: x,
+                        y: y - textSize,
+                        size: textSize,
+                        color: color
+                    });
+                }
                 // Handle shapes
-                if (first.type === 'line') {
+                else if (first.type === 'line') {
                     const startX = first.startX * scaleX;
                     const startY = height - (first.startY * scaleY);
                     const endX = first.endX * scaleX;
@@ -1513,10 +1646,9 @@ onUnmounted(() => {
             <div class="container">
                 <!-- Toolbar -->
                 <ul class="navbar-nav mx-auto">
-
                     <!-- Drawing -->
                     <li class="nav-item btn-group">
-                        <a class="nav-link" href="#" role="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" :class="{ disabled: !isFileLoaded }">
+                        <a class="nav-link" href="#" role="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" :class="{ disabled: !isFileLoaded }" :style="{ color: isDrawing || isTextMode ? drawColor : '' }" title="Drawing Settings">
                             <i class="bi bi-palette-fill"></i>
                         </a>
                         <div class="dropdown-menu dropdown-menu-dark rounded-3 p-3">
@@ -1549,16 +1681,23 @@ onUnmounted(() => {
                                     <input type="text" class="form-control-plaintext" min="1" max="10" v-model="drawThickness" readonly />
                                 </div>
                             </div>
+                            <div class="mb-3">
+                                <label class="form-label">Font Size</label>
+                                <div class="d-flex align-items-center">
+                                    <input type="range" class="form-range" min="8" max="72" v-model="fontSize" />
+                                    <input type="text" class="form-control-plaintext" min="8" max="72" v-model="fontSize" readonly />
+                                </div>
+                            </div>
                             <button class="btn btn-sm btn-danger w-100" @click="clearDrawing()">Clear All Drawing</button>
                         </div>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isDrawing = (isDrawing && drawMode === 'pen' ? false : true), isEraser = false, drawMode = 'pen')" :class="{ disabled: !isFileLoaded }" :style="{ color: isDrawing && drawMode === 'pen' ? drawColor : '' }">
+                        <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isDrawing = (isDrawing && drawMode === 'pen' ? false : true), isEraser = false, drawMode = 'pen')" :class="{ disabled: !isFileLoaded }" title="Freehand Draw">
                             <i class="bi bi-pencil-fill"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isEraser = !isEraser, isDrawing = false)" :class="{ active: isEraser, disabled: !isFileLoaded }">
+                        <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isEraser = !isEraser, isDrawing = false)" :class="{ active: isEraser, disabled: !isFileLoaded }" title="Eraser">
                             <i class="bi bi-eraser-fill"></i>
                         </a>
                     </li>
@@ -1575,6 +1714,11 @@ onUnmounted(() => {
                     <li class="nav-item">
                         <a class="nav-link" href="#" @click.prevent="isFileLoaded && (isDrawing = (isDrawing && drawMode === 'circle' ? false : true), isEraser = false, drawMode = 'circle')" :class="{ active: isDrawing && drawMode === 'circle', disabled: !isFileLoaded }" title="Circle">
                             <i class="bi bi-circle"></i>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" @click.prevent="isFileLoaded && (isTextMode = !isTextMode, isDrawing = false, isEraser = false, isSelectionMode = false)" :class="{ active: isTextMode, disabled: !isFileLoaded }" title="Add Text">
+                            <i class="bi bi-textarea-t"></i>
                         </a>
                     </li>
                     <li class="nav-item">
@@ -1704,6 +1848,30 @@ onUnmounted(() => {
             </div>
         </div>
         <input ref="fileInput" type="file"  accept="application/pdf,image/*" class="d-none" @change="loadPdfDocument" />
+
+        <div v-if="isTextMode && textboxPosition" 
+             class="text-input-box" 
+             :style="{ 
+                 left: textboxPosition.x + 'px', 
+                 top: textboxPosition.y + 'px'
+             }">
+            <input 
+                id="textInputField"
+                type="text" 
+                v-model="textInput" 
+                class="text-input-field" 
+                placeholder="Type text..." 
+                @keydown.enter="confirmText()"
+                @keydown.esc="cancelText()"
+                @blur="handleTextboxBlur()"
+                :style="{ 
+                    fontSize: fontSize + 'px',
+                    color: drawColor,
+                    minWidth: '150px'
+                }"
+                autofocus
+            />
+        </div>
 
         <div v-if="isDragging" class="drag-overlay">
             <div class="drag-message">
