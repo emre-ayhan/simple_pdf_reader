@@ -246,6 +246,8 @@ const scrollToPageCanvas = async (pageNumber) => {
     
     await page.render(renderContext).promise;
     renderedPages.value.add(pageNumber);
+    // Repaint saved annotations after PDF render
+    redrawAllStrokes(pageNumber - 1);
 };
 
 const renderWhiteboardCanvas = () => {
