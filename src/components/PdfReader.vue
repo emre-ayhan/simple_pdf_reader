@@ -263,8 +263,15 @@ const renderWhiteboardCanvas = () => {
         const fitScale = Math.max(0.01, Math.min(1, Math.min(safeWidth / img.width, safeHeight / img.height)));
         // Allow zoom-in beyond the fitted size up to 4x while keeping aspect ratio
         const targetScale = Math.max(0.01, Math.min(fitScale * whiteboardScale.value, 4));
-        const canvasWidth = img.width * targetScale;
-        const canvasHeight = img.height * targetScale;
+        const imageWidth = img.width * targetScale;
+        const imageHeight = img.height * targetScale;
+
+        // Expand canvas to at least the viewport so tools work across the whole whiteboard
+        // Keep the captured selection anchored to top-left (no centering offsets)
+        const canvasWidth = Math.max(imageWidth, safeWidth);
+        const canvasHeight = Math.max(imageHeight, safeHeight);
+        const offsetX = 0;
+        const offsetY = 0;
 
         canvas.width = canvasWidth;
         canvas.height = canvasHeight;
@@ -278,7 +285,7 @@ const renderWhiteboardCanvas = () => {
 
         const ctx = canvas.getContext('2d');
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
+        ctx.drawImage(img, offsetX, offsetY, imageWidth, imageHeight);
 
         drawingContexts[0] = drawCanvas.getContext('2d');
         redrawAllStrokes(0);
