@@ -7,6 +7,7 @@
 APP_NAME="simple-pdf-reader"
 DESKTOP_FILE="$HOME/.local/share/applications/${APP_NAME}.desktop"
 USER_DATA_DIR="$HOME/.config/simple-pdf-reader-profile"
+INSTALL_DIR="$HOME/.local/share/simple-pdf-reader"
 
 echo "Uninstalling Simple PDF Reader..."
 
@@ -35,7 +36,16 @@ if [ -d "$USER_DATA_DIR" ]; then
     echo "Removed user data directory."
 fi
 
-echo.
+# ============================================================================
+# 3. Remove Installation Directory
+# ============================================================================
+
+if [ -d "$INSTALL_DIR" ]; then
+    rm -rf "$INSTALL_DIR"
+    echo "Removed installation directory."
+fi
+
+echo ""
 echo "============================================================================"
 echo "Uninstallation Complete."
 echo "============================================================================"
