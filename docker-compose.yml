@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dev
-    container_name: simple_pdf_reader
+    container_name: spdf
     ports:
       - "5173:5173"
     volumes:
