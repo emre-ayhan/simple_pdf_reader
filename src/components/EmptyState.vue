@@ -1,4 +1,5 @@
 <script setup>
+import { Electron } from '../composables/useElectron';
 const props = defineProps({
   isInstalled: { type: Boolean, default: false }
 });
@@ -70,7 +71,7 @@ const openFile = () => emit('open-file');
             </div>
           </div>
         </div>
-        <div class="empty-download" v-if="!props.isInstalled">
+        <div class="empty-download" v-if="!props.isInstalled && !Electron">
           <a class="btn btn-sm btn-primary" href="simple-pdf-reader.zip" download>
             Download
           </a>

@@ -3,6 +3,7 @@ import { ref, computed, nextTick, onMounted, onUnmounted, markRaw } from "vue";
 import { GlobalWorkerOptions, getDocument } from "pdfjs-dist";
 import { PDFDocument, rgb } from "pdf-lib";
 import EmptyState from "./EmptyState.vue";
+import { Electron } from "../composables/useElectron";
 
 const emit = defineEmits(['file-loaded']);
 
@@ -1245,6 +1246,48 @@ const loadImageFile = (file) => {
     reader.readAsDataURL(file);
 };
 
+const loadImageFromPath = (filepath) => {
+    // For Electron: Load image from file path
+    filename.value = filepath.split(/[/\\]/).pop();
+    
+    // Convert file path to file:// URL for image loading
+    let fileUrl = filepath;
+    if (!fileUrl.startsWith('file://')) {
+        // Handle Windows paths (C:\...) and Unix paths (/...)
+        if (/^[a-zA-Z]:\\/.test(fileUrl) || fileUrl.startsWith('\\\\')) {
+            fileUrl = 'file:///' + fileUrl.replace(/\\/g, '/');
+        } else {
+            fileUrl = 'file://' + fileUrl;
+        }
+    }
+    
+    imagePage.value = fileUrl;
+    whiteboardImage.value = null;
+    whiteboardScale.value = 1;
+    showWhiteboard.value = false;
+    pdfDoc = null;
+    savedPdfDoc = null;
+    savedPageCount = 0;
+    savedPageNum = 1;
+    savedStrokesPerPage = {};
+    pageCount.value = 1;
+    pageNum.value = 1;
+    isFileLoaded.value = true;
+    emit('file-loaded', filename.value);
+
+    // Reset drawing state
+    history.value = [];
+    historyStep.value = -1;
+    savedHistoryStep.value = -1;
+    strokesPerPage = { 1: [] };
+    renderedPages.value.clear();
+    drawingContexts = [];
+
+    nextTick(() => {
+        renderAllPages();
+    });
+};
+
 const onDragEnter = (e) => {
     dragCounter.value++;
     isDragging.value = true;
@@ -1318,6 +1361,8 @@ const loadPdfFile = (file) => {
 
 const loadPdfDocument = () => {
     const file = fileInput.value.files[0];
+    console.log(file);
+    
     if (!file) return;
     if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
         loadPdfFile(file);
@@ -1328,7 +1373,100 @@ const loadPdfDocument = () => {
     }
 };
 
-const openFilePicker = () => {
+const openFilePicker = async () => {
+    if (Electron.value) {
+        const result = await Electron.value.openFile();
+        
+        if (!result) return;
+        
+        // Handle PDF files
+        if (result.type === 'pdf' && result.encoding === 'base64') {
+            filename.value = result.filename || 'document.pdf';
+            
+            // Convert base64 to ArrayBuffer
+            const binaryString = atob(result.content);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            
+            // Load PDF from binary data
+            getDocument({ data: bytes }).promise.then((pdfDoc_) => {
+                pdfDoc = pdfDoc_;
+                imagePage.value = null;
+                pageCount.value = pdfDoc.numPages;
+                pageNum.value = localStorage.getItem(filename.value) ? Number(localStorage.getItem(filename.value)) : 1;
+                isFileLoaded.value = true;
+                emit('file-loaded', filename.value);
+                
+                // Reset history
+                history.value = [];
+                historyStep.value = -1;
+                savedHistoryStep.value = -1;
+                strokesPerPage = {};
+                renderedPages.value.clear();
+                drawingContexts = [];
+                
+                // Close whiteboard if open
+                if (showWhiteboard.value) {
+                    closeWhiteboard();
+                }
+                
+                // Wait for next tick to ensure refs are populated
+                nextTick(() => {
+                    renderAllPages().then(() => {
+                        setupIntersectionObserver();
+                        setupLazyLoadObserver();
+                        // Scroll to saved page
+                        const savedPage = localStorage.getItem(filename.value);
+                        if (savedPage) {
+                            scrollToPage(Number(savedPage));
+                        }
+                    });
+                });
+            }).catch(error => {
+                console.error('Error loading PDF:', error);
+                alert('Error loading PDF: ' + error.message);
+            });
+        }
+        // Handle image files
+        else if (result.type === 'image' && result.encoding === 'base64') {
+            filename.value = result.filename || 'image';
+            const dataUrl = `data:${result.mimeType};base64,${result.content}`;
+            
+            imagePage.value = dataUrl;
+            whiteboardImage.value = null;
+            whiteboardScale.value = 1;
+            showWhiteboard.value = false;
+            pdfDoc = null;
+            savedPdfDoc = null;
+            savedPageCount = 0;
+            savedPageNum = 1;
+            savedStrokesPerPage = {};
+            pageCount.value = 1;
+            pageNum.value = 1;
+            isFileLoaded.value = true;
+            emit('file-loaded', filename.value);
+
+            // Reset drawing state
+            history.value = [];
+            historyStep.value = -1;
+            savedHistoryStep.value = -1;
+            strokesPerPage = { 1: [] };
+            renderedPages.value.clear();
+            drawingContexts = [];
+
+            nextTick(() => {
+                renderAllPages();
+            });
+        }
+        else {
+            alert('Unsupported file type. Please select a PDF or image.');
+        }
+        
+        return;
+    }
+
     if (fileInput.value) {
         fileInput.value.click();
     }
@@ -1900,7 +2038,7 @@ onUnmounted(() => {
                         </a>
                     </li>
                     <li v-if="!showWhiteboard" class="nav-item" :title="isFileLoaded ? 'Open Another File' : 'Open File'">
-                        <a href="#" class="nav-link" @click.prevent="fileInput.click()">
+                        <a href="#" class="nav-link" @click.prevent="openFilePicker">
                             <i class="bi bi-file-earmark-arrow-up"></i>
                         </a>
                     </li>

@@ -3,10 +3,13 @@
   "version": "1.0.0",
   "description": "A simple PDF reader built with Vue 3",
   "type": "module",
+  "main": "main.js",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "electron:dev": "electron .",
+    "electron:start": "vite build && electron ."
   },
   "dependencies": {
     "bootstrap": "^5.3.8",
@@ -18,6 +21,7 @@
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.0.0",
     "archiver": "^7.0.1",
+    "electron": "^39.2.6",
     "sass": "^1.94.2",
     "vite": "^5.0.0",
     "vite-plugin-singlefile": "^2.3.0"

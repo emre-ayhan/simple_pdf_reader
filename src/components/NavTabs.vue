@@ -1,5 +1,18 @@
 <script setup>
 import { ref, computed } from 'vue';
+import { Electron } from '../composables/useElectron';
+
+const electronButtons = [
+    { action: 'fullscreen', icon: 'bi-arrows-fullscreen', title: 'Fullscreen' },
+    { action: 'minimize', icon: 'bi-dash-lg', title: 'Minimize' },
+    { action: 'maximize', icon: 'bi-square', title: 'Maximize' },
+    { action: 'close', icon: 'bi-x-lg', title: 'Close' }
+];
+
+const handleElectronButtonClick = (action) => {
+    if (!Electron.value) return;
+    Electron.value[action]();
+};
 
 const getDefaultTab = () => ({
     name: 'New Tab',
@@ -78,6 +91,15 @@ defineExpose({
             <button class="nav-link nav-add" id="add-tab" type="button" role="tab" aria-selected="false" :disabled="isLastTabDefault" @click="addNewTab">
                 <i class="bi bi-plus-lg"></i>
             </button>
+        </li>
+        <li class="ms-auto" v-if="Electron">
+            <div class="btn-group btn-group-sm">
+                <template v-for="btn in electronButtons">
+                    <button :class="`btn btn-electron ${btn.action}`" type="button" role="tab" aria-selected="false" @click="handleElectronButtonClick(btn.action)" :title="btn.title">
+                        <i :class="btn.icon"></i>
+                    </button>
+                </template>
+            </div>
         </li>
     </ul>
     <div class="tab-content" id="appTabContent">
