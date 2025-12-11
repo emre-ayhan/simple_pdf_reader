@@ -1,6 +1,6 @@
 {
   "name": "simple_pdf_reader",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A simple PDF reader built with Vue 3",
   "type": "module",
   "main": "main.js",
