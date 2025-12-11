@@ -69,42 +69,15 @@ const openFile = () => emit('open-file');
           </div>
         </div>
         <div class="empty-download" v-if="!Electron">
-          <div class="dropdown">
-              <button class="btn btn-outline-primary" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                Download
-              </button>
-              <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end">
-                <li>
-                  <a class="dropdown-item" href="https://github.com/emre-ayhan/simple_pdf_reader/releases/latest/windows/Simple-PDF-Reader-x64.exe" target="_blank" rel="noopener noreferrer">
-                    <i class="bi bi-windows me-1"></i>
-                    Windows (x64)
-                  </a>
-                </li>
-                <li>
-                  <a class="dropdown-item" href="https://github.com/emre-ayhan/simple_pdf_reader/releases/latest/macos/Simple-PDF-Reader-arm64.exe" target="_blank" rel="noopener noreferrer">
-                    <i class="bi bi-windows me-1"></i>
-                    Windows (ARM64)
-                  </a>
-                </li>
-                <li>
-                  <a class="dropdown-item" href="https://github.com/emre-ayhan/simple_pdf_reader/releases/latest/macos/Simple-PDF-Reader.dmg" target="_blank" rel="noopener noreferrer">
-                    <i class="bi bi-apple me-1"></i>
-                    macOS
-                  </a>
-                </li>
-                <li>
-                  <a class="dropdown-item" href="https://github.com/emre-ayhan/simple_pdf_reader/releases/latest/linux/simple-pdf-reader.deb" target="_blank" rel="noopener noreferrer">
-                    <i class="bi bi-tux me-1"></i>
-                    Linux (deb)
-                  </a>
-                </li>
-              </ul>
-          </div>
+          <a href="https://github.com/emre-ayhan/simple_pdf_reader/releases/latest" target="_blank" rel="noopener noreferrer" class="btn btn-outline-primary">
+            <i class="bi bi-download me-1"></i>
+            Download
+          </a>
         </div>
         <div class="empty-footer">
           <a href="https://github.com/emre-ayhan/simple_pdf_reader" target="_blank" rel="noopener noreferrer" class="empty-github-link">
             <i class="bi bi-github"></i>
-            github/emre-ayhan
+            github/emre-ayhan/simple_pdf_reader
           </a>
         </div>
       </div>
