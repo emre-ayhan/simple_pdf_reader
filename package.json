@@ -40,7 +40,7 @@
         }
       ],
       "icon": "public/icon.ico",
-      "artifactName": "${productName}-${arch}.${ext}",
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
       "fileAssociations": [
         {
           "ext": "pdf",
