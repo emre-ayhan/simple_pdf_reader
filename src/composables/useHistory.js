@@ -1,13 +1,34 @@
 import { ref, markRaw, computed } from 'vue';
 
-const history = ref([]);
-const historyStep = ref(-1);
-const savedHistoryStep = ref(-1);
-const hasUnsavedChanges = computed(() => {
-    return historyStep.value !== savedHistoryStep.value;
-});
+const sessions = ref({});
+
+const fileHasUnsavedChanges = (fileId) => {
+    const session = sessions.value[fileId];
+    
+    if (!session) return false;
+    return session.historyStep !== session.savedHistoryStep;
+}
 
 export function useHistory() {
+    const history = ref([]);
+    const historyStep = ref(-1);
+    const savedHistoryStep = ref(-1);
+
+    const startSession = (fileId) => {
+        if (!sessions.value[fileId]) {
+            sessions.value[fileId] = {
+                history,
+                historyStep,
+                savedHistoryStep
+            };
+        }
+    };
+
+    const endSession = (fileId) => {
+        if (sessions.value[fileId]) {
+            delete sessions.value[fileId];
+        }
+    };
 
     const addToHistory = (action) => {
         if (historyStep.value < history.value.length - 1) {
@@ -55,7 +76,14 @@ export function useHistory() {
         savedHistoryStep.value = historyStep.value;
     };
 
+    const hasUnsavedChanges = computed(() => {
+        return historyStep.value !== savedHistoryStep.value;
+    });
+
     return {
+        startSession,
+        endSession,
+        sessions,
         history,
         historyStep,
         savedHistoryStep,
@@ -66,6 +94,7 @@ export function useHistory() {
         canRedo,
         hasUnsavedChanges,
         resetHistory,
-        markSaved
+        markSaved,
+        fileHasUnsavedChanges
     };
 }

@@ -1,10 +1,18 @@
 <script setup>
-import { ref, computed, nextTick, onMounted, onUnmounted, markRaw } from "vue";
+import { ref, computed, nextTick, onMounted, onUnmounted } from "vue";
 import { GlobalWorkerOptions, getDocument } from "pdfjs-dist";
 import { PDFDocument, rgb } from "pdf-lib";
 import EmptyState from "./EmptyState.vue";
 import { Electron } from "../composables/useElectron";
 import { useHistory } from "../composables/useHistory";
+
+const uuid  = () => {
+  return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+    (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+  );
+}
+
+const fileId = uuid();
 
 const emit = defineEmits(['file-loaded']);
 
@@ -26,8 +34,19 @@ let intersectionObserver = null;
 let lazyLoadObserver = null;
 const renderedPages = ref(new Set());
 
+const emitFileLoadedEvent = (type, path) => {
+    emit('file-loaded', {
+        id: fileId,
+        filename: filename.value,
+        type,
+        path: path || null,
+    });
+};
+
 // History management
 const { 
+    startSession,
+    endSession,
     history, 
     historyStep, 
     addToHistory, 
@@ -37,6 +56,8 @@ const {
     resetHistory, 
     markSaved 
 } = useHistory();
+
+startSession(fileId);
 
 const handleUndo = (action) => {
     console.log('Undo action:', action.type);
@@ -1195,7 +1216,8 @@ const loadImageFile = (file) => {
         pageNum.value = 1;
         isFileLoaded.value = true;
         strokesPerPage = { 1: [] };
-        emit('file-loaded', filename.value);
+        
+        emitFileLoadedEvent('image', file.path);
 
         nextTick(() => {
             renderAllPages();
@@ -1245,7 +1267,7 @@ const loadPdfFile = (file) => {
             pageCount.value = pdfDoc.numPages;
             pageNum.value = localStorage.getItem(filename.value) ? Number(localStorage.getItem(filename.value)) : 1;
             isFileLoaded.value = true;
-            emit('file-loaded', filename.value);
+            emitFileLoadedEvent('pdf', file.path);
             
             // Wait for next tick to ensure refs are populated
             nextTick(() => {
@@ -1266,8 +1288,7 @@ const loadPdfFile = (file) => {
 
 const loadPdfDocument = () => {
     const file = fileInput.value.files[0];
-    console.log(file);
-    
+
     if (!file) return;
     if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
         loadPdfFile(file);
@@ -1309,7 +1330,7 @@ const processFileOpenResult = (result) => {
             pageCount.value = pdfDoc.numPages;
             pageNum.value = localStorage.getItem(filename.value) ? Number(localStorage.getItem(filename.value)) : 1;
             isFileLoaded.value = true;
-            emit('file-loaded', filename.value);
+            emitFileLoadedEvent('pdf', electronFilepath.value);
             
             // Wait for next tick to ensure refs are populated
             nextTick(() => {
@@ -1340,7 +1361,7 @@ const processFileOpenResult = (result) => {
         pageNum.value = 1;
         isFileLoaded.value = true;
         strokesPerPage = { 1: [] };
-        emit('file-loaded', filename.value);
+        emitFileLoadedEvent('image', electronFilepath.value);
 
         nextTick(() => {
             renderAllPages();
@@ -1692,6 +1713,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+    endSession(fileId);
     // Remove keyboard event listener
     window.removeEventListener('keydown', handleKeydown);
     

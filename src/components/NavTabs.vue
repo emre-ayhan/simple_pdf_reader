@@ -3,7 +3,7 @@ import { ref, computed } from 'vue';
 import { Electron } from '../composables/useElectron';
 import { useHistory } from '../composables/useHistory';
 
-const { hasUnsavedChanges } = useHistory();
+const { fileHasUnsavedChanges } = useHistory();
 
 const electronButtons = [
     { action: 'fullscreen', icon: 'bi-arrows-fullscreen', title: 'Fullscreen' },
@@ -12,38 +12,39 @@ const electronButtons = [
     { action: 'close', icon: 'bi-x-lg', title: 'Close' }
 ];
 
-const handleCloseIfHasUnsavedChanges = () => {
-    if (!hasUnsavedChanges.value) return true;
-    return confirm('You have unsaved changes. Are you sure you want to close the application?');
+const getDefaultTab = () => ({
+    filename: 'New Tab',
+    default: true,
+    closed: false
+});
+
+const tabHistory = ref([0]);
+const tabs = ref([getDefaultTab()]);
+const activeTabIndex = ref(0);
+
+const openTabs = computed(() => {
+    return tabs.value.filter(tab => !tab.closed);
+});
+
+const onTabClick = (index) => {
+    activeTabIndex.value = index;
+    tabHistory.value.push(index);
 };
 
 const handleElectronButtonClick = (action) => {
     if (!Electron.value) return;
 
-    if (action === 'close' && !handleCloseIfHasUnsavedChanges()) return;
+    if (action === 'close' && openTabs.value.filter(tab => fileHasUnsavedChanges(tab.id)).length && !confirm('You have unsaved changes in one or more tabs. Are you sure you want to close the application?')) return;
     Electron.value[action]();
 };
-
-const getDefaultTab = () => ({
-    name: 'New Tab',
-    default: true,
-    closed: false
-});
-
-const tabs = ref([getDefaultTab()]);
-const activeTabIndex = ref(0);
-
-const activeTabs = computed(() => {
-    return tabs.value.filter(tab => !tab.closed);
-});
 
 const isLastTabDefault = computed(() => {
     return tabs.value[tabs.value.length - 1].default;
 });
 
-const setCurrentTab = (filename) => {
+const setCurrentTab = (fileData) => {
     tabs.value[activeTabIndex.value] = {
-        name: filename,
+        ...fileData,
         default: false,
         closed: false
     };
@@ -56,12 +57,15 @@ const addDefaultTab = () => {
 
 const addNewTab = () => {
     if (isLastTabDefault.value) return;
+    tabHistory.value.push(tabs.value.length);
     addDefaultTab();
 };
 
 const closeTab = (index) => {
-    if (tabs.value[index] && handleCloseIfHasUnsavedChanges()) {
-        const tab = tabs.value[index];
+    const tab = tabs.value[index];
+
+    if (tab) {
+        if (fileHasUnsavedChanges(tab.id) && !confirm('You have unsaved changes. Are you sure you want to close this tab?')) return;
 
         if (tab.default) {
             tabs.value.splice(index, 1);
@@ -69,12 +73,21 @@ const closeTab = (index) => {
             tab.closed = true;
         }
 
-        const lastNotClosedIndex = tabs.value.findIndex((tab, i) => !tab.closed && i >= index);
-        activeTabIndex.value = Math.max(0, lastNotClosedIndex);
+        if (activeTabIndex.value != index) return;
 
-        if (!activeTabs.value.length) {
+        // Remove closed tab from history
+        tabHistory.value = tabHistory.value.filter(i => i !== index);
+
+        // Set active tab to last in history that is not closed
+        const lastOpenTabIndex = tabHistory.value[tabHistory.value.length - 1];
+        activeTabIndex.value = lastOpenTabIndex > -1 && !tabs.value[lastOpenTabIndex].closed
+            ? lastOpenTabIndex
+            : tabs.value.findIndex(tab => !tab.closed);
+
+        if (!openTabs.value.length) {
             addDefaultTab();
         }
+
     }
 };
 
@@ -87,12 +100,13 @@ defineExpose({
     <ul class="nav nav-tabs fixed-top pt-1" id="appTabs" role="tablist">
         <template v-for="(tab, index) in tabs" :key="tab">
             <li class="nav-item" role="presentation" v-if="!tab.closed">
-                <button class="nav-link" :class="{ active: index === activeTabIndex }" type="button" role="tab" @click="activeTabIndex = index">
+                <button class="nav-link" :class="{ active: index === activeTabIndex }" type="button" role="tab" @click="onTabClick(index)">
                     <div class="d-flex align-items-center">
                         <div class="text-truncate flex-fill">
-                            {{ tab.name }}
+                            <span class="align-top fs-5 lh-1" v-if="fileHasUnsavedChanges(tab.id)">*</span>
+                            {{ tab.filename }}
                         </div>
-                        <i class="bi bi-x-lg d-none d-lg-block" v-if="(index === activeTabIndex && !isLastTabDefault) || activeTabs.length > 1" @click.stop.prevent="closeTab(index)"></i>
+                        <i class="bi bi-x-lg d-none d-lg-block" v-if="(index === activeTabIndex && !isLastTabDefault) || openTabs.length > 1" @click.stop.prevent="closeTab(index)"></i>
                     </div>
                 </button>
             </li>

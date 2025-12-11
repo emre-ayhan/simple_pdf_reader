@@ -5,9 +5,9 @@ import PdfReader from './components/PdfReader.vue';
 
 const fileTabs = ref(null);
 
-const handleFileLoad = (filename) => {
+const handleFileLoad = (fileData) => {
     if (fileTabs.value) {
-        fileTabs.value.setCurrentTab(filename);
+        fileTabs.value.setCurrentTab(fileData);
     }
 };
 </script>
