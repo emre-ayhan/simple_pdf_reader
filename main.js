@@ -11,6 +11,36 @@ const __dirname = dirname(__filename)
 let win;
 let pendingFilePath = null;
 
+// Check for file argument passed on command line (Linux)
+function getFileFromArgs() {
+    console.log('[Main] process.argv:', process.argv);
+    
+    // Skip the first two arguments (node executable and script path)
+    for (let i = 1; i < process.argv.length; i++) {
+        const arg = process.argv[i];
+        
+        // Skip Electron-specific arguments
+        if (arg.startsWith('--') || arg === '.' || arg === process.execPath) {
+            continue;
+        }
+        
+        // Check if this looks like a file path
+        if ((arg.endsWith('.pdf') || arg.match(/\.(png|jpg|jpeg|gif|webp|bmp|svg)$/i)) && fs.existsSync(arg)) {
+            console.log('[Main] Found file in args:', arg);
+            return arg;
+        }
+    }
+    
+    return null;
+}
+
+// Check for file at startup
+const fileFromArgs = getFileFromArgs();
+if (fileFromArgs) {
+    console.log('[Main] Setting pendingFilePath from command args:', fileFromArgs);
+    pendingFilePath = fileFromArgs;
+}
+
 // Prevent multiple instances - must be called before app.whenReady()
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
