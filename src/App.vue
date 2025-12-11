@@ -12,9 +12,7 @@ const handleFileLoad = (filename) => {
 };
 </script>
 <template>
-    <div id="app">
-        <nav-tabs ref="fileTabs">
-            <PdfReader @file-loaded="handleFileLoad" />
-        </nav-tabs>
-    </div>
+    <nav-tabs ref="fileTabs">
+        <PdfReader @file-loaded="handleFileLoad" />
+    </nav-tabs>
 </template>
