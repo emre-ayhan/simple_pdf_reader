@@ -26,3 +26,27 @@ body {
     padding: 0;
     overflow: hidden;
 }
+
+
+// Custom Scrollbar Styles (solid color for compatibility)
+* {
+  scrollbar-width: thin;
+  scrollbar-color: $dark $secondary;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  background: $dark;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: $secondary;
+  border-radius: 8px;
+  border: 2px solid $dark;
+}
+
+*::-webkit-scrollbar-track {
+  background: $dark;
+}
+
+
