@@ -200,6 +200,60 @@ var pdfDoc = null;
 
 GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.449/build/pdf.worker.min.mjs';
 
+// Helper functions for tool selection
+const resetToolState = () => {
+    cancelText();
+    isTextMode.value = false;
+    isDrawing.value = false;
+    isEraser.value = false;
+    isSelectionMode.value = false;
+};
+
+const selectDrawingTool = (mode) => {
+    if (!isFileLoaded.value) return;
+    
+    const wasActive = isDrawing.value && drawMode.value === mode;
+    resetToolState();
+    
+    if (!wasActive) {
+        isDrawing.value = true;
+        drawMode.value = mode;
+    }
+};
+
+// Helper function for shape drawing
+const drawShape = (ctx, type, startX, startY, endX, endY) => {
+    if (type === 'line') {
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+    } else if (type === 'rectangle') {
+        ctx.strokeRect(startX, startY, endX - startX, endY - startY);
+    } else if (type === 'circle') {
+        const radius = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2));
+        ctx.beginPath();
+        ctx.arc(startX, startY, radius, 0, 2 * Math.PI);
+        ctx.stroke();
+    }
+};
+
+const resetForNewFile = () => {
+    history.value = [];
+    historyStep.value = -1;
+    savedHistoryStep.value = -1;
+    strokesPerPage = {};
+    renderedPages.value.clear();
+    drawingContexts = [];
+    showWhiteboard.value = false;
+    whiteboardImage.value = null;
+    whiteboardScale.value = 1;
+    savedPdfDoc = null;
+    savedPageCount = 0;
+    savedPageNum = 1;
+    savedStrokesPerPage = {};
+};
+
 const scrollToPageCanvas = async (pageNumber) => {
     if (!pdfDoc || renderedPages.value.has(pageNumber)) return;
     
@@ -431,69 +485,33 @@ const zoomIn = () => {
 };
 
 // Toolbar handlers
-const selectPen = () => {
-    if (!isFileLoaded.value) return;
-    cancelText();
-    isTextMode.value = false;
-    isDrawing.value = (isDrawing.value && drawMode.value === 'pen') ? false : true;
-    isEraser.value = false;
-    drawMode.value = 'pen';
-};
+const selectPen = () => selectDrawingTool('pen');
 
 const selectEraser = () => {
     if (!isFileLoaded.value) return;
-    cancelText();
-    isTextMode.value = false;
-    isEraser.value = !isEraser.value;
-    isDrawing.value = false;
+    const wasActive = isEraser.value;
+    resetToolState();
+    isEraser.value = !wasActive;
 };
 
-const selectLine = () => {
-    if (!isFileLoaded.value) return;
-    cancelText();
-    isTextMode.value = false;
-    isDrawing.value = (isDrawing.value && drawMode.value === 'line') ? false : true;
-    isEraser.value = false;
-    drawMode.value = 'line';
-};
+const selectLine = () => selectDrawingTool('line');
 
-const selectRectangle = () => {
-    if (!isFileLoaded.value) return;
-    cancelText();
-    isTextMode.value = false;
-    isDrawing.value = (isDrawing.value && drawMode.value === 'rectangle') ? false : true;
-    isEraser.value = false;
-    drawMode.value = 'rectangle';
-};
+const selectRectangle = () => selectDrawingTool('rectangle');
 
-const selectCircle = () => {
-    if (!isFileLoaded.value) return;
-    cancelText();
-    isTextMode.value = false;
-    isDrawing.value = (isDrawing.value && drawMode.value === 'circle') ? false : true;
-    isEraser.value = false;
-    drawMode.value = 'circle';
-};
+const selectCircle = () => selectDrawingTool('circle');
 
 const selectText = () => {
     if (!isFileLoaded.value) return;
-    const next = !isTextMode.value;
-    if (!next) {
-        cancelText();
-    }
-    isTextMode.value = next;
-    isDrawing.value = false;
-    isEraser.value = false;
-    isSelectionMode.value = false;
+    const wasActive = isTextMode.value;
+    resetToolState();
+    isTextMode.value = !wasActive;
 };
 
 const selectSelection = () => {
     if (!isFileLoaded.value || showWhiteboard.value) return;
-    cancelText();
-    isTextMode.value = false;
-    isSelectionMode.value = !isSelectionMode.value;
-    isDrawing.value = false;
-    isEraser.value = false;
+    const wasActive = isSelectionMode.value;
+    resetToolState();
+    isSelectionMode.value = !wasActive;
 };
 
 // Drawing functions
@@ -732,18 +750,8 @@ const draw = (e) => {
         drawingContext.lineCap = 'round';
         drawingContext.lineJoin = 'round';
         
-        if (drawMode.value === 'line') {
-            drawingContext.beginPath();
-            drawingContext.moveTo(startX, startY);
-            drawingContext.lineTo(currentX, currentY);
-            drawingContext.stroke();
-        } else if (drawMode.value === 'rectangle') {
-            drawingContext.strokeRect(startX, startY, currentX - startX, currentY - startY);
-        } else if (drawMode.value === 'circle') {
-            const radius = Math.sqrt(Math.pow(currentX - startX, 2) + Math.pow(currentY - startY, 2));
-            drawingContext.beginPath();
-            drawingContext.arc(startX, startY, radius, 0, 2 * Math.PI);
-            drawingContext.stroke();
+        if (drawMode.value === 'line' || drawMode.value === 'rectangle' || drawMode.value === 'circle') {
+            drawShape(drawingContext, drawMode.value, startX, startY, currentX, currentY);
         }
     }
     
@@ -1131,19 +1139,7 @@ const redrawAllStrokes = (pageIndex) => {
             drawingContext.lineCap = 'round';
             drawingContext.lineJoin = 'round';
             
-            if (first.type === 'line') {
-                drawingContext.beginPath();
-                drawingContext.moveTo(first.startX, first.startY);
-                drawingContext.lineTo(first.endX, first.endY);
-                drawingContext.stroke();
-            } else if (first.type === 'rectangle') {
-                drawingContext.strokeRect(first.startX, first.startY, first.endX - first.startX, first.endY - first.startY);
-            } else if (first.type === 'circle') {
-                const radius = Math.sqrt(Math.pow(first.endX - first.startX, 2) + Math.pow(first.endY - first.startY, 2));
-                drawingContext.beginPath();
-                drawingContext.arc(first.startX, first.startY, radius, 0, 2 * Math.PI);
-                drawingContext.stroke();
-            }
+            drawShape(drawingContext, first.type, first.startX, first.startY, first.endX, first.endY);
         } else {
             // It's a pen stroke
             drawingContext.beginPath();
@@ -1204,27 +1200,14 @@ const loadImageFile = (file) => {
     filename.value = file.name || 'image';
     const reader = new FileReader();
     reader.onload = () => {
+        resetForNewFile();
+        
         imagePage.value = reader.result;
-        whiteboardImage.value = null;
-        whiteboardScale.value = 1;
-        showWhiteboard.value = false;
-        pdfDoc = null;
-        savedPdfDoc = null;
-        savedPageCount = 0;
-        savedPageNum = 1;
-        savedStrokesPerPage = {};
         pageCount.value = 1;
         pageNum.value = 1;
         isFileLoaded.value = true;
-        emit('file-loaded', filename.value);
-
-        // Reset drawing state
-        history.value = [];
-        historyStep.value = -1;
-        savedHistoryStep.value = -1;
         strokesPerPage = { 1: [] };
-        renderedPages.value.clear();
-        drawingContexts = [];
+        emit('file-loaded', filename.value);
 
         nextTick(() => {
             renderAllPages();
@@ -1267,25 +1250,14 @@ const loadPdfFile = (file) => {
         filename.value = file.name;
         const url = URL.createObjectURL(file);
         getDocument(url).promise.then((pdfDoc_) => {
+            resetForNewFile();
+            
             pdfDoc = pdfDoc_;
             imagePage.value = null;
             pageCount.value = pdfDoc.numPages;
             pageNum.value = localStorage.getItem(filename.value) ? Number(localStorage.getItem(filename.value)) : 1;
             isFileLoaded.value = true;
             emit('file-loaded', filename.value);
-            
-            // Reset history
-            history.value = [];
-            historyStep.value = -1;
-            savedHistoryStep.value = -1;
-            strokesPerPage = {};
-            renderedPages.value.clear();
-            drawingContexts = [];
-            
-            // Close whiteboard if open
-            if (showWhiteboard.value) {
-                closeWhiteboard();
-            }
             
             // Wait for next tick to ensure refs are populated
             nextTick(() => {
@@ -1321,102 +1293,80 @@ const loadPdfDocument = () => {
 const electronFilepath = ref(null);
 const originalPdfData = ref(null);
 
+const processFileOpenResult = (result) => {
+    if (!result) return;
+
+    electronFilepath.value = result.filepath;
+    
+    // Handle PDF files
+    if (result.type === 'pdf' && result.encoding === 'base64') {
+        filename.value = result.filename || 'document.pdf';
+        
+        // Convert base64 to Uint8Array
+        const binaryString = atob(result.content);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        
+        // Store a copy of the original PDF data for saving (avoid detached ArrayBuffer issue)
+        originalPdfData.value = new Uint8Array(bytes);
+        
+        // Load PDF from binary data
+        getDocument({ data: bytes }).promise.then((pdfDoc_) => {
+            resetForNewFile();
+            
+            pdfDoc = pdfDoc_;
+            imagePage.value = null;
+            pageCount.value = pdfDoc.numPages;
+            pageNum.value = localStorage.getItem(filename.value) ? Number(localStorage.getItem(filename.value)) : 1;
+            isFileLoaded.value = true;
+            emit('file-loaded', filename.value);
+            
+            // Wait for next tick to ensure refs are populated
+            nextTick(() => {
+                renderAllPages().then(() => {
+                    setupIntersectionObserver();
+                    setupLazyLoadObserver();
+                    // Scroll to saved page
+                    const savedPage = localStorage.getItem(filename.value);
+                    if (savedPage) {
+                        scrollToPage(Number(savedPage));
+                    }
+                });
+            });
+        }).catch(error => {
+            console.error('Error loading PDF:', error);
+            alert('Error loading PDF: ' + error.message);
+        });
+    }
+    // Handle image files
+    else if (result.type === 'image' && result.encoding === 'base64') {
+        filename.value = result.filename || 'image';
+        const dataUrl = `data:${result.mimeType};base64,${result.content}`;
+        
+        resetForNewFile();
+        
+        imagePage.value = dataUrl;
+        pageCount.value = 1;
+        pageNum.value = 1;
+        isFileLoaded.value = true;
+        strokesPerPage = { 1: [] };
+        emit('file-loaded', filename.value);
+
+        nextTick(() => {
+            renderAllPages();
+        });
+    }
+    else {
+        alert('Unsupported file type. Please select a PDF or image.');
+    }
+};
+
 const handleFileOpen = async () => {
     if (Electron.value) {
         const result = await Electron.value.openFile();
-        
-        if (!result) return;
-
-        electronFilepath.value = result.filepath;
-        
-        // Handle PDF files
-        if (result.type === 'pdf' && result.encoding === 'base64') {
-            filename.value = result.filename || 'document.pdf';
-            
-            // Convert base64 to Uint8Array
-            const binaryString = atob(result.content);
-            const bytes = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
-            }
-            
-            // Store a copy of the original PDF data for saving (avoid detached ArrayBuffer issue)
-            originalPdfData.value = new Uint8Array(bytes);
-            
-            // Load PDF from binary data
-            getDocument({ data: bytes }).promise.then((pdfDoc_) => {
-                pdfDoc = pdfDoc_;
-                imagePage.value = null;
-                pageCount.value = pdfDoc.numPages;
-                pageNum.value = localStorage.getItem(filename.value) ? Number(localStorage.getItem(filename.value)) : 1;
-                isFileLoaded.value = true;
-                emit('file-loaded', filename.value);
-                
-                // Reset history
-                history.value = [];
-                historyStep.value = -1;
-                savedHistoryStep.value = -1;
-                strokesPerPage = {};
-                renderedPages.value.clear();
-                drawingContexts = [];
-                
-                // Close whiteboard if open
-                if (showWhiteboard.value) {
-                    closeWhiteboard();
-                }
-                
-                // Wait for next tick to ensure refs are populated
-                nextTick(() => {
-                    renderAllPages().then(() => {
-                        setupIntersectionObserver();
-                        setupLazyLoadObserver();
-                        // Scroll to saved page
-                        const savedPage = localStorage.getItem(filename.value);
-                        if (savedPage) {
-                            scrollToPage(Number(savedPage));
-                        }
-                    });
-                });
-            }).catch(error => {
-                console.error('Error loading PDF:', error);
-                alert('Error loading PDF: ' + error.message);
-            });
-        }
-        // Handle image files
-        else if (result.type === 'image' && result.encoding === 'base64') {
-            filename.value = result.filename || 'image';
-            const dataUrl = `data:${result.mimeType};base64,${result.content}`;
-            
-            imagePage.value = dataUrl;
-            whiteboardImage.value = null;
-            whiteboardScale.value = 1;
-            showWhiteboard.value = false;
-            pdfDoc = null;
-            savedPdfDoc = null;
-            savedPageCount = 0;
-            savedPageNum = 1;
-            savedStrokesPerPage = {};
-            pageCount.value = 1;
-            pageNum.value = 1;
-            isFileLoaded.value = true;
-            emit('file-loaded', filename.value);
-
-            // Reset drawing state
-            history.value = [];
-            historyStep.value = -1;
-            savedHistoryStep.value = -1;
-            strokesPerPage = { 1: [] };
-            renderedPages.value.clear();
-            drawingContexts = [];
-
-            nextTick(() => {
-                renderAllPages();
-            });
-        }
-        else {
-            alert('Unsupported file type. Please select a PDF or image.');
-        }
-        
+        processFileOpenResult(result);
         return;
     }
 
@@ -1747,82 +1697,7 @@ onMounted(() => {
         Electron.value.onFileOpened((fileData) => {
             if (fileData) {
                 console.log('File opened from system:', fileData.filename);
-                electronFilepath.value = fileData.filepath;
-                
-                if (fileData.type === 'pdf' && fileData.encoding === 'base64') {
-                    filename.value = fileData.filename || 'document.pdf';
-                    
-                    // Convert base64 to Uint8Array
-                    const binaryString = atob(fileData.content);
-                    const bytes = new Uint8Array(binaryString.length);
-                    for (let i = 0; i < binaryString.length; i++) {
-                        bytes[i] = binaryString.charCodeAt(i);
-                    }
-                    
-                    originalPdfData.value = new Uint8Array(bytes);
-                    
-                    getDocument({ data: bytes }).promise.then((pdfDoc_) => {
-                        pdfDoc = pdfDoc_;
-                        imagePage.value = null;
-                        pageCount.value = pdfDoc.numPages;
-                        pageNum.value = localStorage.getItem(filename.value) ? Number(localStorage.getItem(filename.value)) : 1;
-                        isFileLoaded.value = true;
-                        emit('file-loaded', filename.value);
-                        
-                        history.value = [];
-                        historyStep.value = -1;
-                        savedHistoryStep.value = -1;
-                        strokesPerPage = {};
-                        renderedPages.value.clear();
-                        drawingContexts = [];
-                        
-                        if (showWhiteboard.value) {
-                            closeWhiteboard();
-                        }
-                        
-                        nextTick(() => {
-                            renderAllPages().then(() => {
-                                setupIntersectionObserver();
-                                setupLazyLoadObserver();
-                                const savedPage = localStorage.getItem(filename.value);
-                                if (savedPage) {
-                                    scrollToPage(Number(savedPage));
-                                }
-                            });
-                        });
-                    }).catch(error => {
-                        console.error('Error loading PDF:', error);
-                        alert('Error loading PDF: ' + error.message);
-                    });
-                } else if (fileData.type === 'image' && fileData.encoding === 'base64') {
-                    filename.value = fileData.filename || 'image';
-                    const dataUrl = `data:${fileData.mimeType};base64,${fileData.content}`;
-                    
-                    imagePage.value = dataUrl;
-                    whiteboardImage.value = null;
-                    whiteboardScale.value = 1;
-                    showWhiteboard.value = false;
-                    pdfDoc = null;
-                    savedPdfDoc = null;
-                    savedPageCount = 0;
-                    savedPageNum = 1;
-                    savedStrokesPerPage = {};
-                    pageCount.value = 1;
-                    pageNum.value = 1;
-                    isFileLoaded.value = true;
-                    emit('file-loaded', filename.value);
-
-                    history.value = [];
-                    historyStep.value = -1;
-                    savedHistoryStep.value = -1;
-                    strokesPerPage = { 1: [] };
-                    renderedPages.value.clear();
-                    drawingContexts = [];
-
-                    nextTick(() => {
-                        renderAllPages();
-                    });
-                }
+                processFileOpenResult(fileData);
             }
         });
     }

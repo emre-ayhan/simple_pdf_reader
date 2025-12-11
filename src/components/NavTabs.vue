@@ -92,7 +92,7 @@ defineExpose({
                 <i class="bi bi-plus-lg"></i>
             </button>
         </li>
-        <li class="ms-auto" v-if="Electron">
+        <li class="ms-auto me-1" v-if="Electron">
             <div class="btn-group btn-group-sm">
                 <template v-for="btn in electronButtons">
                     <button :class="`btn btn-electron ${btn.action}`" type="button" role="tab" aria-selected="false" @click="handleElectronButtonClick(btn.action)" :title="btn.title">
