@@ -34,16 +34,21 @@ A feature-rich PDF reader application built with Vue 3 and Vite, containerized w
 - PDF.js for reliable PDF rendering
 - Bootstrap 5 for modern UI components
 - Vite for fast development and building
+- Electron for desktop application packaging
 - Docker support for development and production
 - Nginx for production serving
 - LocalStorage integration for page persistence
 
 ## Prerequisites
 
-### For Local Usage
+### For Web Usage
 - Node.js (v16 or higher)
 - npm or yarn
-- **Google Chrome** or **Chromium** (Required for the standalone app mode and local file access)
+- Modern web browser (Chrome, Firefox, Edge, Safari)
+
+### For Electron Desktop App
+- Node.js (v16 or higher)
+- npm or yarn
 
 ### For Docker Development
 - Docker
@@ -51,9 +56,43 @@ A feature-rich PDF reader application built with Vue 3 and Vite, containerized w
 
 ## Getting Started
 
-### Local Usage (Standalone)
+### Electron Desktop App
 
-Build the application for local use without Docker:
+Build and run the desktop application:
+
+1. Install dependencies:
+```bash
+npm install
+```
+
+2. Run in development mode:
+```bash
+npm run electron:dev
+```
+
+3. Build the desktop app for your platform:
+
+**Windows:**
+```bash
+npm run electron:build:win
+```
+The installer will be in `dist-electron/windows/`
+
+**macOS:**
+```bash
+npm run electron:build:mac
+```
+The DMG file will be in `dist-electron/macos/`
+
+**Linux:**
+```bash
+npm run electron:build:linux
+```
+The DEB package will be in `dist-electron/linux/`
+
+### Web Usage (Standalone)
+
+Build the application for web browser use:
 
 1. Install dependencies and build:
 ```bash
@@ -61,42 +100,9 @@ npm install
 npm run build
 ```
 
-2. The built files will be in the `dist/` folder, including:
-   - `index.html` - The main application file
-   - `icon.ico` - Application icon
-   - `install_app.bat` - Windows installer script
-   - `install_app.sh` - Linux installer script
-   - `uninstall_app.bat` - Windows uninstaller script
-   - `uninstall_app.sh` - Linux uninstaller script
+2. The built files will be in the `dist/` folder.
 
-3. **Install and Set as Default App:**
-
-   **Windows:**
-   1. Open the `dist` folder.
-   2. Right-click `install_app.bat` and select **"Run as administrator"**.
-   3. This will:
-      - Create a Start Menu shortcut "Simple PDF Reader".
-      - Register the application as a PDF viewer.
-      - Attempt to set it as the default PDF app.
-   4. If Windows asks, select "Simple PDF Reader" as the default app.
-   5. Alternatively, right-click any PDF -> Open With -> Choose another app -> Select Simple PDF Reader -> Check "Always use this app".
-
-   **Linux:**
-   1. Open a terminal in the `dist` folder.
-   2. Run the installer:
-      ```bash
-      chmod +x install_app.sh
-      ./install_app.sh
-      ```
-   3. This will create a desktop entry and register the app as the default PDF viewer.
-
-4. **Uninstall:**
-
-   **Windows:**
-   - Run `dist/uninstall_app.bat` (as Administrator) to remove the shortcut and registry entries.
-
-   **Linux:**
-   - Run `dist/uninstall_app.sh` to remove the desktop entry and user data.
+3. Open `dist/index.html` in your browser to use the application.
 
 ### Development
 
@@ -155,6 +161,15 @@ simple_pdf_reader/
 
 ## Available Scripts
 
+### Electron Desktop App
+- `npm run electron:dev` - Run Electron app in development mode
+- `npm run electron:start` - Build and start Electron app
+- `npm run electron:build` - Build Electron app for current platform
+- `npm run electron:build:win` - Build for Windows (NSIS installer)
+- `npm run electron:build:mac` - Build for macOS (DMG)
+- `npm run electron:build:linux` - Build for Linux (DEB package)
+
+### Web Development
 - `npm run dev` - Start development server
 - `npm run build` - Build for production
 - `npm run preview` - Preview production build
@@ -186,6 +201,7 @@ docker run -p 8080:80 simple_pdf_reader:latest
 
 - **Vue 3** - Progressive JavaScript framework with Composition API
 - **Vite** - Next generation frontend tooling
+- **Electron** - Desktop application framework
 - **PDF.js** - PDF rendering library (v5.4.449)
 - **Bootstrap 5** - CSS framework for responsive design
 - **Bootstrap Icons** - Icon library for UI elements
@@ -224,4 +240,26 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-MIT
+MIT License
+
+Copyright (c) 2025 Emre Ayhan
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+See the [LICENSE](LICENSE) file for more details.

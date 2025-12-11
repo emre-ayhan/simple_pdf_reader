@@ -1,5 +1,9 @@
 ; Custom NSIS installer script for Simple PDF Reader
 ; This registers the application as a PDF handler
+;
+; MIT License
+; Copyright (c) 2025 Emre Ayhan
+; See LICENSE file for full license text
 
 !macro customInstall
   ; Write registry keys for PDF file association
