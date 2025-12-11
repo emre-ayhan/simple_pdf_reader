@@ -1908,7 +1908,7 @@ onUnmounted(() => {
                     </li>
                     <li v-if="!showWhiteboard" class="nav-item" :title="isFileLoaded ? 'Open Another File' : 'Open File'">
                         <a href="#" class="nav-link" @click.prevent="handleFileOpen">
-                            <i class="bi bi-file-earmark-arrow-up"></i>
+                            <i class="bi bi-folder-fill"></i>
                         </a>
                     </li>
                 </ul>
