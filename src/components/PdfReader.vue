@@ -5,6 +5,7 @@ import { PDFDocument, rgb } from "pdf-lib";
 import EmptyState from "./EmptyState.vue";
 import { Electron } from "../composables/useElectron";
 import { useHistory } from "../composables/useHistory";
+import { usePagination } from "../composables/usePagination";
 
 const uuid  = () => {
   return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
@@ -19,7 +20,7 @@ const emit = defineEmits(['file-loaded']);
 const pdfCanvases = ref([]);
 const fileInput = ref(null);
 const filename = ref(null);
-const pageNum = ref(localStorage.getItem(filename.value) ? Number(localStorage.getItem(filename.value)) : 1);
+const pageNum = ref(1);
 const pageCount = ref(0);
 const scale = 2;
 const lockView = ref(false);
@@ -411,47 +412,12 @@ const renderAllPages = async () => {
     // Don't render any pages here - let lazy loading handle it
 };
 
-// Scroll to specific page
-const scrollToPage = (page) => {
-    if (!isFileLoaded.value) return;
-
-    if (page >= 1 && page <= pageCount.value) {
-        const pageIndex = page - 1;
-        const canvas = pdfCanvases.value[pageIndex];
-        if (canvas) {
-            canvas.scrollIntoView({ block: 'start' });
-            pageNum.value = page;
-            localStorage.setItem(filename.value, page);
-        }
-    }
-};
-
-const handleKeydown = (event) => {
-    // Ctrl+Z - Undo
-    if ((event.ctrlKey || event.metaKey) && event.key === 'z' && !event.shiftKey) {
-        event.preventDefault();
-        undo();
-    }
-    // Ctrl+Y or Ctrl+Shift+Z - Redo
-    else if ((event.ctrlKey || event.metaKey) && (event.key === 'y' || (event.key === 'z' && event.shiftKey))) {
-        event.preventDefault();
-        redo();
-    }
-    // Left arrow key - previous page
-    else if (event.key === 'ArrowLeft') {
-        event.preventDefault();
-        if (pageNum.value > 1) {
-            scrollToPage(pageNum.value - 1);
-        }
-    }
-    // Right arrow key - next page
-    else if (event.key === 'ArrowRight') {
-        event.preventDefault();
-        if (pageNum.value < pageCount.value) {
-            scrollToPage(pageNum.value + 1);
-        }
-    }
-};
+// Pagination composable
+const {
+    savePageToLocalStorage,
+    getPageFromLocalStorage,
+    scrollToPage,
+} = usePagination(isFileLoaded, pdfCanvases, pageCount, pageNum, filename);
 
 const toggleZoomMode = () => {
     if (!isFileLoaded.value || showWhiteboard.value) return;
@@ -1265,7 +1231,7 @@ const loadPdfFile = (file) => {
             pdfDoc = pdfDoc_;
             imagePage.value = null;
             pageCount.value = pdfDoc.numPages;
-            pageNum.value = localStorage.getItem(filename.value) ? Number(localStorage.getItem(filename.value)) : 1;
+            pageNum.value = getPageFromLocalStorage();
             isFileLoaded.value = true;
             emitFileLoadedEvent('pdf', file.path);
             
@@ -1275,11 +1241,7 @@ const loadPdfFile = (file) => {
                     // Setup observers after pages structure is ready
                     setupIntersectionObserver();
                     setupLazyLoadObserver();
-                    // Scroll to saved page
-                    const savedPage = localStorage.getItem(filename.value);
-                    if (savedPage) {
-                        scrollToPage(Number(savedPage));
-                    }
+                    scrollToPage(pageNum.value);
                 });
             });
         });
@@ -1328,7 +1290,7 @@ const processFileOpenResult = (result) => {
             pdfDoc = pdfDoc_;
             imagePage.value = null;
             pageCount.value = pdfDoc.numPages;
-            pageNum.value = localStorage.getItem(filename.value) ? Number(localStorage.getItem(filename.value)) : 1;
+            pageNum.value = getPageFromLocalStorage();
             isFileLoaded.value = true;
             emitFileLoadedEvent('pdf', electronFilepath.value);
             
@@ -1338,10 +1300,7 @@ const processFileOpenResult = (result) => {
                     setupIntersectionObserver();
                     setupLazyLoadObserver();
                     // Scroll to saved page
-                    const savedPage = localStorage.getItem(filename.value);
-                    if (savedPage) {
-                        scrollToPage(Number(savedPage));
-                    }
+                    scrollToPage(pageNum.value);
                 });
             });
         }).catch(error => {
@@ -1444,7 +1403,7 @@ const setupIntersectionObserver = () => {
             const pageNumber = parseInt(mostVisiblePage.getAttribute('data-page'));
             if (pageNumber && pageNumber !== pageNum.value) {
                 pageNum.value = pageNumber;
-                localStorage.setItem(filename.value, pageNumber);
+                savePageToLocalStorage();
             }
         }
     }, options);
@@ -1697,6 +1656,44 @@ const handleSaveFile = async () => {
     }
 };
 
+// Page Event Handlers
+const handleKeydown = (event) => {
+    // Ctrl + Key Shortcuts
+    if (event.ctrlKey || event.metaKey) {
+        event.preventDefault();
+
+        switch (event.key) {
+            case 'z':
+                undo();
+                break;
+            case 'y':
+                redo();
+                break;
+            default:
+                break;
+        }
+        return;
+    }
+
+    switch (event.key) {
+        case 'ArrowLeft':
+            if (pageNum.value > 1) {
+                event.preventDefault();
+                scrollToPage(pageNum.value - 1);
+            }
+            break;
+        case 'ArrowRight':
+            if (pageNum.value < pageCount.value) {
+                event.preventDefault();
+                scrollToPage(pageNum.value + 1);
+            }
+            break;
+        default:
+            break;
+    }
+};
+
+
 onMounted(() => {
     // Add keyboard event listener
     window.addEventListener('keydown', handleKeydown);
@@ -1714,6 +1711,7 @@ onMounted(() => {
 
 onUnmounted(() => {
     endSession(fileId);
+
     // Remove keyboard event listener
     window.removeEventListener('keydown', handleKeydown);
     
