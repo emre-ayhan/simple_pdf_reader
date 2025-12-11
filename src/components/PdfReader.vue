@@ -17,14 +17,12 @@ const lockView = ref(false);
 const width = ref(100);
 const zoomMode = ref('fit-width'); // 'fit-width' or 'fit-height'
 const isFileLoaded = ref(false);
-const isInstalled = ref(false);
 const isDragging = ref(false);
 const dragCounter = ref(0);
 const pagesContainer = ref(null);
 const pdfReader = ref(null);
 let intersectionObserver = null;
 let lazyLoadObserver = null;
-let displayModeMedia = null;
 const renderedPages = ref(new Set());
 
 // History management
@@ -166,16 +164,6 @@ let startY = 0;
 let canvasSnapshot = null;
 let currentCanvasIndex = -1;
 let savedWidth = 100; // Save page width before entering whiteboard
-
-const updateInstalledState = () => {
-    try {
-        const standaloneMatch = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
-        const pwaStandalone = window.navigator && window.navigator.standalone;
-        isInstalled.value = !!(standaloneMatch || pwaStandalone);
-    } catch (e) {
-        isInstalled.value = false;
-    }
-};
 
 const isMouseDown = ref(false);
 const activePointerId = ref(null);
@@ -1246,48 +1234,6 @@ const loadImageFile = (file) => {
     reader.readAsDataURL(file);
 };
 
-const loadImageFromPath = (filepath) => {
-    // For Electron: Load image from file path
-    filename.value = filepath.split(/[/\\]/).pop();
-    
-    // Convert file path to file:// URL for image loading
-    let fileUrl = filepath;
-    if (!fileUrl.startsWith('file://')) {
-        // Handle Windows paths (C:\...) and Unix paths (/...)
-        if (/^[a-zA-Z]:\\/.test(fileUrl) || fileUrl.startsWith('\\\\')) {
-            fileUrl = 'file:///' + fileUrl.replace(/\\/g, '/');
-        } else {
-            fileUrl = 'file://' + fileUrl;
-        }
-    }
-    
-    imagePage.value = fileUrl;
-    whiteboardImage.value = null;
-    whiteboardScale.value = 1;
-    showWhiteboard.value = false;
-    pdfDoc = null;
-    savedPdfDoc = null;
-    savedPageCount = 0;
-    savedPageNum = 1;
-    savedStrokesPerPage = {};
-    pageCount.value = 1;
-    pageNum.value = 1;
-    isFileLoaded.value = true;
-    emit('file-loaded', filename.value);
-
-    // Reset drawing state
-    history.value = [];
-    historyStep.value = -1;
-    savedHistoryStep.value = -1;
-    strokesPerPage = { 1: [] };
-    renderedPages.value.clear();
-    drawingContexts = [];
-
-    nextTick(() => {
-        renderAllPages();
-    });
-};
-
 const onDragEnter = (e) => {
     dragCounter.value++;
     isDragging.value = true;
@@ -1774,134 +1720,14 @@ const handleSaveFile = async () => {
     }
 };
 
-const loadPdfFromUrl = (url) => {
-    // Handle Windows paths that might be passed as arguments
-    // Remove surrounding quotes if present
-    url = url.replace(/^"|"$/g, '').trim();
-    
-    // Decode URL-encoded characters (like %20 for space)
-    try {
-        url = decodeURIComponent(url);
-    } catch (e) {
-        console.warn('Could not decode URL:', e);
-    }
-    
-    // If it looks like a Windows path (e.g. C:\...), convert to file URL
-    if (/^[a-zA-Z]:\\/.test(url) || url.startsWith('\\\\')) {
-        url = 'file:///' + url.replace(/\\/g, '/');
-    }
-    
-    console.log('Loading PDF from URL:', url);
-    
-    // Extract filename from URL
-    try {
-        const urlObj = new URL(url);
-        filename.value = decodeURIComponent(urlObj.pathname.split('/').pop());
-    } catch (e) {
-        // Fallback for simple paths or errors
-        const parts = url.split(/[/\\]/);
-        filename.value = parts[parts.length - 1] || "Document.pdf";
-    }
-
-    // Fetch the file content manually to bypass worker CORS/Protocol issues
-    // The worker (on CDN) cannot access file:// URLs, but the main thread can (with flags)
-    const xhr = new XMLHttpRequest();
-    xhr.open('GET', url, true);
-    xhr.responseType = 'arraybuffer';
-
-    xhr.onload = function() {
-        // Status 0 is expected for local files
-        if (this.status === 200 || this.status === 0) {
-            const data = this.response;
-            if (!data || data.byteLength === 0) {
-                console.error('Error loading PDF: Empty response');
-                alert('Error loading PDF: Empty response');
-                return;
-            }
-
-            getDocument({
-                data: data
-            }).promise.then((pdfDoc_) => {
-                pdfDoc = pdfDoc_;
-                
-                pageCount.value = pdfDoc.numPages;
-                pageNum.value = localStorage.getItem(filename.value) ? Number(localStorage.getItem(filename.value)) : 1;
-                isFileLoaded.value = true;
-                emit('file-loaded', filename.value);
-                window.history.replaceState(null, '', window.location.pathname); // Clear URL parameters
-
-                // Reset history
-                history.value = [];
-                historyStep.value = -1;
-                savedHistoryStep.value = -1;
-                strokesPerPage = {};
-                
-                // Wait for next tick to ensure refs are populated
-                nextTick(() => {
-                    renderAllPages().then(() => {
-                        // Setup observers after pages structure is ready
-                        setupIntersectionObserver();
-                        setupLazyLoadObserver();
-                        // Scroll to saved page
-                        const savedPage = localStorage.getItem(filename.value);
-                        if (savedPage) {
-                            scrollToPage(Number(savedPage));
-                        }
-                    });
-                });
-            }).catch(error => {
-                console.error('Error parsing PDF:', error);
-                alert('Error parsing PDF: ' + error.message);
-            });
-        } else {
-            console.error('Error loading PDF: Status ' + this.status);
-            alert('Error loading PDF: Status ' + this.status);
-        }
-    };
-
-    xhr.onerror = function() {
-        console.error('Error loading PDF: Network/Access Error');
-        alert('Error loading PDF: Network/Access Error. Make sure the app was launched with --allow-file-access-from-files');
-    };
-
-    xhr.send();
-};
-
 onMounted(() => {
     // Add keyboard event listener
     window.addEventListener('keydown', handleKeydown);
-
-    // Detect installed/standalone PWA to hide download button
-    updateInstalledState();
-    if (window.matchMedia) {
-        displayModeMedia = window.matchMedia('(display-mode: standalone)');
-        displayModeMedia.addEventListener?.('change', updateInstalledState);
-    }
-    
-    // Try to get file parameter from URL
-    // Don't use URLSearchParams as it might double-decode
-    const search = window.location.search;
-    console.log('Raw search string:', search);
-    
-    if (search && search.includes('file=')) {
-        // Extract file parameter manually to avoid double-decoding
-        const match = search.match(/[?&]file=([^&]*)/);
-        if (match) {
-            const fileParam = match[1];
-            console.log('File parameter extracted:', fileParam);
-            loadPdfFromUrl(fileParam);
-        }
-    } else {
-        scrollToPage(pageNum.value);
-    }
 });
 
 onUnmounted(() => {
     // Remove keyboard event listener
     window.removeEventListener('keydown', handleKeydown);
-    if (displayModeMedia && displayModeMedia.removeEventListener) {
-        displayModeMedia.removeEventListener('change', updateInstalledState);
-    }
     
     if (intersectionObserver) {
         intersectionObserver.disconnect();
@@ -2094,7 +1920,7 @@ onUnmounted(() => {
             </div>
         </nav>
         <div class="pdf-reader" ref="pdfReader" :class="{ 'overflow-hidden': lockView || showWhiteboard }">
-            <EmptyState v-if="!isFileLoaded" :is-installed="isInstalled" @open-file="handleFileOpen" />
+            <EmptyState v-if="!isFileLoaded" @open-file="handleFileOpen" />
 
             <div v-else class="pages-container" ref="pagesContainer" :style="{ width: showWhiteboard ? '100%' : `${width}%`, padding: showWhiteboard ? '0' : '20px 0' }">
                 <div v-for="page in pageCount" :key="page" class="page-container" :data-page="page">

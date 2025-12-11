@@ -1,9 +1,5 @@
 <script setup>
-import { ref } from 'vue';
 import { Electron } from '../composables/useElectron';
-const props = defineProps({
-  isInstalled: { type: Boolean, default: false }
-});
 
 const emit = defineEmits(['open-file']);
 
