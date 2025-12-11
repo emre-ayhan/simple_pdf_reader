@@ -74,7 +74,7 @@ const openFile = () => emit('open-file');
             <div class="empty-download" v-if="!Electron">
               <div class="d-flex gap-2 align-items-center">
                 <i class="bi bi-windows"></i>
-                <i class="bi bi-apple"></i>
+                <!-- <i class="bi bi-apple"></i> -->
                 <i class="bi bi-tux"></i>
               </div>
               <a href="https://github.com/emre-ayhan/simple_pdf_reader/releases/latest" target="_blank" rel="noopener noreferrer" class="btn btn-link">
