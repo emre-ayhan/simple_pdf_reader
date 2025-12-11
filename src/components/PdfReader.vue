@@ -137,7 +137,6 @@ const textInput = ref('');
 const textPosition = ref(null);
 const textCanvasIndex = ref(-1);
 const fontSize = ref(16);
-const isDraggingText = ref(false);
 const textboxPosition = ref(null); // Screen position for the textbox
 
 // Selection and Whiteboard
