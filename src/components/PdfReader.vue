@@ -4,6 +4,7 @@ import { GlobalWorkerOptions, getDocument } from "pdfjs-dist";
 import { PDFDocument, rgb } from "pdf-lib";
 import EmptyState from "./EmptyState.vue";
 import { Electron } from "../composables/useElectron";
+import { useHistory } from "../composables/useHistory";
 
 const emit = defineEmits(['file-loaded']);
 
@@ -26,26 +27,18 @@ let lazyLoadObserver = null;
 const renderedPages = ref(new Set());
 
 // History management
-const history = ref([]);
-const historyStep = ref(-1);
-const savedHistoryStep = ref(-1);
+const { 
+    history, 
+    historyStep, 
+    addToHistory, 
+    undo: historyUndo, 
+    redo: historyRedo, 
+    hasUnsavedChanges, 
+    resetHistory, 
+    markSaved 
+} = useHistory();
 
-const addToHistory = (action) => {
-    if (historyStep.value < history.value.length - 1) {
-        // If we are branching off and the saved state is in the future (or overwritten), invalidate it
-        if (savedHistoryStep.value > historyStep.value) {
-            savedHistoryStep.value = -2;
-        }
-        history.value = history.value.slice(0, historyStep.value + 1);
-    }
-    history.value.push(markRaw(action));
-    historyStep.value++;
-};
-
-const undo = () => {
-    if (historyStep.value < 0) return;
-    
-    const action = history.value[historyStep.value];
+const handleUndo = (action) => {
     console.log('Undo action:', action.type);
     
     if (action.type === 'add') {
@@ -74,16 +67,9 @@ const undo = () => {
             redrawAllStrokes(i);
         }
     }
-    
-    historyStep.value--;
 };
 
-const redo = () => {
-    if (historyStep.value >= history.value.length - 1) return;
-    
-    historyStep.value++;
-    const action = history.value[historyStep.value];
-    
+const handleRedo = (action) => {
     if (action.type === 'add') {
         if (!strokesPerPage[action.page]) strokesPerPage[action.page] = [];
         strokesPerPage[action.page].push(action.stroke);
@@ -111,9 +97,13 @@ const redo = () => {
     }
 };
 
-const hasUnsavedChanges = computed(() => {
-    return historyStep.value !== savedHistoryStep.value;
-});
+const undo = () => {
+    historyUndo(handleUndo);
+};
+
+const redo = () => {
+    historyRedo(handleRedo);
+};
 
 const colors = [
     ['black', 'dimgray', 'gray', 'darkgray', 'silver', 'white'],
@@ -239,9 +229,7 @@ const drawShape = (ctx, type, startX, startY, endX, endY) => {
 };
 
 const resetForNewFile = () => {
-    history.value = [];
-    historyStep.value = -1;
-    savedHistoryStep.value = -1;
+    resetHistory();
     strokesPerPage = {};
     renderedPages.value.clear();
     drawingContexts = [];
@@ -1617,7 +1605,7 @@ const handleSaveFile = async () => {
                 if (result.success) {
                     console.log('PDF saved successfully to:', result.filepath);
                     alert('PDF saved successfully!');
-                    savedHistoryStep.value = historyStep.value;
+                    markSaved();
                     return;
                 } else {
                     console.error('Electron save failed:', result.error);
@@ -1653,7 +1641,7 @@ const handleSaveFile = async () => {
                 await writable.write(pdfBytes);
                 await writable.close();
                 console.log('PDF saved successfully with annotations to:', handle.name);
-                savedHistoryStep.value = historyStep.value;
+                markSaved();
                 return;
             } catch (err) {
                 if (err.name === 'AbortError') {
@@ -1674,7 +1662,7 @@ const handleSaveFile = async () => {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         console.log('PDF downloaded with annotations');
-        savedHistoryStep.value = historyStep.value;
+        markSaved();
     } catch (error) {
         console.error('Error saving PDF:', error);
         console.error('Error details:', {
