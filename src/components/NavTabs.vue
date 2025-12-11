@@ -1,6 +1,9 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { Electron } from '../composables/useElectron';
+import { useHistory } from '../composables/useHistory';
+
+const { hasUnsavedChanges } = useHistory();
 
 const electronButtons = [
     { action: 'fullscreen', icon: 'bi-arrows-fullscreen', title: 'Fullscreen' },
@@ -9,8 +12,15 @@ const electronButtons = [
     { action: 'close', icon: 'bi-x-lg', title: 'Close' }
 ];
 
+const handleCloseIfHasUnsavedChanges = () => {
+    if (!hasUnsavedChanges.value) return true;
+    return confirm('You have unsaved changes. Are you sure you want to close the application?');
+};
+
 const handleElectronButtonClick = (action) => {
     if (!Electron.value) return;
+
+    if (action === 'close' && !handleCloseIfHasUnsavedChanges()) return;
     Electron.value[action]();
 };
 
@@ -50,7 +60,7 @@ const addNewTab = () => {
 };
 
 const closeTab = (index) => {
-    if (tabs.value[index]) {
+    if (tabs.value[index] && handleCloseIfHasUnsavedChanges()) {
         const tab = tabs.value[index];
 
         if (tab.default) {

@@ -1,9 +1,13 @@
 import { ref, markRaw, computed } from 'vue';
 
+const history = ref([]);
+const historyStep = ref(-1);
+const savedHistoryStep = ref(-1);
+const hasUnsavedChanges = computed(() => {
+    return historyStep.value !== savedHistoryStep.value;
+});
+
 export function useHistory() {
-    const history = ref([]);
-    const historyStep = ref(-1);
-    const savedHistoryStep = ref(-1);
 
     const addToHistory = (action) => {
         if (historyStep.value < history.value.length - 1) {
@@ -40,10 +44,6 @@ export function useHistory() {
             handler(action);
         }
     };
-
-    const hasUnsavedChanges = computed(() => {
-        return historyStep.value !== savedHistoryStep.value;
-    });
 
     const resetHistory = () => {
         history.value = [];
