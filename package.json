@@ -39,7 +39,7 @@
           ]
         }
       ],
-      "icon": "public/logo.ico",
+      "icon": "public/icon.ico",
       "artifactName": "${productName}-${arch}.${ext}",
       "fileAssociations": [
         {
@@ -47,7 +47,7 @@
           "name": "PDF Document",
           "description": "PDF Document",
           "role": "Viewer",
-          "icon": "public/logo.ico"
+          "icon": "public/icon.ico"
         }
       ]
     },
@@ -72,7 +72,7 @@
         }
       ],
       "category": "public.app-category.productivity",
-      "icon": "public/logo.icns",
+      "icon": "public/icon.icns",
       "extendInfo": {
         "CFBundleDocumentTypes": [
           {

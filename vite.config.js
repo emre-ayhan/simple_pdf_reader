@@ -21,7 +21,7 @@ export default defineConfig({
             mkdirSync(docsDir, { recursive: true })
           }
           
-          const filesToCopy = ['index.html', 'logo.ico', 'pdf.worker.min.mjs']
+          const filesToCopy = ['index.html', 'icon.ico', 'pdf.worker.min.mjs']
           
           for (const file of filesToCopy) {
             const srcPath = join(distDir, file)
@@ -55,9 +55,9 @@ export default defineConfig({
     rollupOptions: {
       output: {
         assetFileNames: (assetInfo) => {
-          // Keep logo.ico name unchanged
-          if (assetInfo.name === 'logo.ico') {
-            return 'logo.ico'
+          // Keep icon.ico name unchanged
+          if (assetInfo.name === 'icon.ico') {
+            return 'icon.ico'
           }
           // Default naming for other assets
           return 'assets/[name]-[hash][extname]'

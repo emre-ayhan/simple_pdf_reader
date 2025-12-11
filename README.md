@@ -63,7 +63,7 @@ npm run build
 
 2. The built files will be in the `dist/` folder, including:
    - `index.html` - The main application file
-   - `logo.ico` - Application icon
+   - `icon.ico` - Application icon
    - `install_app.bat` - Windows installer script
    - `install_app.sh` - Linux installer script
    - `uninstall_app.bat` - Windows uninstaller script
