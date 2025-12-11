@@ -1660,13 +1660,13 @@ const handleSaveFile = async () => {
 const handleKeydown = (event) => {
     // Ctrl + Key Shortcuts
     if (event.ctrlKey || event.metaKey) {
-        event.preventDefault();
-
         switch (event.key) {
             case 'z':
+                event.preventDefault();
                 undo();
                 break;
             case 'y':
+                event.preventDefault();
                 redo();
                 break;
             default:
