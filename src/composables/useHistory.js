@@ -9,7 +9,7 @@ const fileHasUnsavedChanges = (fileId) => {
     return session.historyStep !== session.savedHistoryStep;
 }
 
-export function useHistory() {
+export function useHistory(undoHandler, redoHandler) {
     const history = ref([]);
     const historyStep = ref(-1);
     const savedHistoryStep = ref(-1);
@@ -45,24 +45,24 @@ export function useHistory() {
     const canUndo = computed(() => historyStep.value >= 0);
     const canRedo = computed(() => historyStep.value < history.value.length - 1);
 
-    const undo = (handler) => {
+    const undo = () => {
         if (!canUndo.value) return;
         
         const action = history.value[historyStep.value];
-        if (handler) {
-            handler(action);
+        if (typeof undoHandler === 'function') {
+            undoHandler(action);
         }
         
         historyStep.value--;
     };
 
-    const redo = (handler) => {
+    const redo = () => {
         if (!canRedo.value) return;
         
         historyStep.value++;
         const action = history.value[historyStep.value];
-        if (handler) {
-            handler(action);
+        if (typeof redoHandler === 'function') {
+            redoHandler(action);
         }
     };
 
