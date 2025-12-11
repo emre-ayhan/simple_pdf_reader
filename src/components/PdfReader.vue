@@ -35,7 +35,10 @@ let intersectionObserver = null;
 let lazyLoadObserver = null;
 const renderedPages = ref(new Set());
 
-const emitFileLoadedEvent = (type, path) => {
+const emitFileLoadedEvent = (type, path, page_count) => {
+    isFileLoaded.value = true;
+    pageCount.value = page_count || 1;
+    pageNum.value = getPageFromLocalStorage();
     emit('file-loaded', {
         id: fileId,
         filename: filename.value,
@@ -1178,9 +1181,6 @@ const loadImageFile = (file) => {
         resetForNewFile();
         
         imagePage.value = reader.result;
-        pageCount.value = 1;
-        pageNum.value = 1;
-        isFileLoaded.value = true;
         strokesPerPage = { 1: [] };
         
         emitFileLoadedEvent('image', file.path);
@@ -1230,10 +1230,7 @@ const loadPdfFile = (file) => {
             
             pdfDoc = pdfDoc_;
             imagePage.value = null;
-            pageCount.value = pdfDoc.numPages;
-            pageNum.value = getPageFromLocalStorage();
-            isFileLoaded.value = true;
-            emitFileLoadedEvent('pdf', file.path);
+            emitFileLoadedEvent('pdf', file.path, pdfDoc.numPages);
             
             // Wait for next tick to ensure refs are populated
             nextTick(() => {
@@ -1289,10 +1286,7 @@ const processFileOpenResult = (result) => {
             
             pdfDoc = pdfDoc_;
             imagePage.value = null;
-            pageCount.value = pdfDoc.numPages;
-            pageNum.value = getPageFromLocalStorage();
-            isFileLoaded.value = true;
-            emitFileLoadedEvent('pdf', electronFilepath.value);
+            emitFileLoadedEvent('pdf', electronFilepath.value, pdfDoc.numPages);
             
             // Wait for next tick to ensure refs are populated
             nextTick(() => {
@@ -1316,9 +1310,6 @@ const processFileOpenResult = (result) => {
         resetForNewFile();
         
         imagePage.value = dataUrl;
-        pageCount.value = 1;
-        pageNum.value = 1;
-        isFileLoaded.value = true;
         strokesPerPage = { 1: [] };
         emitFileLoadedEvent('image', electronFilepath.value);
 
