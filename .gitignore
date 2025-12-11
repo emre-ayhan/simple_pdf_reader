@@ -9,9 +9,17 @@ lerna-debug.log*
 
 node_modules
 dist
+dist-electron
 dist-ssr
 *.local
 .env
+
+# Large installer files
+*.zip
+*.exe
+*.dmg
+*.deb
+*.AppImage
 
 # Editor directories and files
 .vscode/*

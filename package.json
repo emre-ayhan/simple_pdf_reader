@@ -4,16 +4,114 @@
   "description": "A simple PDF reader built with Vue 3",
   "type": "module",
   "main": "main.js",
+  "author": "emre-ayhan",
+  "homepage": "https://github.com/emre-ayhan/simple_pdf_reader",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "electron:dev": "electron .",
-    "electron:start": "vite build && electron ."
+    "electron:start": "vite build && electron .",
+    "electron:build": "vite build && electron-builder",
+    "electron:build:win": "vite build && electron-builder --win --config.directories.output=dist-electron/windows",
+    "electron:build:mac": "vite build && electron-builder --mac --config.directories.output=dist-electron/macos",
+    "electron:build:linux": "vite build && electron-builder --linux --config.directories.output=dist-electron/linux"
+  },
+  "build": {
+    "appId": "com.emreayhan.simplepdf",
+    "productName": "Simple PDF Reader",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "dist/**/*",
+      "public/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "public/logo.ico",
+      "artifactName": "${productName}-${arch}.${ext}",
+      "fileAssociations": [
+        {
+          "ext": "pdf",
+          "name": "PDF Document",
+          "description": "PDF Document",
+          "role": "Viewer",
+          "icon": "public/logo.ico"
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Simple PDF Reader",
+      "include": "scripts/installer.nsh"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "category": "public.app-category.productivity",
+      "icon": "public/logo.icns",
+      "extendInfo": {
+        "CFBundleDocumentTypes": [
+          {
+            "CFBundleTypeName": "PDF Document",
+            "CFBundleTypeRole": "Viewer",
+            "LSHandlerRank": "Default",
+            "LSItemContentTypes": [
+              "com.adobe.pdf"
+            ]
+          }
+        ]
+      }
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "deb",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "category": "Office",
+      "icon": "public/icon.png",
+      "mimeTypes": [
+        "application/pdf"
+      ]
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "emre-ayhan",
+      "repo": "simple_pdf_reader"
+    }
   },
   "dependencies": {
     "bootstrap": "^5.3.8",
     "bootstrap-icons": "^1.13.1",
+    "electron-updater": "^6.6.2",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^5.4.449",
     "vue": "^3.4.0"
@@ -22,6 +120,7 @@
     "@vitejs/plugin-vue": "^5.0.0",
     "archiver": "^7.0.1",
     "electron": "^39.2.6",
+    "electron-builder": "^26.0.12",
     "sass": "^1.94.2",
     "vite": "^5.0.0",
     "vite-plugin-singlefile": "^2.3.0"

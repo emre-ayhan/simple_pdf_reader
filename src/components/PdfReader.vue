@@ -1373,22 +1373,30 @@ const loadPdfDocument = () => {
     }
 };
 
-const openFilePicker = async () => {
+const electronFilepath = ref(null);
+const originalPdfData = ref(null);
+
+const handleFileOpen = async () => {
     if (Electron.value) {
         const result = await Electron.value.openFile();
         
         if (!result) return;
+
+        electronFilepath.value = result.filepath;
         
         // Handle PDF files
         if (result.type === 'pdf' && result.encoding === 'base64') {
             filename.value = result.filename || 'document.pdf';
             
-            // Convert base64 to ArrayBuffer
+            // Convert base64 to Uint8Array
             const binaryString = atob(result.content);
             const bytes = new Uint8Array(binaryString.length);
             for (let i = 0; i < binaryString.length; i++) {
                 bytes[i] = binaryString.charCodeAt(i);
             }
+            
+            // Store a copy of the original PDF data for saving (avoid detached ArrayBuffer issue)
+            originalPdfData.value = new Uint8Array(bytes);
             
             // Load PDF from binary data
             getDocument({ data: bytes }).promise.then((pdfDoc_) => {
@@ -1546,13 +1554,25 @@ const setupIntersectionObserver = () => {
     }
 };
 
-const saveFile = async () => {
-    if (!pdfDoc || !fileInput.value.files[0]) return;
+const handleSaveFile = async () => {
+    if (!pdfDoc) return;
 
     try {
-        // Read the original PDF file
-        const file = fileInput.value.files[0];
-        const arrayBuffer = await file.arrayBuffer();
+        // Get the original PDF data
+        let arrayBuffer;
+        
+        if (originalPdfData.value) {
+            // Electron mode - use stored data (convert Uint8Array to ArrayBuffer)
+            arrayBuffer = originalPdfData.value.buffer.slice(originalPdfData.value.byteOffset, originalPdfData.value.byteOffset + originalPdfData.value.byteLength);
+        } else if (fileInput.value?.files[0]) {
+            // Browser mode - read from file input
+            const file = fileInput.value.files[0];
+            arrayBuffer = await file.arrayBuffer();
+        } else {
+            console.error('No PDF data available');
+            return;
+        }
+        
         const pdfLibDoc = await PDFDocument.load(arrayBuffer);
 
         // Process each page with annotations
@@ -1682,6 +1702,27 @@ const saveFile = async () => {
 
         // Save the modified PDF
         const pdfBytes = await pdfLibDoc.save();
+        
+        // If running in Electron and we have the original filepath, overwrite it
+        if (Electron.value && electronFilepath.value) {
+            try {
+                const base64Content = btoa(String.fromCharCode(...new Uint8Array(pdfBytes)));
+                const result = await Electron.value.saveFile(electronFilepath.value, base64Content, 'base64');
+                
+                if (result.success) {
+                    console.log('PDF saved successfully to:', result.filepath);
+                    savedHistoryStep.value = historyStep.value;
+                    return;
+                } else {
+                    console.error('Electron save failed:', result.error);
+                    throw new Error(result.error);
+                }
+            } catch (err) {
+                console.error('Error saving with Electron:', err);
+                alert('Failed to save PDF with Electron. Falling back to download.');
+            }
+        }
+        
         const blob = new Blob([pdfBytes], { type: 'application/pdf' });
         
         // Try to use File System Access API if available (Chrome/Edge)
@@ -1722,7 +1763,14 @@ const saveFile = async () => {
         savedHistoryStep.value = historyStep.value;
     } catch (error) {
         console.error('Error saving PDF:', error);
-        alert('Failed to save PDF. Please try again.');
+        console.error('Error details:', {
+            message: error.message,
+            stack: error.stack,
+            hasElectron: !!Electron.value,
+            hasFilepath: !!electronFilepath.value,
+            hasPdfData: !!originalPdfData.value
+        });
+        alert('Failed to save PDF: ' + error.message);
     }
 };
 
@@ -2033,12 +2081,12 @@ onUnmounted(() => {
                         </a>
                     </li>
                     <li v-if="!showWhiteboard" class="nav-item" title="Save File">
-                        <a href="#" class="nav-link" @click.prevent="saveFile" :class="{ disabled: !isFileLoaded || !hasUnsavedChanges || !pdfDoc }">
+                        <a href="#" class="nav-link" @click.prevent="handleSaveFile" :class="{ disabled: !isFileLoaded || !hasUnsavedChanges || !pdfDoc }">
                             <i class="bi bi-floppy-fill"></i>
                         </a>
                     </li>
                     <li v-if="!showWhiteboard" class="nav-item" :title="isFileLoaded ? 'Open Another File' : 'Open File'">
-                        <a href="#" class="nav-link" @click.prevent="openFilePicker">
+                        <a href="#" class="nav-link" @click.prevent="handleFileOpen">
                             <i class="bi bi-file-earmark-arrow-up"></i>
                         </a>
                     </li>
@@ -2046,7 +2094,7 @@ onUnmounted(() => {
             </div>
         </nav>
         <div class="pdf-reader" ref="pdfReader" :class="{ 'overflow-hidden': lockView || showWhiteboard }">
-            <EmptyState v-if="!isFileLoaded" :is-installed="isInstalled" @open-file="openFilePicker" />
+            <EmptyState v-if="!isFileLoaded" :is-installed="isInstalled" @open-file="handleFileOpen" />
 
             <div v-else class="pages-container" ref="pagesContainer" :style="{ width: showWhiteboard ? '100%' : `${width}%`, padding: showWhiteboard ? '0' : '20px 0' }">
                 <div v-for="page in pageCount" :key="page" class="page-container" :data-page="page">

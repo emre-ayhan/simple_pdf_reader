@@ -1,4 +1,6 @@
 import { app, BrowserWindow, ipcMain, dialog } from "electron";
+import pkg from "electron-updater";
+const { autoUpdater } = pkg;
 import fs from "fs";
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
@@ -18,35 +20,41 @@ function createWindow() {
         },
     });
 
-
-    win.loadURL("http://127.0.0.1:5173/");
-    // win.loadFile("./docs/index.html");
-    win.webContents.openDevTools({ mode: "undocked" });
+    // Load from Vite dev server in development, built files in production
+    const isDev = !app.isPackaged;
+    if (isDev) {
+        win.loadURL("http://127.0.0.1:5173/");
+        win.webContents.openDevTools({ mode: "undocked" });
+    } else {
+        win.loadFile(join(__dirname, "dist", "index.html"));
+        // Check for updates
+        autoUpdater.checkForUpdatesAndNotify();
+    }
 }
 
-    app.whenReady().then(createWindow);
+app.whenReady().then(createWindow);
 
-    // Window control handlers
-    ipcMain.handle("window:minimize", () => {
-        win.minimize();
-    });
+// Window control handlers
+ipcMain.handle("window:minimize", () => {
+    win.minimize();
+});
 
-    ipcMain.handle("window:maximize", () => {
-        if (win.isMaximized()) win.restore();
-        else win.maximize();
-    });
+ipcMain.handle("window:maximize", () => {
+    if (win.isMaximized()) win.restore();
+    else win.maximize();
+});
 
-    ipcMain.handle("window:fullscreen", () => {
-        if (win.isFullScreen()) win.setFullScreen(false);
-        else win.setFullScreen(true);
-    });
+ipcMain.handle("window:fullscreen", () => {
+    if (win.isFullScreen()) win.setFullScreen(false);
+    else win.setFullScreen(true);
+});
 
-    ipcMain.handle("window:close", () => {
-        win.close();
-    });
+ipcMain.handle("window:close", () => {
+    win.close();
+});
 
-    // File open dialog + read file
-    ipcMain.handle("file:open", async () => {
+// File open dialog + read file
+ipcMain.handle("file:open", async () => {
     const result = await dialog.showOpenDialog(win, {
         properties: ["openFile"],
         filters: [
@@ -104,6 +112,35 @@ function createWindow() {
             filename,
             content,
             type: 'text'
+        };
+    }
+});
+
+// File save handler - overwrites existing file
+ipcMain.handle("file:save", async (event, filepath, content, encoding = 'utf-8') => {
+    try {
+        if (!filepath) {
+            throw new Error('No filepath provided');
+        }
+
+        // If content is base64 and it's a PDF, decode it
+        if (encoding === 'base64') {
+            const buffer = Buffer.from(content, 'base64');
+            fs.writeFileSync(filepath, buffer);
+        } else {
+            fs.writeFileSync(filepath, content, encoding);
+        }
+
+        return {
+            success: true,
+            filepath,
+            message: 'File saved successfully'
+        };
+    } catch (error) {
+        console.error('Error saving file:', error);
+        return {
+            success: false,
+            error: error.message
         };
     }
 });
