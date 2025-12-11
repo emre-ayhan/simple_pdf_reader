@@ -23,7 +23,7 @@ const filename = ref(null);
 const pageNum = ref(1);
 const pageCount = ref(0);
 const scale = 2;
-const lockView = ref(false);
+const isViewLocked = ref(false);
 const width = ref(100);
 const zoomMode = ref('fit-width'); // 'fit-width' or 'fit-height'
 const isFileLoaded = ref(false);
@@ -1417,6 +1417,11 @@ const setupIntersectionObserver = () => {
     }
 };
 
+const lockView = () => {
+    if (!isFileLoaded.value) return;
+    isViewLocked.value = !isViewLocked.value;
+};
+
 const handleSaveFile = async () => {
     if (!pdfDoc) return;
 
@@ -1852,31 +1857,33 @@ onUnmounted(() => {
 
                     <!-- Zoom -->
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="zoomOut()" :class="{ disabled: !isFileLoaded || lockView }">
+                        <a href="#" class="nav-link" @click.prevent="zoomOut()" :class="{ disabled: !isFileLoaded || isViewLocked }">
                             <i class="bi bi-zoom-out"></i>
                         </a>
                     </li>
                     <li class="nav-item d-none d-lg-block">
-                        <input type="text" class="form-control-plaintext" :value="showWhiteboard ? Math.round(whiteboardScale * 100) : width" :disabled="!isFileLoaded || lockView || showWhiteboard">
+                        <input type="text" class="form-control-plaintext" :value="showWhiteboard ? Math.round(whiteboardScale * 100) : width" :disabled="!isFileLoaded || isViewLocked || showWhiteboard">
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="zoomIn()" :class="{ disabled: !isFileLoaded || lockView }">
+                        <a href="#" class="nav-link" @click.prevent="zoomIn()" :class="{ disabled: !isFileLoaded || isViewLocked }">
                             <i class="bi bi-zoom-in"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="toggleZoomMode()" :class="{ disabled: !isFileLoaded || lockView || showWhiteboard }" :title="zoomMode === 'fit-width' ? 'Fit Height' : 'Fit Width'">
+                        <a href="#" class="nav-link" @click.prevent="toggleZoomMode()" :class="{ disabled: !isFileLoaded || isViewLocked || showWhiteboard }" :title="zoomMode === 'fit-width' ? 'Fit Height' : 'Fit Width'">
                             <i :class="`bi bi-arrows-expand${zoomMode === 'fit-width' ? '-vertical' : ''}`"></i>
                         </a>
                     </li>
                     <li class="nav-item vr bg-white mx-2"></li>
 
-                    <!-- Menu -->
-                    <li v-if="!showWhiteboard" class="nav-item" :title="lockView ? 'Unlock View' : 'Lock View'">
-                        <a href="#" class="nav-link" @click.prevent="isFileLoaded && (lockView = !lockView)" :class="{ disabled: !isFileLoaded }">
-                            <i class="bi" :class="lockView ? 'bi-lock-fill' : 'bi-lock'"></i>
+                    <!-- View Lock -->
+                    <li v-if="!showWhiteboard" class="nav-item" :title="isViewLocked ? 'Unlock View' : 'Lock View'">
+                        <a href="#" class="nav-link" @click.prevent="lockView" :class="{ disabled: !isFileLoaded }">
+                            <i class="bi" :class="isViewLocked ? 'bi-lock-fill' : 'bi-lock'"></i>
                         </a>
                     </li>
+
+                    <!-- Whiteboard Controls -->
                     <li v-if="showWhiteboard" class="nav-item" title="Copy to Clipboard">
                         <a href="#" class="nav-link" @click.prevent="copyWhiteboardToClipboard()">
                             <i class="bi bi-clipboard"></i>
@@ -1892,6 +1899,8 @@ onUnmounted(() => {
                             <i class="bi bi-x-lg"></i>
                         </a>
                     </li>
+
+                    <!-- File Controls -->
                     <li v-if="!showWhiteboard" class="nav-item" title="Save File">
                         <a href="#" class="nav-link" @click.prevent="handleSaveFile" :class="{ disabled: !isFileLoaded || !hasUnsavedChanges || !pdfDoc }">
                             <i class="bi bi-floppy-fill"></i>
@@ -1905,7 +1914,7 @@ onUnmounted(() => {
                 </ul>
             </div>
         </nav>
-        <div class="pdf-reader" ref="pdfReader" :class="{ 'overflow-hidden': lockView || showWhiteboard }">
+        <div class="pdf-reader" ref="pdfReader" :class="{ 'overflow-hidden': isViewLocked || showWhiteboard }">
             <EmptyState v-if="!isFileLoaded" @open-file="handleFileOpen" />
 
             <div v-else class="pages-container" ref="pagesContainer" :style="{ width: showWhiteboard ? '100%' : `${width}%`, padding: showWhiteboard ? '0' : '20px 0' }">
@@ -1923,7 +1932,7 @@ onUnmounted(() => {
                             :style="{ 
                                 cursor: cursorStyle,
                                 pointerEvents: 'auto',
-                                touchAction: lockView || isPenHovering ? 'none' : 'pan-y pan-x'
+                                touchAction: isViewLocked || isPenHovering ? 'none' : 'pan-y pan-x'
                             }"
                         ></canvas>
                     </div>
