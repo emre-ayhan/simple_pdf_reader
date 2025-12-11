@@ -11,8 +11,10 @@ const openFile = () => emit('open-file');
         <div class="empty-state">
       <div class="empty-card">
         <div class="empty-eyebrow">
-          <i class="bi bi-file-earmark-pdf-fill"></i>
-          Simple PDF Reader
+          <a href="https://emre-ayhan.github.io/simple_pdf_reader/" target="_blank" rel="noopener noreferrer">
+            <i class="bi bi-file-earmark-pdf-fill"></i>
+            Simple PDF Reader
+          </a>
         </div>
         <h1 class="empty-title">Fast, focused reading with ink-ready tools.</h1>
         <p class="empty-lead d-none d-md-block">This reader keeps your PDFs and Images quick to open, easy to mark up, and ready for sharing.</p>
