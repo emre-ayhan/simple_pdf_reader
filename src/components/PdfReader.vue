@@ -1652,20 +1652,39 @@ const handleSaveFile = async () => {
         // If running in Electron and we have the original filepath, overwrite it
         if (Electron.value && electronFilepath.value) {
             try {
-                const base64Content = btoa(String.fromCharCode(...new Uint8Array(pdfBytes)));
+                // Convert Uint8Array to base64 in chunks to avoid call stack overflow
+                const uint8Array = new Uint8Array(pdfBytes);
+                let base64Content = '';
+                const chunkSize = 8192; // Process 8KB at a time
+                
+                for (let i = 0; i < uint8Array.length; i += chunkSize) {
+                    const chunk = uint8Array.subarray(i, Math.min(i + chunkSize, uint8Array.length));
+                    base64Content += String.fromCharCode.apply(null, Array.from(chunk));
+                }
+                base64Content = btoa(base64Content);
+                
                 const result = await Electron.value.saveFile(electronFilepath.value, base64Content, 'base64');
                 
                 if (result.success) {
                     console.log('PDF saved successfully to:', result.filepath);
+                    alert('PDF saved successfully!');
                     savedHistoryStep.value = historyStep.value;
                     return;
                 } else {
                     console.error('Electron save failed:', result.error);
-                    throw new Error(result.error);
+                    console.error('Error code:', result.errorCode);
+                    alert(`Failed to save PDF: ${result.error}\nError code: ${result.errorCode || 'unknown'}\nFalling back to download.`);
+                    // Don't throw - fall through to download method
                 }
             } catch (err) {
                 console.error('Error saving with Electron:', err);
-                alert('Failed to save PDF with Electron. Falling back to download.');
+                console.error('Error details:', {
+                    message: err.message,
+                    stack: err.stack,
+                    filepath: electronFilepath.value
+                });
+                alert(`Failed to save PDF with Electron: ${err.message}\nFalling back to download.`);
+                // Don't throw - fall through to download method
             }
         }
         
@@ -1723,6 +1742,91 @@ const handleSaveFile = async () => {
 onMounted(() => {
     // Add keyboard event listener
     window.addEventListener('keydown', handleKeydown);
+    
+    // Listen for files opened from system (when set as default app)
+    if (Electron.value?.onFileOpened) {
+        Electron.value.onFileOpened((fileData) => {
+            if (fileData) {
+                console.log('File opened from system:', fileData.filename);
+                electronFilepath.value = fileData.filepath;
+                
+                if (fileData.type === 'pdf' && fileData.encoding === 'base64') {
+                    filename.value = fileData.filename || 'document.pdf';
+                    
+                    // Convert base64 to Uint8Array
+                    const binaryString = atob(fileData.content);
+                    const bytes = new Uint8Array(binaryString.length);
+                    for (let i = 0; i < binaryString.length; i++) {
+                        bytes[i] = binaryString.charCodeAt(i);
+                    }
+                    
+                    originalPdfData.value = new Uint8Array(bytes);
+                    
+                    getDocument({ data: bytes }).promise.then((pdfDoc_) => {
+                        pdfDoc = pdfDoc_;
+                        imagePage.value = null;
+                        pageCount.value = pdfDoc.numPages;
+                        pageNum.value = localStorage.getItem(filename.value) ? Number(localStorage.getItem(filename.value)) : 1;
+                        isFileLoaded.value = true;
+                        emit('file-loaded', filename.value);
+                        
+                        history.value = [];
+                        historyStep.value = -1;
+                        savedHistoryStep.value = -1;
+                        strokesPerPage = {};
+                        renderedPages.value.clear();
+                        drawingContexts = [];
+                        
+                        if (showWhiteboard.value) {
+                            closeWhiteboard();
+                        }
+                        
+                        nextTick(() => {
+                            renderAllPages().then(() => {
+                                setupIntersectionObserver();
+                                setupLazyLoadObserver();
+                                const savedPage = localStorage.getItem(filename.value);
+                                if (savedPage) {
+                                    scrollToPage(Number(savedPage));
+                                }
+                            });
+                        });
+                    }).catch(error => {
+                        console.error('Error loading PDF:', error);
+                        alert('Error loading PDF: ' + error.message);
+                    });
+                } else if (fileData.type === 'image' && fileData.encoding === 'base64') {
+                    filename.value = fileData.filename || 'image';
+                    const dataUrl = `data:${fileData.mimeType};base64,${fileData.content}`;
+                    
+                    imagePage.value = dataUrl;
+                    whiteboardImage.value = null;
+                    whiteboardScale.value = 1;
+                    showWhiteboard.value = false;
+                    pdfDoc = null;
+                    savedPdfDoc = null;
+                    savedPageCount = 0;
+                    savedPageNum = 1;
+                    savedStrokesPerPage = {};
+                    pageCount.value = 1;
+                    pageNum.value = 1;
+                    isFileLoaded.value = true;
+                    emit('file-loaded', filename.value);
+
+                    history.value = [];
+                    historyStep.value = -1;
+                    savedHistoryStep.value = -1;
+                    strokesPerPage = { 1: [] };
+                    renderedPages.value.clear();
+                    drawingContexts = [];
+
+                    nextTick(() => {
+                        renderAllPages();
+                    });
+                }
+            }
+        });
+    }
 });
 
 onUnmounted(() => {
