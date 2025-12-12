@@ -7,6 +7,8 @@ import { Electron } from "../composables/useElectron";
 import { useHistory } from "../composables/useHistory";
 import { usePagination } from "../composables/usePagination";
 import { useDrop } from "../composables/useDrop";
+import { useWhiteBoard } from "../composables/useWhiteBoard";
+import { useZoom } from "../composables/usZoom";
 
 const uuid  = () => {
   return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
@@ -29,18 +31,17 @@ const isDragging = ref(false);
 const dragCounter = ref(0);
 const pagesContainer = ref(null);
 const pdfReader = ref(null);
-const renderedPages = ref(new Set());
 let intersectionObserver = null;
 let lazyLoadObserver = null;
 
-// Zoom Variables
-const zoomMode = ref('fit-width'); // 'fit-width' or 'fit-height'
-const zoomPercentage = ref(100); // 25 to 100
-
-// Whiteboard Variables
-const showWhiteboard = ref(false);
-const whiteboardImage = ref(null);
-const whiteboardScale = ref(1);
+// Drawing variables
+const isDrawing = ref(false);
+const isEraser = ref(false);
+const drawMode = ref('pen'); // 'pen', 'line', 'rectangle', 'circle', 'text'
+const drawColor = ref('blue');
+const drawThickness = ref(2);
+const drawingCanvases = ref([]);
+const drawingContexts = ref([]);
 
 // Pagination Management
 const {
@@ -52,41 +53,93 @@ const {
 } = usePagination(isFileLoaded, pdfCanvases, filename);
 
 
-// Zoom Management
-const toggleZoomMode = () => {
-    if (!isFileLoaded.value || showWhiteboard.value) return;
-    const currentPage = pageNum.value;
-    const canvas = pdfCanvases.value[currentPage - 1];
-
-    if (zoomMode.value === 'fit-width') {
-        zoomMode.value = 'fit-height';
-        const margin = scale * 65.5; // Account for navbar and padding
-        zoomPercentage.value = ((pdfReader.value.clientHeight - margin) * 100) / canvas.height;
-    } else {
-        zoomMode.value = 'fit-width';
-        zoomPercentage.value = 100; // Full width
-    }
-    
-    // Restore scroll position to current page after DOM updates
-    nextTick(() => {
-        scrollToPage(currentPage);
-    });
+// Whiteboard Management
+const whiteboardRenderCallback = async () => {
+    // After whiteboard canvas is rendered, redraw strokes
+    redrawAllStrokes(0);
 };
 
-const zoom = (mode) => {
-    if (!isFileLoaded.value) return;
-    if (showWhiteboard.value) {
-        whiteboardScale.value =  mode === 'in' 
-            ? Math.min(2, +(whiteboardScale.value + 0.1).toFixed(2))
-            : Math.max(0.1, +(whiteboardScale.value - 0.1).toFixed(2));
-        renderWhiteboardCanvas();
+const whiteboardCloseCallback = () => {
+    // Restore PDF state
+    if (savedPdfDoc) {
+        const targetPage = savedPageNum;
+        pdfDoc = savedPdfDoc;
+        pageCount.value = savedPageCount;
+        pageNum.value = targetPage;
+        isFileLoaded.value = true;
+        strokesPerPage.value = JSON.parse(JSON.stringify(savedStrokesPerPage));
+        zoomPercentage.value = savedWidth; // Restore zoom width
+        whiteboardImage.value = null;
+        renderedPages.value.clear();
+        drawingContexts.value = [];
+        
+        // Re-render PDF pages
+        nextTick(() => {
+            renderAllPages().then(() => {
+                setupIntersectionObserver();
+                setupLazyLoadObserver();
+                // Scroll to saved page
+                nextTick(() => {
+                    scrollToPage(targetPage);
+                });
+            });
+        });
+        
+        // Clear saved state
+        savedPdfDoc = null;
+        savedPageCount = 0;
+        savedPageNum = 1;
+        savedStrokesPerPage = {};
+        savedWidth = 100;
+    } else if (imagePage.value) {
+        // Restore image page (preserves imagePage)
+        whiteboardImage.value = null;
+        pdfDoc = null;
+        isFileLoaded.value = true;
+        pageCount.value = 1;
+        pageNum.value = 1;
+        strokesPerPage.value = { 1: [] };
+        renderedPages.value.clear();
+        drawingContexts.value = [];
+        
+        // Re-render image page
+        nextTick(() => {
+            renderAllPages();
+        });
     } else {
-        zoomPercentage.value = mode === 'in' 
-            ? Math.min(zoomPercentage.value + 10, 100)
-            : Math.max(zoomPercentage.value - 10, 25);
+        // No PDF or image to return to
+        pdfDoc = null;
+        imagePage.value = null;
+        whiteboardImage.value = null;
+        isFileLoaded.value = false;
+        pageCount.value = 0;
+        pageNum.value = 1;
+        strokesPerPage.value = {};
+        renderedPages.value.clear();
+        drawingContexts.value = [];
     }
-}
+};
 
+const {
+    showWhiteboard,
+    whiteboardScale,
+    whiteboardImage,
+    renderedPages,
+    renderWhiteboardCanvas,
+    closeWhiteboard,
+    copyWhiteboardToClipboard,
+    downloadWhiteboard,
+} = useWhiteBoard(drawingCanvases, drawingContexts, pdfCanvases, pdfReader, whiteboardRenderCallback, whiteboardCloseCallback);
+
+// Zoom Management
+const {
+    zoomMode,
+    zoomPercentage,
+    toggleZoomMode,
+    zoom
+} = useZoom(isFileLoaded, showWhiteboard, pageNum, pdfCanvases, pdfReader, scale, whiteboardScale, renderWhiteboardCanvas, scrollToPage)
+
+// File Loaded Event Emitter
 const emitFileLoadedEvent = (type, path, page_count) => {
     isFileLoaded.value = true;
     pageCount.value = page_count || 1;
@@ -106,14 +159,6 @@ const colors = [
     ['blue', 'darkblue', 'royalblue', 'purple', 'magenta', 'pink'],
     ['brown', 'sienna', 'olive', 'maroon', 'coral', 'salmon']
 ];
-
-// Drawing variables
-const isDrawing = ref(false);
-const isEraser = ref(false);
-const drawMode = ref('pen'); // 'pen', 'line', 'rectangle', 'circle', 'text'
-const drawColor = ref('blue');
-const drawThickness = ref(2);
-const drawingCanvases = ref([]);
 
 // Text mode variables
 const isTextMode = ref(false);
@@ -137,7 +182,6 @@ let savedPageNum = 1;
 let savedStrokesPerPage = {};
 let savedWidth = 100; // Save page width before entering whiteboard
 
-const drawingContexts = ref([]);
 const strokesPerPage = ref({}); // Store strokes per page
 const currentStroke = ref([]);
 let lastX = 0;
@@ -271,52 +315,6 @@ const scrollToPageCanvas = async (pageNumber) => {
     renderedPages.value.add(pageNumber);
     // Repaint saved annotations after PDF render
     redrawAllStrokes(pageNumber - 1);
-};
-
-const renderWhiteboardCanvas = () => {
-    const canvas = pdfCanvases.value[0];
-    const drawCanvas = drawingCanvases.value[0];
-    if (!canvas || !drawCanvas || !whiteboardImage.value) return;
-
-    const img = new Image();
-    img.onload = () => {
-        // Fit capture within viewport while preserving aspect ratio; allow user-scale without exceeding 1x source
-        const availableWidth = (pdfReader.value?.clientWidth || window.innerWidth) - 40;
-        const availableHeight = (pdfReader.value?.clientHeight || window.innerHeight) - 40;
-        const safeWidth = Math.max(1, availableWidth);
-        const safeHeight = Math.max(1, availableHeight);
-        const fitScale = Math.max(0.01, Math.min(1, Math.min(safeWidth / img.width, safeHeight / img.height)));
-        // Allow zoom-in beyond the fitted size up to 4x while keeping aspect ratio
-        const targetScale = Math.max(0.01, Math.min(fitScale * whiteboardScale.value, 4));
-        const imageWidth = img.width * targetScale;
-        const imageHeight = img.height * targetScale;
-
-        // Expand canvas to at least the viewport so tools work across the whole whiteboard
-        // Keep the captured selection anchored to top-left (no centering offsets)
-        const canvasWidth = Math.max(imageWidth, safeWidth);
-        const canvasHeight = Math.max(imageHeight, safeHeight);
-        const offsetX = 0;
-        const offsetY = 0;
-
-        canvas.width = canvasWidth;
-        canvas.height = canvasHeight;
-        canvas.style.width = `${canvasWidth}px`;
-        canvas.style.height = `${canvasHeight}px`;
-
-        drawCanvas.width = canvasWidth;
-        drawCanvas.height = canvasHeight;
-        drawCanvas.style.width = `${canvasWidth}px`;
-        drawCanvas.style.height = `${canvasHeight}px`;
-
-        const ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, offsetX, offsetY, imageWidth, imageHeight);
-
-        drawingContexts.value[0] = drawCanvas.getContext('2d');
-        redrawAllStrokes(0);
-        renderedPages.value.add(1);
-    };
-    img.src = whiteboardImage.value;
 };
 
 const renderAllPages = async () => {
@@ -884,121 +882,6 @@ const captureSelection = () => {
         renderAllPages();
     });
 };
-
-const closeWhiteboard = () => {
-    showWhiteboard.value = false;
-    whiteboardScale.value = 1;
-    
-    // Restore PDF state
-    if (savedPdfDoc) {
-        const targetPage = savedPageNum;
-        pdfDoc = savedPdfDoc;
-        pageCount.value = savedPageCount;
-        pageNum.value = targetPage;
-        isFileLoaded.value = true;
-        strokesPerPage.value = JSON.parse(JSON.stringify(savedStrokesPerPage));
-        zoomPercentage.value = savedWidth; // Restore zoom width
-        whiteboardImage.value = null;
-        renderedPages.value.clear();
-        drawingContexts.value = [];
-        
-        // Re-render PDF pages
-        nextTick(() => {
-            renderAllPages().then(() => {
-                setupIntersectionObserver();
-                setupLazyLoadObserver();
-                // Scroll to saved page
-                nextTick(() => {
-                    scrollToPage(targetPage);
-                });
-            });
-        });
-        
-        // Clear saved state
-        savedPdfDoc = null;
-        savedPageCount = 0;
-        savedPageNum = 1;
-        savedStrokesPerPage = {};
-        savedWidth = 100;
-    } else if (imagePage.value) {
-        // Restore image page (preserves imagePage)
-        whiteboardImage.value = null;
-        pdfDoc = null;
-        isFileLoaded.value = true;
-        pageCount.value = 1;
-        pageNum.value = 1;
-        strokesPerPage.value = { 1: [] };
-        renderedPages.value.clear();
-        drawingContexts.value = [];
-        
-        // Re-render image page
-        nextTick(() => {
-            renderAllPages();
-        });
-    } else {
-        // No PDF or image to return to
-        pdfDoc = null;
-        imagePage.value = null;
-        whiteboardImage.value = null;
-        isFileLoaded.value = false;
-        pageCount.value = 0;
-        pageNum.value = 1;
-        strokesPerPage.value = {};
-        renderedPages.value.clear();
-        drawingContexts.value = [];
-    }
-};
-
-const getWhiteboardCanvas = () => {
-    if (!showWhiteboard.value || !pdfCanvases.value[0] || !drawingCanvases.value[0]) return null;
-    
-    const pdfCanvas = pdfCanvases.value[0];
-    const drawCanvas = drawingCanvases.value[0];
-    
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = pdfCanvas.width;
-    tempCanvas.height = pdfCanvas.height;
-    const tempCtx = tempCanvas.getContext('2d');
-    
-    // Draw white background
-    tempCtx.fillStyle = 'white';
-    tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-    
-    // Draw background image
-    tempCtx.drawImage(pdfCanvas, 0, 0);
-    // Draw annotations
-    tempCtx.drawImage(drawCanvas, 0, 0);
-    
-    return tempCanvas;
-};
-
-const copyWhiteboardToClipboard = async () => {
-    const tempCanvas = getWhiteboardCanvas();
-    if (!tempCanvas) return;
-    
-    try {
-        const blob = await new Promise(resolve => tempCanvas.toBlob(resolve, 'image/png'));
-        if (!blob) return;
-        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-        alert('Whiteboard copied to clipboard');
-    } catch (err) {
-        console.error('Failed to copy to clipboard:', err);
-        alert('Failed to copy to clipboard');
-    }
-};
-
-const downloadWhiteboard = () => {
-    const tempCanvas = getWhiteboardCanvas();
-    if (!tempCanvas) return;
-    
-    // Download
-    const url = tempCanvas.toDataURL('image/png');
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'whiteboard-' + new Date().getTime() + '.png';
-    a.click();
-};
-
 
 const redrawAllStrokes = (pageIndex) => {
     const canvas = drawingCanvases.value[pageIndex];
@@ -1570,6 +1453,12 @@ const handleKeydown = (event) => {
     }
 
     switch (event.key) {
+        case 'Escape':
+            if (isDrawing.value || isEraser.value || isSelectionMode.value || isTextMode.value) {
+                resetToolState();
+                event.preventDefault();
+            }
+            break;
         case 'ArrowLeft':
             if (pageNum.value > 1) {
                 event.preventDefault();
