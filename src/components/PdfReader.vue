@@ -436,25 +436,20 @@ const toggleZoomMode = () => {
     });
 };
 
-const zoomOut = () => {
+const zoom = (mode) => {
     if (!isFileLoaded.value) return;
     if (showWhiteboard.value) {
-        whiteboardScale.value = Math.max(0.1, +(whiteboardScale.value - 0.1).toFixed(2));
+        whiteboardScale.value =  mode === 'in' 
+            ? Math.min(2, +(whiteboardScale.value + 0.1).toFixed(2)) 
+            : Math.max(0.1, +(whiteboardScale.value - 0.1).toFixed(2));
         renderWhiteboardCanvas();
     } else {
-        width.value = Math.max(width.value - 10, 25);
+        width.value = mode === 'in' 
+            ? Math.min(width.value + 10, 100) 
+            : Math.max(width.value - 10, 25);
     }
-};
+}
 
-const zoomIn = () => {
-    if (!isFileLoaded.value) return;
-    if (showWhiteboard.value) {
-        whiteboardScale.value = Math.min(2, +(whiteboardScale.value + 0.1).toFixed(2));
-        renderWhiteboardCanvas();
-    } else {
-        width.value = Math.min(width.value + 10, 100);
-    }
-};
 
 // Toolbar handlers
 const selectPen = () => selectDrawingTool('pen');
@@ -1808,7 +1803,7 @@ onUnmounted(() => {
 
                     <!-- Zoom -->
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="zoomOut()" :class="{ disabled: !isFileLoaded || isViewLocked }">
+                        <a href="#" class="nav-link" @click.prevent="zoom('out')" :class="{ disabled: !isFileLoaded || isViewLocked }">
                             <i class="bi bi-zoom-out"></i>
                         </a>
                     </li>
@@ -1816,7 +1811,7 @@ onUnmounted(() => {
                         <input type="text" class="form-control-plaintext" :value="showWhiteboard ? Math.round(whiteboardScale * 100) : width" :disabled="!isFileLoaded || isViewLocked || showWhiteboard">
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="zoomIn()" :class="{ disabled: !isFileLoaded || isViewLocked }">
+                        <a href="#" class="nav-link" @click.prevent="zoom('in')" :class="{ disabled: !isFileLoaded || isViewLocked }">
                             <i class="bi bi-zoom-in"></i>
                         </a>
                     </li>
