@@ -1,4 +1,8 @@
-export function useDrop(dragCounter, isDragging, loadPdfHandler, loadImageHandler) {
+import { ref } from 'vue';
+
+export function useDrop(isDragging, loadPdfHandler, loadImageHandler) {
+    const dragCounter = ref(0);
+
     const onDragEnter = (e) => {
         dragCounter.value++;
         isDragging.value = true;

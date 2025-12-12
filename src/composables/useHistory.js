@@ -9,10 +9,14 @@ const fileHasUnsavedChanges = (fileId) => {
     return session.historyStep !== session.savedHistoryStep;
 }
 
-export function useHistory(strokesPerPage, redrawAllStrokes, drawingCanvases, drawingContexts) {
+export function useHistory(redrawShapeCallback) {
     const history = ref([]);
     const historyStep = ref(-1);
     const savedHistoryStep = ref(-1);
+
+    const strokesPerPage = ref({}); // Store strokes per page
+    const drawingCanvases = ref([]); // Array of drawing canvas elements
+    const drawingContexts = ref([]); // Array of drawing contexts
 
     const startSession = (fileId) => {
         if (!sessions.value[fileId]) {
@@ -129,6 +133,58 @@ export function useHistory(strokesPerPage, redrawAllStrokes, drawingCanvases, dr
         return historyStep.value !== savedHistoryStep.value;
     });
 
+    const redrawAllStrokes = (pageIndex) => {
+        const canvas = drawingCanvases.value[pageIndex];
+        const drawingContext = drawingContexts.value[pageIndex];
+        if (!canvas || !drawingContext) return;
+        
+        const pageNumber = pageIndex + 1;
+        const strokes = strokesPerPage.value[pageNumber] || [];
+        
+        drawingContext.clearRect(0, 0, canvas.width, canvas.height);
+        
+        strokes.forEach(stroke => {
+            if (stroke.length === 0) return;
+            
+            const first = stroke[0];
+            
+            // Check if it's text
+            if (first.type === 'text') {
+                drawingContext.font = `${first.fontSize}px Arial`;
+                drawingContext.fillStyle = first.color;
+                drawingContext.textBaseline = 'top';
+                drawingContext.fillText(first.text, first.x, first.y);
+                return;
+            }
+            
+            // Check if it's a shape
+            if (first.type === 'line' || first.type === 'rectangle' || first.type === 'circle') {
+                drawingContext.strokeStyle = first.color;
+                drawingContext.lineWidth = first.thickness;
+                drawingContext.lineCap = 'round';
+                drawingContext.lineJoin = 'round';
+                
+                if (typeof redrawShapeCallback === 'function') {
+                    redrawShapeCallback(first)
+                }
+            } else {
+                // It's a pen stroke
+                drawingContext.beginPath();
+                drawingContext.moveTo(stroke[0].x, stroke[0].y);
+                
+                for (let i = 1; i < stroke.length; i++) {
+                    drawingContext.lineTo(stroke[i].x, stroke[i].y);
+                }
+                
+                drawingContext.strokeStyle = stroke[0].color;
+                drawingContext.lineWidth = stroke[0].thickness;
+                drawingContext.lineCap = 'round';
+                drawingContext.lineJoin = 'round';
+                drawingContext.stroke();
+            }
+        });
+    };
+
     return {
         startSession,
         endSession,
@@ -144,6 +200,10 @@ export function useHistory(strokesPerPage, redrawAllStrokes, drawingCanvases, dr
         hasUnsavedChanges,
         resetHistory,
         markSaved,
-        fileHasUnsavedChanges
+        fileHasUnsavedChanges,
+        strokesPerPage,
+        drawingCanvases,
+        drawingContexts,
+        redrawAllStrokes
     };
 }

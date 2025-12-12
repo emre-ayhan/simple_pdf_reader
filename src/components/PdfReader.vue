@@ -10,6 +10,8 @@ import { useDrop } from "../composables/useDrop";
 import { useWhiteBoard } from "../composables/useWhiteBoard";
 import { useZoom } from "../composables/usZoom";
 
+GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.449/build/pdf.worker.min.mjs';
+
 const uuid  = () => {
   return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
     (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
@@ -21,15 +23,15 @@ const emit = defineEmits(['file-loaded']);
 
 // General State Variables
 const fileId = uuid();
-const pdfCanvases = ref([]);
 const fileInput = ref(null);
 const filename = ref(null);
+const pagesContainer = ref(null);
 const scale = 2;
 const isViewLocked = ref(false);
 const isFileLoaded = ref(false);
 const isDragging = ref(false);
-const dragCounter = ref(0);
-const pagesContainer = ref(null);
+
+const pdfCanvases = ref([]);
 const pdfReader = ref(null);
 let intersectionObserver = null;
 let lazyLoadObserver = null;
@@ -40,8 +42,104 @@ const isEraser = ref(false);
 const drawMode = ref('pen'); // 'pen', 'line', 'rectangle', 'circle', 'text'
 const drawColor = ref('blue');
 const drawThickness = ref(2);
-const drawingCanvases = ref([]);
-const drawingContexts = ref([]);
+
+const colors = [
+    ['black', 'dimgray', 'gray', 'darkgray', 'silver', 'white'],
+    ['magenta', 'red', 'orangered', 'orange', 'gold', 'yellow'],
+    ['green', 'darkgreen', 'lime', 'teal', 'cyan', 'navy'],
+    ['blue', 'darkblue', 'royalblue', 'purple', 'magenta', 'pink'],
+    ['brown', 'sienna', 'olive', 'maroon', 'coral', 'salmon']
+];
+
+// Text mode variables
+const isTextMode = ref(false);
+const textInput = ref('');
+const textPosition = ref(null);
+const textCanvasIndex = ref(-1);
+const fontSize = ref(16);
+const textboxPosition = ref(null); // Screen position for the textbox
+
+// Selection and Whiteboard
+const isSelectionMode = ref(false);
+const selectionStart = ref(null);
+const selectionEnd = ref(null);
+const isSelecting = ref(false);
+const imagePage = ref(null); // when opening images as a single page
+
+// Saved State Variables
+let savedPdfDoc = null;
+let savedPageCount = 0;
+let savedPageNum = 1;
+let savedStrokesPerPage = {};
+let savedWidth = 100; // Save page width before entering whiteboard
+
+
+const currentStroke = ref([]);
+
+let lastX = 0;
+let lastY = 0;
+let startX = 0;
+let startY = 0;
+let canvasSnapshot = null;
+let currentCanvasIndex = -1;
+
+const isMouseDown = ref(false);
+const activePointerId = ref(null);
+const activePointerType = ref(null);
+const isPenHovering = ref(false);
+
+// Custom cursor
+const cursorStyle = computed(() => {
+    if (isSelectionMode.value) {
+        return 'crosshair';
+    }
+    
+    if (isTextMode.value) {
+        return 'text';
+    }
+    
+    if (!isDrawing.value && !isEraser.value) {
+        return 'default';
+    }
+
+    if (!isEraser.value && drawMode.value != 'pen') {
+        return 'crosshair';
+    }
+
+    var svg = isDrawing.value && drawMode.value === 'pen' ? `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="${drawColor.value}" class="bi bi-pencil-fill" viewBox="0 0 16 16">
+            <path d="M12.854.146a.5.5 0 0 0-.707 0L10.5 1.793 14.207 5.5l1.647-1.646a.5.5 0 0 0 0-.708zm.646 6.061L9.793 2.5 3.293 9H3.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.207zm-7.468 7.468A.5.5 0 0 1 6 13.5V13h-.5a.5.5 0 0 1-.5-.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.5-.5V10h-.5a.5.5 0 0 1-.175-.032l-.179.178a.5.5 0 0 0-.11.168l-2 5a.5.5 0 0 0 .65.65l5-2a.5.5 0 0 0 .168-.11z"/>
+        </svg>` : `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-eraser-fill" viewBox="0 0 16 16">
+        <path d="M8.086 2.207a2 2 0 0 1 2.828 0l3.879 3.879a2 2 0 0 1 0 2.828l-5.5 5.5A2 2 0 0 1 7.879 15H5.12a2 2 0 0 1-1.414-.586l-2.5-2.5a2 2 0 0 1 0-2.828zm.66 11.34L3.453 8.254 1.914 9.793a1 1 0 0 0 0 1.414l2.5 2.5a1 1 0 0 0 .707.293H7.88a1 1 0 0 0 .707-.293z"/>
+        </svg>`;
+    const encoded = encodeURIComponent(svg);
+    return `url('data:image/svg+xml;utf8,${encoded}') 8 8, auto`;
+});
+
+var pdfDoc = null;
+
+// History management
+const redrawShapeCallback = (data) => {
+    drawShape(drawingContext, data.type, data.startX, data.startY, data.endX, data.endY);
+};
+
+const { 
+    startSession,
+    endSession,
+    history,
+    historyStep,
+    addToHistory,
+    undo,
+    redo,
+    hasUnsavedChanges,
+    resetHistory, 
+    markSaved,
+    strokesPerPage,
+    drawingCanvases,
+    drawingContexts,
+    redrawAllStrokes
+} = useHistory(redrawShapeCallback);
+
+startSession(fileId);
 
 // Pagination Management
 const {
@@ -151,81 +249,6 @@ const emitFileLoadedEvent = (type, path, page_count) => {
         path: path || null,
     });
 };
-
-const colors = [
-    ['black', 'dimgray', 'gray', 'darkgray', 'silver', 'white'],
-    ['magenta', 'red', 'orangered', 'orange', 'gold', 'yellow'],
-    ['green', 'darkgreen', 'lime', 'teal', 'cyan', 'navy'],
-    ['blue', 'darkblue', 'royalblue', 'purple', 'magenta', 'pink'],
-    ['brown', 'sienna', 'olive', 'maroon', 'coral', 'salmon']
-];
-
-// Text mode variables
-const isTextMode = ref(false);
-const textInput = ref('');
-const textPosition = ref(null);
-const textCanvasIndex = ref(-1);
-const fontSize = ref(16);
-const textboxPosition = ref(null); // Screen position for the textbox
-
-// Selection and Whiteboard
-const isSelectionMode = ref(false);
-const selectionStart = ref(null);
-const selectionEnd = ref(null);
-const isSelecting = ref(false);
-const imagePage = ref(null); // when opening images as a single page
-
-// Saved State Variables
-let savedPdfDoc = null;
-let savedPageCount = 0;
-let savedPageNum = 1;
-let savedStrokesPerPage = {};
-let savedWidth = 100; // Save page width before entering whiteboard
-
-const strokesPerPage = ref({}); // Store strokes per page
-const currentStroke = ref([]);
-let lastX = 0;
-let lastY = 0;
-let startX = 0;
-let startY = 0;
-let canvasSnapshot = null;
-let currentCanvasIndex = -1;
-
-const isMouseDown = ref(false);
-const activePointerId = ref(null);
-const activePointerType = ref(null);
-const isPenHovering = ref(false);
-
-// Custom cursor
-const cursorStyle = computed(() => {
-    if (isSelectionMode.value) {
-        return 'crosshair';
-    }
-    
-    if (isTextMode.value) {
-        return 'text';
-    }
-    
-    if (!isDrawing.value && !isEraser.value) {
-        return 'default';
-    }
-
-    if (!isEraser.value && drawMode.value != 'pen') {
-        return 'crosshair';
-    }
-
-    var svg = isDrawing.value && drawMode.value === 'pen' ? `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="${drawColor.value}" class="bi bi-pencil-fill" viewBox="0 0 16 16">
-            <path d="M12.854.146a.5.5 0 0 0-.707 0L10.5 1.793 14.207 5.5l1.647-1.646a.5.5 0 0 0 0-.708zm.646 6.061L9.793 2.5 3.293 9H3.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.207zm-7.468 7.468A.5.5 0 0 1 6 13.5V13h-.5a.5.5 0 0 1-.5-.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.5-.5V10h-.5a.5.5 0 0 1-.175-.032l-.179.178a.5.5 0 0 0-.11.168l-2 5a.5.5 0 0 0 .65.65l5-2a.5.5 0 0 0 .168-.11z"/>
-        </svg>` : `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-eraser-fill" viewBox="0 0 16 16">
-        <path d="M8.086 2.207a2 2 0 0 1 2.828 0l3.879 3.879a2 2 0 0 1 0 2.828l-5.5 5.5A2 2 0 0 1 7.879 15H5.12a2 2 0 0 1-1.414-.586l-2.5-2.5a2 2 0 0 1 0-2.828zm.66 11.34L3.453 8.254 1.914 9.793a1 1 0 0 0 0 1.414l2.5 2.5a1 1 0 0 0 .707.293H7.88a1 1 0 0 0 .707-.293z"/>
-        </svg>`;
-    const encoded = encodeURIComponent(svg);
-    return `url('data:image/svg+xml;utf8,${encoded}') 8 8, auto`;
-});
-
-var pdfDoc = null;
-
-GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.449/build/pdf.worker.min.mjs';
 
 // Helper functions for tool selection
 const resetToolState = () => {
@@ -883,56 +906,6 @@ const captureSelection = () => {
     });
 };
 
-const redrawAllStrokes = (pageIndex) => {
-    const canvas = drawingCanvases.value[pageIndex];
-    const drawingContext = drawingContexts.value[pageIndex];
-    if (!canvas || !drawingContext) return;
-    
-    const pageNumber = pageIndex + 1;
-    const strokes = strokesPerPage.value[pageNumber] || [];
-    
-    drawingContext.clearRect(0, 0, canvas.width, canvas.height);
-    
-    strokes.forEach(stroke => {
-        if (stroke.length === 0) return;
-        
-        const first = stroke[0];
-        
-        // Check if it's text
-        if (first.type === 'text') {
-            drawingContext.font = `${first.fontSize}px Arial`;
-            drawingContext.fillStyle = first.color;
-            drawingContext.textBaseline = 'top';
-            drawingContext.fillText(first.text, first.x, first.y);
-            return;
-        }
-        
-        // Check if it's a shape
-        if (first.type === 'line' || first.type === 'rectangle' || first.type === 'circle') {
-            drawingContext.strokeStyle = first.color;
-            drawingContext.lineWidth = first.thickness;
-            drawingContext.lineCap = 'round';
-            drawingContext.lineJoin = 'round';
-            
-            drawShape(drawingContext, first.type, first.startX, first.startY, first.endX, first.endY);
-        } else {
-            // It's a pen stroke
-            drawingContext.beginPath();
-            drawingContext.moveTo(stroke[0].x, stroke[0].y);
-            
-            for (let i = 1; i < stroke.length; i++) {
-                drawingContext.lineTo(stroke[i].x, stroke[i].y);
-            }
-            
-            drawingContext.strokeStyle = stroke[0].color;
-            drawingContext.lineWidth = stroke[0].thickness;
-            drawingContext.lineCap = 'round';
-            drawingContext.lineJoin = 'round';
-            drawingContext.stroke();
-        }
-    });
-};
-
 const eraseAtPoint = (x, y, canvasIndex) => {
     const eraserRadius = 10;
     const pageNumber = canvasIndex + 1;
@@ -1019,7 +992,7 @@ const {
     onDragEnter,
     onDragLeave,
     loadFile
-} = useDrop(dragCounter, isDragging, loadPdfFile, loadImageFile);
+} = useDrop(isDragging, loadPdfFile, loadImageFile);
 
 const electronFilepath = ref(null);
 const originalPdfData = ref(null);
@@ -1414,23 +1387,6 @@ const handleSaveFile = async () => {
         alert('Failed to save PDF: ' + error.message);
     }
 };
-
-
-// History management
-const { 
-    startSession,
-    endSession,
-    history,
-    historyStep,
-    addToHistory,
-    undo,
-    redo,
-    hasUnsavedChanges,
-    resetHistory, 
-    markSaved 
-} = useHistory(strokesPerPage, redrawAllStrokes, drawingCanvases, drawingContexts);
-
-startSession(fileId);
 
 
 // Page Event Handlers
