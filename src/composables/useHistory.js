@@ -165,7 +165,7 @@ export function useHistory(redrawShapeCallback) {
                 drawingContext.lineJoin = 'round';
                 
                 if (typeof redrawShapeCallback === 'function') {
-                    redrawShapeCallback(first)
+                    redrawShapeCallback(drawingContext, first)
                 }
             } else {
                 // It's a pen stroke

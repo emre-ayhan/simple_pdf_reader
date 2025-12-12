@@ -118,8 +118,8 @@ const cursorStyle = computed(() => {
 var pdfDoc = null;
 
 // History management
-const redrawShapeCallback = (data) => {
-    drawShape(drawingContext, data.type, data.startX, data.startY, data.endX, data.endY);
+const redrawShapeCallback = (context, el) => {
+    drawShape(context, el.type, el.startX, el.startY, el.endX, el.endY);
 };
 
 const { 
