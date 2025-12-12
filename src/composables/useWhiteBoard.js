@@ -1,12 +1,10 @@
 import { ref } from 'vue';
 
-export function useWhiteBoard(drawingCanvases, drawingContexts, pdfCanvases, pdfReader, renderCallback, closeCallback) {
+export function useWhiteBoard(drawingCanvases, drawingContexts, pdfCanvases, pdfReader, renderedPages, renderCallback, closeCallback) {
 
     const showWhiteboard = ref(false);
     const whiteboardScale = ref(1);
     const whiteboardImage = ref(null);
-    const renderedPages = ref(new Set());
-
 
     const renderWhiteboardCanvas = () => {
         const canvas = pdfCanvases.value[0];

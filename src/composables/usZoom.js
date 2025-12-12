@@ -1,6 +1,7 @@
 import { ref, nextTick } from 'vue';
 
-export function useZoom(isFileLoaded, showWhiteboard, pageNum, pdfCanvases, pdfReader, scale, whiteboardScale, renderWhiteboardCanvas, scrollToPage) {
+export function useZoom(isFileLoaded, showWhiteboard, pageNum, pdfCanvases, pdfReader, whiteboardScale, renderWhiteboardCanvas, scrollToPage) {
+    const scale = 2;
     const zoomMode = ref('fit-width'); // 'fit-width' or 'fit-height'
     const zoomPercentage = ref(100); // 25 to 100
     

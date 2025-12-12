@@ -25,16 +25,12 @@ const emit = defineEmits(['file-loaded']);
 const fileId = uuid();
 const fileInput = ref(null);
 const filename = ref(null);
-const pagesContainer = ref(null);
-const scale = 2;
 const isViewLocked = ref(false);
 const isFileLoaded = ref(false);
 const isDragging = ref(false);
 
 const pdfCanvases = ref([]);
 const pdfReader = ref(null);
-let intersectionObserver = null;
-let lazyLoadObserver = null;
 
 // Drawing variables
 const isDrawing = ref(false);
@@ -142,13 +138,56 @@ const {
 startSession(fileId);
 
 // Pagination Management
+const scrollToPageCanvas = async (pageNumber) => {
+    if (!pdfDoc || renderedPages.value.has(pageNumber)) return;
+    
+    const page = await pdfDoc.getPage(pageNumber);
+    const viewport = page.getViewport({ scale: 2 });
+    
+    // Get canvas elements
+    const canvas = pdfCanvases.value[pageNumber - 1];
+    const drawCanvas = drawingCanvases.value[pageNumber - 1];
+    
+    if (!canvas || !drawCanvas) return;
+    // Reset inline styles that might have been set in whiteboard mode
+    canvas.style.width = '';
+    canvas.style.height = '';
+    drawCanvas.style.width = '';
+    drawCanvas.style.height = '';
+    
+    const ctx = canvas.getContext("2d");
+    
+    canvas.height = viewport.height;
+    canvas.width = viewport.width;
+    drawCanvas.height = viewport.height;
+    drawCanvas.width = viewport.width;
+    
+    // Initialize drawing context
+    drawingContexts.value[pageNumber - 1] = drawCanvas.getContext('2d');
+    
+    const renderContext = {
+        canvasContext: ctx,
+        viewport,
+    };
+    
+    await page.render(renderContext).promise;
+    renderedPages.value.add(pageNumber);
+    // Repaint saved annotations after PDF render
+    redrawAllStrokes(pageNumber - 1);
+};
+
 const {
+    pagesContainer,
+    renderedPages,
     pageCount,
     pageNum,
-    savePageToLocalStorage,
     getPageFromLocalStorage,
     scrollToPage,
-} = usePagination(isFileLoaded, pdfCanvases, filename);
+    setupIntersectionObserver,
+    setupLazyLoadObserver,
+    intersectionObserver,
+    lazyLoadObserver
+} = usePagination(pdfCanvases, pdfReader, isFileLoaded, filename, scrollToPageCanvas);
 
 
 // Whiteboard Management
@@ -222,12 +261,12 @@ const {
     showWhiteboard,
     whiteboardScale,
     whiteboardImage,
-    renderedPages,
     renderWhiteboardCanvas,
     closeWhiteboard,
     copyWhiteboardToClipboard,
     downloadWhiteboard,
-} = useWhiteBoard(drawingCanvases, drawingContexts, pdfCanvases, pdfReader, whiteboardRenderCallback, whiteboardCloseCallback);
+} = useWhiteBoard(drawingCanvases, drawingContexts, pdfCanvases, pdfReader, renderedPages, whiteboardRenderCallback, whiteboardCloseCallback);
+
 
 // Zoom Management
 const {
@@ -235,7 +274,7 @@ const {
     zoomPercentage,
     toggleZoomMode,
     zoom
-} = useZoom(isFileLoaded, showWhiteboard, pageNum, pdfCanvases, pdfReader, scale, whiteboardScale, renderWhiteboardCanvas, scrollToPage)
+} = useZoom(isFileLoaded, showWhiteboard, pageNum, pdfCanvases, pdfReader, whiteboardScale, renderWhiteboardCanvas, scrollToPage)
 
 // File Loaded Event Emitter
 const emitFileLoadedEvent = (type, path, page_count) => {
@@ -300,44 +339,6 @@ const resetForNewFile = () => {
     savedPageCount = 0;
     savedPageNum = 1;
     savedStrokesPerPage = {};
-};
-
-const scrollToPageCanvas = async (pageNumber) => {
-    if (!pdfDoc || renderedPages.value.has(pageNumber)) return;
-    
-    const page = await pdfDoc.getPage(pageNumber);
-    const viewport = page.getViewport({ scale });
-    
-    // Get canvas elements
-    const canvas = pdfCanvases.value[pageNumber - 1];
-    const drawCanvas = drawingCanvases.value[pageNumber - 1];
-    
-    if (!canvas || !drawCanvas) return;
-    // Reset inline styles that might have been set in whiteboard mode
-    canvas.style.width = '';
-    canvas.style.height = '';
-    drawCanvas.style.width = '';
-    drawCanvas.style.height = '';
-    
-    const ctx = canvas.getContext("2d");
-    
-    canvas.height = viewport.height;
-    canvas.width = viewport.width;
-    drawCanvas.height = viewport.height;
-    drawCanvas.width = viewport.width;
-    
-    // Initialize drawing context
-    drawingContexts.value[pageNumber - 1] = drawCanvas.getContext('2d');
-    
-    const renderContext = {
-        canvasContext: ctx,
-        viewport,
-    };
-    
-    await page.render(renderContext).promise;
-    renderedPages.value.add(pageNumber);
-    // Repaint saved annotations after PDF render
-    redrawAllStrokes(pageNumber - 1);
 };
 
 const renderAllPages = async () => {
@@ -1070,79 +1071,7 @@ const handleFileOpen = async () => {
     }
 };
 
-const setupLazyLoadObserver = () => {
-    // Clean up existing observer
-    if (lazyLoadObserver) {
-        lazyLoadObserver.disconnect();
-    }
-    
-    const options = {
-        root: pdfReader.value,
-        rootMargin: '200px', // Start loading 200px before entering viewport
-        threshold: 0.01
-    };
-    
-    lazyLoadObserver = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-            if (entry.isIntersecting) {
-                const pageNumber = parseInt(entry.target.getAttribute('data-page'));
-                if (pageNumber) {
-                    scrollToPageCanvas(pageNumber);
-                }
-            }
-        });
-    }, options);
-    
-    // Observe all page containers
-    if (pagesContainer.value) {
-        const pageContainers = pagesContainer.value.querySelectorAll('.page-container');
-        pageContainers.forEach(container => {
-            lazyLoadObserver.observe(container);
-        });
-    }
-};
 
-const setupIntersectionObserver = () => {
-    // Clean up existing observer
-    if (intersectionObserver) {
-        intersectionObserver.disconnect();
-    }
-    
-    const options = {
-        root: pdfReader.value,
-        rootMargin: '-45% 0px -45% 0px', // Trigger when middle of viewport
-        threshold: 0
-    };
-    
-    intersectionObserver = new IntersectionObserver((entries) => {
-        // Find the most visible page
-        let maxRatio = 0;
-        let mostVisiblePage = null;
-        
-        entries.forEach(entry => {
-            if (entry.isIntersecting && entry.intersectionRatio > maxRatio) {
-                maxRatio = entry.intersectionRatio;
-                mostVisiblePage = entry.target;
-            }
-        });
-        
-        if (mostVisiblePage) {
-            const pageNumber = parseInt(mostVisiblePage.getAttribute('data-page'));
-            if (pageNumber && pageNumber !== pageNum.value) {
-                pageNum.value = pageNumber;
-                savePageToLocalStorage();
-            }
-        }
-    }, options);
-    
-    // Observe all page containers
-    if (pagesContainer.value) {
-        const pageContainers = pagesContainer.value.querySelectorAll('.page-container');
-        pageContainers.forEach(container => {
-            intersectionObserver.observe(container);
-        });
-    }
-};
 
 const lockView = () => {
     if (!isFileLoaded.value) return;
@@ -1454,11 +1383,11 @@ onUnmounted(() => {
     // Remove keyboard event listener
     window.removeEventListener('keydown', handleKeydown);
     
-    if (intersectionObserver) {
-        intersectionObserver.disconnect();
+    if (intersectionObserver.value) {
+        intersectionObserver.value.disconnect();
     }
-    if (lazyLoadObserver) {
-        lazyLoadObserver.disconnect();
+    if (lazyLoadObserver.value) {
+        lazyLoadObserver.value.disconnect();
     }
 });
 </script>
