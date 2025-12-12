@@ -1210,6 +1210,7 @@ const loadPdfFile = (file) => {
     }
 };
 
+// Drag and Drop Handlers
 const {
     onDrop,
     onDragEnter,
