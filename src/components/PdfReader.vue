@@ -17,6 +17,7 @@ const emit = defineEmits(['file-loaded']);
 // General State Variables
 const fileInput = ref(null);
 const filename = ref(null);
+const filepath = ref(null);
 const isViewLocked = ref(false);
 const isFileLoaded = ref(false);
 const isDragging = ref(false);
@@ -271,15 +272,16 @@ const {
 } = useZoom(isFileLoaded, showWhiteboard, pageNum, pdfCanvases, pdfReader, whiteboardScale, renderWhiteboardCanvas, scrollToPage)
 
 // File Loaded Event Emitter
-const emitFileLoadedEvent = (type, path, page_count) => {
+const emitFileLoadedEvent = (type, page_count) => {
     isFileLoaded.value = true;
     pageCount.value = page_count || 1;
     pageNum.value = getPageFromLocalStorage();
+
     emit('file-loaded', {
         id: fileId,
         filename: filename.value,
+        path: filepath.value,
         type,
-        path: path || null,
     });
 };
 
@@ -942,6 +944,7 @@ const loadImageFile = (file) => {
     if (!file) return;
 
     filename.value = file.name || 'image';
+    filepath.value = file.path || null;
     const reader = new FileReader();
     reader.onload = () => {
         resetForNewFile();
@@ -949,7 +952,7 @@ const loadImageFile = (file) => {
         imagePage.value = reader.result;
         strokesPerPage.value = { 1: [] };
         
-        emitFileLoadedEvent('image', file.path);
+        emitFileLoadedEvent('image');
 
         nextTick(() => {
             renderAllPages();
@@ -958,26 +961,32 @@ const loadImageFile = (file) => {
     reader.readAsDataURL(file);
 };
 
+const getDocumentCallback = (pdfDoc_) => {
+    resetForNewFile();
+    
+    pdfDoc = pdfDoc_;
+    imagePage.value = null;
+    emitFileLoadedEvent('pdf', pdfDoc.numPages);
+    
+    // Wait for next tick to ensure refs are populated
+    nextTick(() => {
+        renderAllPages().then(() => {
+            // Setup observers after pages structure is ready
+            setupIntersectionObserver();
+            setupLazyLoadObserver();
+            scrollToPage(pageNum.value);
+        });
+    });
+}
+
 const loadPdfFile = (file) => {
     if (file) {
         filename.value = file.name;
+        filepath.value = file.path || null;
         const url = URL.createObjectURL(file);
-        getDocument(url).promise.then((pdfDoc_) => {
-            resetForNewFile();
-            
-            pdfDoc = pdfDoc_;
-            imagePage.value = null;
-            emitFileLoadedEvent('pdf', file.path, pdfDoc.numPages);
-            
-            // Wait for next tick to ensure refs are populated
-            nextTick(() => {
-                renderAllPages().then(() => {
-                    // Setup observers after pages structure is ready
-                    setupIntersectionObserver();
-                    setupLazyLoadObserver();
-                    scrollToPage(pageNum.value);
-                });
-            });
+        getDocument(url).promise.then(getDocumentCallback).catch(error => {
+            console.error('Error loading PDF:', error);
+            alert('Error loading PDF: ' + error.message);
         });
     }
 };
@@ -990,13 +999,12 @@ const {
     loadFile
 } = useDrop(isDragging, loadPdfFile, loadImageFile);
 
-const electronFilepath = ref(null);
 const originalPdfData = ref(null);
 
 const processFileOpenResult = (result) => {
     if (!result) return;
 
-    electronFilepath.value = result.filepath;
+    filepath.value = result.filepath;
     
     // Handle PDF files
     if (result.type === 'pdf' && result.encoding === 'base64') {
@@ -1013,23 +1021,7 @@ const processFileOpenResult = (result) => {
         originalPdfData.value = new Uint8Array(bytes);
         
         // Load PDF from binary data
-        getDocument({ data: bytes }).promise.then((pdfDoc_) => {
-            resetForNewFile();
-            
-            pdfDoc = pdfDoc_;
-            imagePage.value = null;
-            emitFileLoadedEvent('pdf', electronFilepath.value, pdfDoc.numPages);
-            
-            // Wait for next tick to ensure refs are populated
-            nextTick(() => {
-                renderAllPages().then(() => {
-                    setupIntersectionObserver();
-                    setupLazyLoadObserver();
-                    // Scroll to saved page
-                    scrollToPage(pageNum.value);
-                });
-            });
-        }).catch(error => {
+        getDocument({ data: bytes }).promise.then(getDocumentCallback).catch(error => {
             console.error('Error loading PDF:', error);
             alert('Error loading PDF: ' + error.message);
         });
@@ -1043,7 +1035,7 @@ const processFileOpenResult = (result) => {
         
         imagePage.value = dataUrl;
         strokesPerPage.value = { 1: [] };
-        emitFileLoadedEvent('image', electronFilepath.value);
+        emitFileLoadedEvent('image');
 
         nextTick(() => {
             renderAllPages();
@@ -1223,7 +1215,7 @@ const handleSaveFile = async () => {
         const pdfBytes = await pdfLibDoc.save();
         
         // If running in Electron and we have the original filepath, overwrite it
-        if (Electron.value && electronFilepath.value) {
+        if (Electron.value && filepath.value) {
             try {
                 // Convert Uint8Array to base64 in chunks to avoid call stack overflow
                 const uint8Array = new Uint8Array(pdfBytes);
@@ -1236,7 +1228,7 @@ const handleSaveFile = async () => {
                 }
                 base64Content = btoa(base64Content);
                 
-                const result = await Electron.value.saveFile(electronFilepath.value, base64Content, 'base64');
+                const result = await Electron.value.saveFile(filepath.value, base64Content, 'base64');
                 
                 if (result.success) {
                     console.log('PDF saved successfully to:', result.filepath);
@@ -1254,7 +1246,7 @@ const handleSaveFile = async () => {
                 console.error('Error details:', {
                     message: err.message,
                     stack: err.stack,
-                    filepath: electronFilepath.value
+                    filepath: filepath.value
                 });
                 alert(`Failed to save PDF with Electron: ${err.message}\nFalling back to download.`);
                 // Don't throw - fall through to download method
@@ -1305,7 +1297,7 @@ const handleSaveFile = async () => {
             message: error.message,
             stack: error.stack,
             hasElectron: !!Electron.value,
-            hasFilepath: !!electronFilepath.value,
+            hasFilepath: !!filepath.value,
             hasPdfData: !!originalPdfData.value
         });
         alert('Failed to save PDF: ' + error.message);
