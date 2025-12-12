@@ -1,4 +1,9 @@
-export function usePagination(isFileLoaded, pdfCanvases, pageCount, pageNum, filename) {
+import { ref } from "vue";
+
+export function usePagination(isFileLoaded, pdfCanvases, filename) {
+    const pageCount = ref(0);
+    const pageNum = ref(1);
+
     const savePageToLocalStorage = () => {
         localStorage.setItem(filename.value, pageNum.value);
     }
@@ -23,6 +28,8 @@ export function usePagination(isFileLoaded, pdfCanvases, pageCount, pageNum, fil
     };
 
     return {
+        pageNum,
+        pageCount,
         scrollToPage,
         savePageToLocalStorage,
         getPageFromLocalStorage

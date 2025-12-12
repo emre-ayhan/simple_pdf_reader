@@ -14,34 +14,78 @@ const uuid  = () => {
   );
 }
 
-const fileId = uuid();
 
 const emit = defineEmits(['file-loaded']);
 
+// General State Variables
+const fileId = uuid();
 const pdfCanvases = ref([]);
 const fileInput = ref(null);
 const filename = ref(null);
-const pageNum = ref(1);
-const pageCount = ref(0);
 const scale = 2;
 const isViewLocked = ref(false);
-const width = ref(100);
-const zoomMode = ref('fit-width'); // 'fit-width' or 'fit-height'
 const isFileLoaded = ref(false);
 const isDragging = ref(false);
 const dragCounter = ref(0);
 const pagesContainer = ref(null);
 const pdfReader = ref(null);
+const renderedPages = ref(new Set());
 let intersectionObserver = null;
 let lazyLoadObserver = null;
-const renderedPages = ref(new Set());
+
+// Zoom Variables
+const zoomMode = ref('fit-width'); // 'fit-width' or 'fit-height'
+const zoomPercentage = ref(100); // 25 to 100
+
+// Whiteboard Variables
+const showWhiteboard = ref(false);
+const whiteboardImage = ref(null);
+const whiteboardScale = ref(1);
 
 // Pagination Management
 const {
+    pageCount,
+    pageNum,
     savePageToLocalStorage,
     getPageFromLocalStorage,
     scrollToPage,
-} = usePagination(isFileLoaded, pdfCanvases, pageCount, pageNum, filename);
+} = usePagination(isFileLoaded, pdfCanvases, filename);
+
+
+// Zoom Management
+const toggleZoomMode = () => {
+    if (!isFileLoaded.value || showWhiteboard.value) return;
+    const currentPage = pageNum.value;
+    const canvas = pdfCanvases.value[currentPage - 1];
+
+    if (zoomMode.value === 'fit-width') {
+        zoomMode.value = 'fit-height';
+        const margin = scale * 65.5; // Account for navbar and padding
+        zoomPercentage.value = ((pdfReader.value.clientHeight - margin) * 100) / canvas.height;
+    } else {
+        zoomMode.value = 'fit-width';
+        zoomPercentage.value = 100; // Full width
+    }
+    
+    // Restore scroll position to current page after DOM updates
+    nextTick(() => {
+        scrollToPage(currentPage);
+    });
+};
+
+const zoom = (mode) => {
+    if (!isFileLoaded.value) return;
+    if (showWhiteboard.value) {
+        whiteboardScale.value =  mode === 'in' 
+            ? Math.min(2, +(whiteboardScale.value + 0.1).toFixed(2))
+            : Math.max(0.1, +(whiteboardScale.value - 0.1).toFixed(2));
+        renderWhiteboardCanvas();
+    } else {
+        zoomPercentage.value = mode === 'in' 
+            ? Math.min(zoomPercentage.value + 10, 100)
+            : Math.max(zoomPercentage.value - 10, 25);
+    }
+}
 
 const emitFileLoadedEvent = (type, path, page_count) => {
     isFileLoaded.value = true;
@@ -160,9 +204,6 @@ const isSelectionMode = ref(false);
 const selectionStart = ref(null);
 const selectionEnd = ref(null);
 const isSelecting = ref(false);
-const showWhiteboard = ref(false);
-const whiteboardImage = ref(null);
-const whiteboardScale = ref(1);
 const imagePage = ref(null); // when opening images as a single page
 let savedPdfDoc = null;
 let savedPageCount = 0;
@@ -415,40 +456,6 @@ const renderAllPages = async () => {
     
     // Don't render any pages here - let lazy loading handle it
 };
-
-const toggleZoomMode = () => {
-    if (!isFileLoaded.value || showWhiteboard.value) return;
-    const currentPage = pageNum.value;
-    const canvas = pdfCanvases.value[currentPage - 1];
-
-    if (zoomMode.value === 'fit-width') {
-        zoomMode.value = 'fit-height';
-        const margin = scale * 65.5; // Account for navbar and padding
-        width.value = ((pdfReader.value.clientHeight - margin) * 100) / canvas.height;
-    } else {
-        zoomMode.value = 'fit-width';
-        width.value = 100; // Full width
-    }
-    
-    // Restore scroll position to current page after DOM updates
-    nextTick(() => {
-        scrollToPage(currentPage);
-    });
-};
-
-const zoom = (mode) => {
-    if (!isFileLoaded.value) return;
-    if (showWhiteboard.value) {
-        whiteboardScale.value =  mode === 'in' 
-            ? Math.min(2, +(whiteboardScale.value + 0.1).toFixed(2)) 
-            : Math.max(0.1, +(whiteboardScale.value - 0.1).toFixed(2));
-        renderWhiteboardCanvas();
-    } else {
-        width.value = mode === 'in' 
-            ? Math.min(width.value + 10, 100) 
-            : Math.max(width.value - 10, 25);
-    }
-}
 
 
 // Toolbar handlers
@@ -941,7 +948,7 @@ const captureSelection = () => {
     savedPageCount = pageCount.value;
     savedPageNum = pageNum.value;
     savedStrokesPerPage = JSON.parse(JSON.stringify(strokesPerPage));
-    savedWidth = width.value;
+    savedWidth = zoomPercentage.value;
     
     // Switch to whiteboard mode
     showWhiteboard.value = true;
@@ -972,7 +979,7 @@ const closeWhiteboard = () => {
         pageNum.value = targetPage;
         isFileLoaded.value = true;
         strokesPerPage = JSON.parse(JSON.stringify(savedStrokesPerPage));
-        width.value = savedWidth; // Restore zoom width
+        zoomPercentage.value = savedWidth; // Restore zoom width
         whiteboardImage.value = null;
         renderedPages.value.clear();
         drawingContexts = [];
@@ -1808,7 +1815,7 @@ onUnmounted(() => {
                         </a>
                     </li>
                     <li class="nav-item d-none d-lg-block">
-                        <input type="text" class="form-control-plaintext" :value="showWhiteboard ? Math.round(whiteboardScale * 100) : width" :disabled="!isFileLoaded || isViewLocked || showWhiteboard">
+                        <input type="text" class="form-control-plaintext" :value="showWhiteboard ? Math.round(whiteboardScale * 100) : zoomPercentage" :disabled="!isFileLoaded || isViewLocked || showWhiteboard">
                     </li>
                     <li class="nav-item">
                         <a href="#" class="nav-link" @click.prevent="zoom('in')" :class="{ disabled: !isFileLoaded || isViewLocked }">
@@ -1863,7 +1870,7 @@ onUnmounted(() => {
         <div class="pdf-reader" ref="pdfReader" :class="{ 'overflow-hidden': isViewLocked || showWhiteboard }">
             <EmptyState v-if="!isFileLoaded" @open-file="handleFileOpen" />
 
-            <div v-else class="pages-container" ref="pagesContainer" :style="{ width: showWhiteboard ? '100%' : `${width}%`, padding: showWhiteboard ? '0' : '20px 0' }">
+            <div v-else class="pages-container" ref="pagesContainer" :style="{ width: showWhiteboard ? '100%' : `${zoomPercentage}%`, padding: showWhiteboard ? '0' : '20px 0' }">
                 <div v-for="page in pageCount" :key="page" class="page-container" :data-page="page">
                     <div class="canvas-container" :class="{ 'whiteboard-mode': showWhiteboard, 'canvas-loading': !renderedPages.has(page) }">
                         <canvas class="pdf-canvas" :ref="el => { if (el) pdfCanvases[page - 1] = el }"></canvas>
