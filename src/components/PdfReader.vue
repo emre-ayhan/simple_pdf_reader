@@ -1618,33 +1618,37 @@ onUnmounted(() => {
                     </li>
 
                     <!-- Whiteboard Controls -->
-                    <li v-if="showWhiteboard" class="nav-item" title="Copy to Clipboard">
-                        <a href="#" class="nav-link" @click.prevent="copyWhiteboardToClipboard()">
-                            <i class="bi bi-clipboard"></i>
-                        </a>
-                    </li>
-                    <li v-if="showWhiteboard" class="nav-item" title="Download Whiteboard">
-                        <a href="#" class="nav-link" @click.prevent="downloadWhiteboard()">
-                            <i class="bi bi-download"></i>
-                        </a>
-                    </li>
-                    <li v-if="showWhiteboard" class="nav-item" title="Close Whiteboard">
-                        <a href="#" class="nav-link" @click.prevent="closeWhiteboard()">
-                            <i class="bi bi-x-lg"></i>
-                        </a>
-                    </li>
+                    <template v-if="showWhiteboard">
+                        <li class="nav-item" title="Copy to Clipboard">
+                            <a href="#" class="nav-link" @click.prevent="copyWhiteboardToClipboard()">
+                                <i class="bi bi-clipboard"></i>
+                            </a>
+                        </li>
+                        <li class="nav-item" title="Download Whiteboard">
+                            <a href="#" class="nav-link" @click.prevent="downloadWhiteboard()">
+                                <i class="bi bi-download"></i>
+                            </a>
+                        </li>
+                        <li class="nav-item" title="Close Whiteboard">
+                            <a href="#" class="nav-link" @click.prevent="closeWhiteboard()">
+                                <i class="bi bi-x-lg"></i>
+                            </a>
+                        </li>
+                    </template>
+                    <template v-else>
+                        <!-- File Controls -->
+                        <li class="nav-item" title="Save File">
+                            <a href="#" class="nav-link" @click.prevent="handleSaveFile" :class="{ disabled: !isFileLoaded || !hasUnsavedChanges || !pdfDoc }">
+                                <i class="bi bi-floppy-fill"></i>
+                            </a>
+                        </li>
+                        <li class="nav-item" :title="isFileLoaded ? 'Open Another File' : 'Open File'">
+                            <a href="#" class="nav-link" @click.prevent="handleFileOpen">
+                                <i class="bi bi-folder-fill"></i>
+                            </a>
+                        </li>
+                    </template>
 
-                    <!-- File Controls -->
-                    <li v-if="!showWhiteboard" class="nav-item" title="Save File">
-                        <a href="#" class="nav-link" @click.prevent="handleSaveFile" :class="{ disabled: !isFileLoaded || !hasUnsavedChanges || !pdfDoc }">
-                            <i class="bi bi-floppy-fill"></i>
-                        </a>
-                    </li>
-                    <li v-if="!showWhiteboard" class="nav-item" :title="isFileLoaded ? 'Open Another File' : 'Open File'">
-                        <a href="#" class="nav-link" @click.prevent="handleFileOpen">
-                            <i class="bi bi-folder-fill"></i>
-                        </a>
-                    </li>
                 </ul>
             </div>
         </nav>
