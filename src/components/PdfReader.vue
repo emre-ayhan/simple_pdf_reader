@@ -69,9 +69,6 @@ let savedPageNum = 1;
 let savedStrokesPerPage = {};
 let savedWidth = 100; // Save page width before entering whiteboard
 
-
-const currentStroke = ref([]);
-
 let lastX = 0;
 let lastY = 0;
 let startX = 0;
@@ -130,6 +127,7 @@ const {
     resetHistory, 
     markSaved,
     strokesPerPage,
+    currentStroke,
     drawingCanvases,
     drawingContexts,
     redrawAllStrokes

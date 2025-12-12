@@ -15,6 +15,7 @@ export function useHistory(redrawShapeCallback) {
     const savedHistoryStep = ref(-1);
 
     const strokesPerPage = ref({}); // Store strokes per page
+    const currentStroke = ref([]); // Current stroke being drawn
     const drawingCanvases = ref([]); // Array of drawing canvas elements
     const drawingContexts = ref([]); // Array of drawing contexts
 
@@ -202,6 +203,7 @@ export function useHistory(redrawShapeCallback) {
         markSaved,
         fileHasUnsavedChanges,
         strokesPerPage,
+        currentStroke,
         drawingCanvases,
         drawingContexts,
         redrawAllStrokes
