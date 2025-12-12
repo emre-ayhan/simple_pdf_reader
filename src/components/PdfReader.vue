@@ -196,7 +196,7 @@ const whiteboardRenderCallback = async () => {
     redrawAllStrokes(0);
 };
 
-const whiteboardCloseCallback = () => {
+const closeWhiteboardCallback = () => {
     // Restore PDF state
     if (savedPdfDoc) {
         const targetPage = savedPageNum;
@@ -265,7 +265,7 @@ const {
     closeWhiteboard,
     copyWhiteboardToClipboard,
     downloadWhiteboard,
-} = useWhiteBoard(drawingCanvases, drawingContexts, pdfCanvases, pdfReader, renderedPages, whiteboardRenderCallback, whiteboardCloseCallback);
+} = useWhiteBoard(drawingCanvases, drawingContexts, pdfCanvases, pdfReader, renderedPages, whiteboardRenderCallback, closeWhiteboardCallback);
 
 
 // Zoom Management
@@ -287,58 +287,6 @@ const emitFileLoadedEvent = (type, path, page_count) => {
         type,
         path: path || null,
     });
-};
-
-// Helper functions for tool selection
-const resetToolState = () => {
-    cancelText();
-    isTextMode.value = false;
-    isDrawing.value = false;
-    isEraser.value = false;
-    isSelectionMode.value = false;
-};
-
-const selectDrawingTool = (mode) => {
-    if (!isFileLoaded.value) return;
-    
-    const wasActive = isDrawing.value && drawMode.value === mode;
-    resetToolState();
-    
-    if (!wasActive) {
-        isDrawing.value = true;
-        drawMode.value = mode;
-    }
-};
-
-// Helper function for shape drawing
-const drawShape = (ctx, type, startX, startY, endX, endY) => {
-    if (type === 'line') {
-        ctx.beginPath();
-        ctx.moveTo(startX, startY);
-        ctx.lineTo(endX, endY);
-        ctx.stroke();
-    } else if (type === 'rectangle') {
-        ctx.strokeRect(startX, startY, endX - startX, endY - startY);
-    } else if (type === 'circle') {
-        const radius = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2));
-        ctx.beginPath();
-        ctx.arc(startX, startY, radius, 0, 2 * Math.PI);
-        ctx.stroke();
-    }
-};
-
-const resetForNewFile = () => {
-    resetHistory();
-    strokesPerPage.value = {};
-    renderedPages.value.clear();
-    drawingContexts.value = [];
-    showWhiteboard.value = false;
-    whiteboardImage.value = null;
-    whiteboardScale.value = 1;
-    savedPdfDoc = null;
-    savedPageCount = 0;
-    savedPageNum = 1;
-    savedStrokesPerPage = {};
 };
 
 const renderAllPages = async () => {
@@ -403,6 +351,58 @@ const renderAllPages = async () => {
     }
     
     // Don't render any pages here - let lazy loading handle it
+};
+
+// Helper functions for tool selection
+const resetToolState = () => {
+    cancelText();
+    isTextMode.value = false;
+    isDrawing.value = false;
+    isEraser.value = false;
+    isSelectionMode.value = false;
+};
+
+const selectDrawingTool = (mode) => {
+    if (!isFileLoaded.value) return;
+    
+    const wasActive = isDrawing.value && drawMode.value === mode;
+    resetToolState();
+    
+    if (!wasActive) {
+        isDrawing.value = true;
+        drawMode.value = mode;
+    }
+};
+
+// Helper function for shape drawing
+const drawShape = (ctx, type, startX, startY, endX, endY) => {
+    if (type === 'line') {
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+    } else if (type === 'rectangle') {
+        ctx.strokeRect(startX, startY, endX - startX, endY - startY);
+    } else if (type === 'circle') {
+        const radius = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2));
+        ctx.beginPath();
+        ctx.arc(startX, startY, radius, 0, 2 * Math.PI);
+        ctx.stroke();
+    }
+};
+
+const resetForNewFile = () => {
+    resetHistory();
+    strokesPerPage.value = {};
+    renderedPages.value.clear();
+    drawingContexts.value = [];
+    showWhiteboard.value = false;
+    whiteboardImage.value = null;
+    whiteboardScale.value = 1;
+    savedPdfDoc = null;
+    savedPageCount = 0;
+    savedPageNum = 1;
+    savedStrokesPerPage = {};
 };
 
 
