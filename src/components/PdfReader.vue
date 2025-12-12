@@ -1536,7 +1536,7 @@ onUnmounted(() => {
 
                     <!-- View Lock -->
                     <li v-if="!showWhiteboard" class="nav-item" :title="isViewLocked ? 'Unlock View' : 'Lock View'">
-                        <a href="#" class="nav-link" @click.prevent="lockView" :class="{ disabled: !isFileLoaded }">
+                        <a href="#" class="nav-link" @click.prevent="lockView" :class="{ disabled: !isFileLoaded, active: isViewLocked }">
                             <i class="bi" :class="isViewLocked ? 'bi-lock-fill' : 'bi-lock'"></i>
                         </a>
                     </li>
