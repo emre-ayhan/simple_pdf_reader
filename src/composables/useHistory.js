@@ -9,7 +9,7 @@ const fileHasUnsavedChanges = (fileId) => {
     return session.historyStep !== session.savedHistoryStep;
 }
 
-export function useHistory(undoHandler, redoHandler) {
+export function useHistory(strokesPerPage, redrawAllStrokes, drawingCanvases, drawingContexts) {
     const history = ref([]);
     const historyStep = ref(-1);
     const savedHistoryStep = ref(-1);
@@ -49,8 +49,34 @@ export function useHistory(undoHandler, redoHandler) {
         if (!canUndo.value) return;
         
         const action = history.value[historyStep.value];
-        if (typeof undoHandler === 'function') {
-            undoHandler(action);
+        
+        console.log('Undo action:', action.type);
+    
+        if (action.type === 'add') {
+            const strokes = strokesPerPage.value[action.page];
+            if (strokes) {
+                const index = strokes.indexOf(action.stroke);
+                if (index > -1) {
+                    strokes.splice(index, 1);
+                } else {
+                    console.warn('Stroke not found for undo');
+                }
+            }
+            redrawAllStrokes(action.page - 1);
+        } else if (action.type === 'erase') {
+            const strokes = strokesPerPage.value[action.page];
+            if (strokes) {
+                const toRestore = [...action.strokes].sort((a, b) => a.index - b.index);
+                toRestore.forEach(item => {
+                    strokes.splice(item.index, 0, item.data);
+                });
+            }
+            redrawAllStrokes(action.page - 1);
+        } else if (action.type === 'clear') {
+            strokesPerPage.value = JSON.parse(JSON.stringify(action.previousState));
+            for (let i = 0; i < drawingCanvases.value.length; i++) {
+                redrawAllStrokes(i);
+            }
         }
         
         historyStep.value--;
@@ -61,8 +87,31 @@ export function useHistory(undoHandler, redoHandler) {
         
         historyStep.value++;
         const action = history.value[historyStep.value];
-        if (typeof redoHandler === 'function') {
-            redoHandler(action);
+        
+        if (action.type === 'add') {
+            if (!strokesPerPage.value[action.page]) strokesPerPage.value[action.page] = [];
+            strokesPerPage.value[action.page].push(action.stroke);
+            redrawAllStrokes(action.page - 1);
+        } else if (action.type === 'erase') {
+            const strokes = strokesPerPage.value[action.page];
+            if (strokes) {
+                action.strokes.forEach(item => {
+                    const index = strokes.indexOf(item.data);
+                    if (index > -1) {
+                        strokes.splice(index, 1);
+                    }
+                });
+            }
+            redrawAllStrokes(action.page - 1);
+        } else if (action.type === 'clear') {
+            strokesPerPage.value = {};
+            for (let i = 0; i < drawingCanvases.value.length; i++) {
+                const canvas = drawingCanvases.value[i];
+                const ctx = drawingContexts.value[i];
+                if (canvas && ctx) {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                }
+            }
         }
     };
 

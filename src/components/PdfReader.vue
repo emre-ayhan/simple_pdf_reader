@@ -99,82 +99,6 @@ const emitFileLoadedEvent = (type, path, page_count) => {
     });
 };
 
-// History management
-const handleRedo = (action) => {
-    if (action.type === 'add') {
-        if (!strokesPerPage[action.page]) strokesPerPage[action.page] = [];
-        strokesPerPage[action.page].push(action.stroke);
-        redrawAllStrokes(action.page - 1);
-    } else if (action.type === 'erase') {
-        const strokes = strokesPerPage[action.page];
-        if (strokes) {
-            action.strokes.forEach(item => {
-                const index = strokes.indexOf(item.data);
-                if (index > -1) {
-                    strokes.splice(index, 1);
-                }
-            });
-        }
-        redrawAllStrokes(action.page - 1);
-    } else if (action.type === 'clear') {
-        strokesPerPage = {};
-        for (let i = 0; i < drawingCanvases.value.length; i++) {
-            const canvas = drawingCanvases.value[i];
-            const ctx = drawingContexts[i];
-            if (canvas && ctx) {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-            }
-        }
-    }
-};
-
-const handleUndo = (action) => {
-    console.log('Undo action:', action.type);
-    
-    if (action.type === 'add') {
-        const strokes = strokesPerPage[action.page];
-        if (strokes) {
-            const index = strokes.indexOf(action.stroke);
-            if (index > -1) {
-                strokes.splice(index, 1);
-            } else {
-                console.warn('Stroke not found for undo');
-            }
-        }
-        redrawAllStrokes(action.page - 1);
-    } else if (action.type === 'erase') {
-        const strokes = strokesPerPage[action.page];
-        if (strokes) {
-            const toRestore = [...action.strokes].sort((a, b) => a.index - b.index);
-            toRestore.forEach(item => {
-                strokes.splice(item.index, 0, item.data);
-            });
-        }
-        redrawAllStrokes(action.page - 1);
-    } else if (action.type === 'clear') {
-        strokesPerPage = JSON.parse(JSON.stringify(action.previousState));
-        for (let i = 0; i < drawingCanvases.value.length; i++) {
-            redrawAllStrokes(i);
-        }
-    }
-};
-
-const { 
-    startSession,
-    endSession,
-    history,
-    historyStep,
-    addToHistory,
-    undo,
-    redo,
-    hasUnsavedChanges,
-    resetHistory, 
-    markSaved 
-} = useHistory(handleUndo, handleRedo);
-
-startSession(fileId);
-
-
 const colors = [
     ['black', 'dimgray', 'gray', 'darkgray', 'silver', 'white'],
     ['magenta', 'red', 'orangered', 'orange', 'gold', 'yellow'],
@@ -205,21 +129,23 @@ const selectionStart = ref(null);
 const selectionEnd = ref(null);
 const isSelecting = ref(false);
 const imagePage = ref(null); // when opening images as a single page
+
+// Saved State Variables
 let savedPdfDoc = null;
 let savedPageCount = 0;
 let savedPageNum = 1;
 let savedStrokesPerPage = {};
+let savedWidth = 100; // Save page width before entering whiteboard
 
-let drawingContexts = [];
+const drawingContexts = ref([]);
+const strokesPerPage = ref({}); // Store strokes per page
+const currentStroke = ref([]);
 let lastX = 0;
 let lastY = 0;
-let strokesPerPage = {}; // Store strokes per page
-let currentStroke = [];
 let startX = 0;
 let startY = 0;
 let canvasSnapshot = null;
 let currentCanvasIndex = -1;
-let savedWidth = 100; // Save page width before entering whiteboard
 
 const isMouseDown = ref(false);
 const activePointerId = ref(null);
@@ -297,9 +223,9 @@ const drawShape = (ctx, type, startX, startY, endX, endY) => {
 
 const resetForNewFile = () => {
     resetHistory();
-    strokesPerPage = {};
+    strokesPerPage.value = {};
     renderedPages.value.clear();
-    drawingContexts = [];
+    drawingContexts.value = [];
     showWhiteboard.value = false;
     whiteboardImage.value = null;
     whiteboardScale.value = 1;
@@ -334,7 +260,7 @@ const scrollToPageCanvas = async (pageNumber) => {
     drawCanvas.width = viewport.width;
     
     // Initialize drawing context
-    drawingContexts[pageNumber - 1] = drawCanvas.getContext('2d');
+    drawingContexts.value[pageNumber - 1] = drawCanvas.getContext('2d');
     
     const renderContext = {
         canvasContext: ctx,
@@ -386,7 +312,7 @@ const renderWhiteboardCanvas = () => {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, offsetX, offsetY, imageWidth, imageHeight);
 
-        drawingContexts[0] = drawCanvas.getContext('2d');
+        drawingContexts.value[0] = drawCanvas.getContext('2d');
         redrawAllStrokes(0);
         renderedPages.value.add(1);
     };
@@ -397,7 +323,7 @@ const renderAllPages = async () => {
     if (showWhiteboard.value) {
         // Whiteboard mode: render single page with background image
         pageCount.value = 1;
-        strokesPerPage = { 1: strokesPerPage[1] || [] };
+        strokesPerPage.value = { 1: strokesPerPage.value[1] || [] };
         await nextTick();
         renderWhiteboardCanvas();
         return;
@@ -405,7 +331,7 @@ const renderAllPages = async () => {
 
     if (imagePage.value) {
         pageCount.value = 1;
-        strokesPerPage = { 1: strokesPerPage[1] || [] };
+        strokesPerPage.value = { 1: strokesPerPage.value[1] || [] };
         await nextTick();
 
         const canvas = pdfCanvases.value[0];
@@ -433,7 +359,7 @@ const renderAllPages = async () => {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
 
-                drawingContexts[0] = drawCanvas.getContext('2d');
+                drawingContexts.value[0] = drawCanvas.getContext('2d');
                 redrawAllStrokes(0);
                 renderedPages.value.add(1);
             };
@@ -449,8 +375,8 @@ const renderAllPages = async () => {
     
     // Initialize strokes for each page
     for (let i = 1; i <= numPages; i++) {
-        if (!strokesPerPage[i]) {
-            strokesPerPage[i] = [];
+        if (!strokesPerPage.value[i]) {
+            strokesPerPage.value[i] = [];
         }
     }
     
@@ -459,20 +385,12 @@ const renderAllPages = async () => {
 
 
 // Toolbar handlers
-const selectPen = () => selectDrawingTool('pen');
-
 const selectEraser = () => {
     if (!isFileLoaded.value) return;
     const wasActive = isEraser.value;
     resetToolState();
     isEraser.value = !wasActive;
 };
-
-const selectLine = () => selectDrawingTool('line');
-
-const selectRectangle = () => selectDrawingTool('rectangle');
-
-const selectCircle = () => selectDrawingTool('circle');
 
 const selectText = () => {
     if (!isFileLoaded.value) return;
@@ -578,7 +496,7 @@ const startDrawing = (e) => {
     if (currentCanvasIndex === -1) return;
     
     const canvas = drawingCanvases.value[currentCanvasIndex];
-    const drawingContext = drawingContexts[currentCanvasIndex];
+    const drawingContext = drawingContexts.value[currentCanvasIndex];
     
     if (!canvas || !drawingContext) return;
     
@@ -605,14 +523,14 @@ const startDrawing = (e) => {
     startY = lastY;
     
     const pageIndex = currentCanvasIndex + 1;
-    if (!strokesPerPage[pageIndex]) {
-        strokesPerPage[pageIndex] = [];
+    if (!strokesPerPage.value[pageIndex]) {
+        strokesPerPage.value[pageIndex] = [];
     }
     
     if (shouldErase) {
         eraseAtPoint(lastX, lastY, currentCanvasIndex);
     } else if (drawMode.value === 'pen') {
-        currentStroke = [{
+        currentStroke.value = [{
             x: lastX,
             y: lastY,
             color: drawColor.value,
@@ -642,7 +560,7 @@ const draw = (e) => {
         
         // Draw selection rectangle
         const canvas = drawingCanvases.value[selectionStart.value.canvasIndex];
-        const ctx = drawingContexts[selectionStart.value.canvasIndex];
+        const ctx = drawingContexts.value[selectionStart.value.canvasIndex];
         if (canvas && ctx) {
             // Scale coordinates to canvas size
             const scaleX = canvas.width / rect.width;
@@ -682,7 +600,7 @@ const draw = (e) => {
     if (currentCanvasIndex === -1) return;
     
     const canvas = drawingCanvases.value[currentCanvasIndex];
-    const drawingContext = drawingContexts[currentCanvasIndex];
+    const drawingContext = drawingContexts.value[currentCanvasIndex];
     
     if (!canvas || !drawingContext) return;
     
@@ -699,7 +617,7 @@ const draw = (e) => {
     if (shouldErase) {
         eraseAtPoint(currentX, currentY, currentCanvasIndex);
     } else if (drawMode.value === 'pen') {
-        currentStroke.push({
+        currentStroke.value.push({
             x: currentX,
             y: currentY,
             color: drawColor.value,
@@ -786,12 +704,12 @@ const stopDrawing = (e) => {
             thickness: drawThickness.value
         };
         newStroke = [shape];
-        strokesPerPage[pageIndex].push(newStroke);
+        strokesPerPage.value[pageIndex].push(newStroke);
         canvasSnapshot = null;
-    } else if (isDrawing.value && currentStroke.length > 0) {
-        newStroke = [...currentStroke];
-        strokesPerPage[pageIndex].push(newStroke);
-        currentStroke = [];
+    } else if (isDrawing.value && currentStroke.value.length > 0) {
+        newStroke = [...currentStroke.value];
+        strokesPerPage.value[pageIndex].push(newStroke);
+        currentStroke.value = [];
     }
 
     if (newStroke) {
@@ -802,7 +720,7 @@ const stopDrawing = (e) => {
         });
     }
     
-    const drawingContext = drawingContexts[currentCanvasIndex];
+    const drawingContext = drawingContexts.value[currentCanvasIndex];
     if (drawingContext) {
         drawingContext.closePath();
     }
@@ -831,8 +749,8 @@ const confirmText = () => {
     }
     
     const pageIndex = textCanvasIndex.value + 1;
-    if (!strokesPerPage[pageIndex]) {
-        strokesPerPage[pageIndex] = [];
+    if (!strokesPerPage.value[pageIndex]) {
+        strokesPerPage.value[pageIndex] = [];
     }
     
     const textStroke = [{
@@ -845,7 +763,7 @@ const confirmText = () => {
         fontSize: fontSize.value
     }];
     
-    strokesPerPage[pageIndex].push(textStroke);
+    strokesPerPage.value[pageIndex].push(textStroke);
     
     addToHistory({
         type: 'add',
@@ -881,19 +799,19 @@ const handleTextboxBlur = () => {
 const clearDrawing = () => {
     addToHistory({
         type: 'clear',
-        previousState: JSON.parse(JSON.stringify(strokesPerPage))
+        previousState: JSON.parse(JSON.stringify(strokesPerPage.value))
     });
 
     // Clear all drawings on all pages
     for (let i = 0; i < drawingCanvases.value.length; i++) {
         const canvas = drawingCanvases.value[i];
-        const ctx = drawingContexts[i];
+        const ctx = drawingContexts.value[i];
         if (canvas && ctx) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
         }
     }
-    strokesPerPage = {};
-    currentStroke = [];
+    strokesPerPage.value = {};
+    currentStroke.value = [];
 };
 
 const captureSelection = () => {
@@ -947,16 +865,16 @@ const captureSelection = () => {
     savedPdfDoc = pdfDoc;
     savedPageCount = pageCount.value;
     savedPageNum = pageNum.value;
-    savedStrokesPerPage = JSON.parse(JSON.stringify(strokesPerPage));
+    savedStrokesPerPage = JSON.parse(JSON.stringify(strokesPerPage.value));
     savedWidth = zoomPercentage.value;
     
     // Switch to whiteboard mode
     showWhiteboard.value = true;
     pdfDoc = null; // Temporarily clear PDF doc
     pageCount.value = 1;
-    strokesPerPage = { 1: [] };
+    strokesPerPage.value = { 1: [] };
     renderedPages.value.clear();
-    drawingContexts = [];
+    drawingContexts.value = [];
     
     // Clear selection rectangle from original canvas
     redrawAllStrokes(canvasIndex);
@@ -978,11 +896,11 @@ const closeWhiteboard = () => {
         pageCount.value = savedPageCount;
         pageNum.value = targetPage;
         isFileLoaded.value = true;
-        strokesPerPage = JSON.parse(JSON.stringify(savedStrokesPerPage));
+        strokesPerPage.value = JSON.parse(JSON.stringify(savedStrokesPerPage));
         zoomPercentage.value = savedWidth; // Restore zoom width
         whiteboardImage.value = null;
         renderedPages.value.clear();
-        drawingContexts = [];
+        drawingContexts.value = [];
         
         // Re-render PDF pages
         nextTick(() => {
@@ -1009,9 +927,9 @@ const closeWhiteboard = () => {
         isFileLoaded.value = true;
         pageCount.value = 1;
         pageNum.value = 1;
-        strokesPerPage = { 1: [] };
+        strokesPerPage.value = { 1: [] };
         renderedPages.value.clear();
-        drawingContexts = [];
+        drawingContexts.value = [];
         
         // Re-render image page
         nextTick(() => {
@@ -1025,9 +943,9 @@ const closeWhiteboard = () => {
         isFileLoaded.value = false;
         pageCount.value = 0;
         pageNum.value = 1;
-        strokesPerPage = {};
+        strokesPerPage.value = {};
         renderedPages.value.clear();
-        drawingContexts = [];
+        drawingContexts.value = [];
     }
 };
 
@@ -1084,11 +1002,11 @@ const downloadWhiteboard = () => {
 
 const redrawAllStrokes = (pageIndex) => {
     const canvas = drawingCanvases.value[pageIndex];
-    const drawingContext = drawingContexts[pageIndex];
+    const drawingContext = drawingContexts.value[pageIndex];
     if (!canvas || !drawingContext) return;
     
     const pageNumber = pageIndex + 1;
-    const strokes = strokesPerPage[pageNumber] || [];
+    const strokes = strokesPerPage.value[pageNumber] || [];
     
     drawingContext.clearRect(0, 0, canvas.width, canvas.height);
     
@@ -1135,7 +1053,7 @@ const redrawAllStrokes = (pageIndex) => {
 const eraseAtPoint = (x, y, canvasIndex) => {
     const eraserRadius = 10;
     const pageNumber = canvasIndex + 1;
-    const strokes = strokesPerPage[pageNumber] || [];
+    const strokes = strokesPerPage.value[pageNumber] || [];
     
     const strokesToRemove = [];
     const keptStrokes = [];
@@ -1158,7 +1076,7 @@ const eraseAtPoint = (x, y, canvasIndex) => {
     });
     
     if (strokesToRemove.length > 0) {
-        strokesPerPage[pageNumber] = keptStrokes;
+        strokesPerPage.value[pageNumber] = keptStrokes;
         addToHistory({
             type: 'erase',
             page: pageNumber,
@@ -1177,7 +1095,7 @@ const loadImageFile = (file) => {
         resetForNewFile();
         
         imagePage.value = reader.result;
-        strokesPerPage = { 1: [] };
+        strokesPerPage.value = { 1: [] };
         
         emitFileLoadedEvent('image', file.path);
 
@@ -1272,7 +1190,7 @@ const processFileOpenResult = (result) => {
         resetForNewFile();
         
         imagePage.value = dataUrl;
-        strokesPerPage = { 1: [] };
+        strokesPerPage.value = { 1: [] };
         emitFileLoadedEvent('image', electronFilepath.value);
 
         nextTick(() => {
@@ -1398,7 +1316,7 @@ const handleSaveFile = async () => {
 
         // Process each page with annotations
         for (let pageNum = 1; pageNum <= pageCount.value; pageNum++) {
-            const strokes = strokesPerPage[pageNum];
+            const strokes = strokesPerPage.value[pageNum];
             if (!strokes || strokes.length === 0) continue;
 
             const page = pdfLibDoc.getPage(pageNum - 1);
@@ -1614,6 +1532,24 @@ const handleSaveFile = async () => {
     }
 };
 
+
+// History management
+const { 
+    startSession,
+    endSession,
+    history,
+    historyStep,
+    addToHistory,
+    undo,
+    redo,
+    hasUnsavedChanges,
+    resetHistory, 
+    markSaved 
+} = useHistory(strokesPerPage, redrawAllStrokes, drawingCanvases, drawingContexts);
+
+startSession(fileId);
+
+
 // Page Event Handlers
 const handleKeydown = (event) => {
     // Ctrl + Key Shortcuts
@@ -1733,7 +1669,7 @@ onUnmounted(() => {
                         </div>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="selectPen" :class="{ active: isDrawing && drawMode === 'pen', disabled: !isFileLoaded }" title="Freehand Draw">
+                        <a class="nav-link" href="#" @click.prevent="selectDrawingTool('pen')" :class="{ active: isDrawing && drawMode === 'pen', disabled: !isFileLoaded }" title="Freehand Draw">
                             <i class="bi bi-pencil-fill"></i>
                         </a>
                     </li>
@@ -1743,17 +1679,17 @@ onUnmounted(() => {
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="selectLine" :class="{ active: isDrawing && drawMode === 'line', disabled: !isFileLoaded }" title="Line">
+                        <a class="nav-link" href="#" @click.prevent="selectDrawingTool('line')" :class="{ active: isDrawing && drawMode === 'line', disabled: !isFileLoaded }" title="Line">
                             <i class="bi bi-slash-lg"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="selectRectangle" :class="{ active: isDrawing && drawMode === 'rectangle', disabled: !isFileLoaded }" title="Rectangle">
+                        <a class="nav-link" href="#" @click.prevent="selectDrawingTool('rectangle')" :class="{ active: isDrawing && drawMode === 'rectangle', disabled: !isFileLoaded }" title="Rectangle">
                             <i class="bi bi-square"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="selectCircle" :class="{ active: isDrawing && drawMode === 'circle', disabled: !isFileLoaded }" title="Circle">
+                        <a class="nav-link" href="#" @click.prevent="selectDrawingTool('circle')" :class="{ active: isDrawing && drawMode === 'circle', disabled: !isFileLoaded }" title="Circle">
                             <i class="bi bi-circle"></i>
                         </a>
                     </li>
