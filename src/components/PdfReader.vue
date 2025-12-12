@@ -12,17 +12,9 @@ import { useZoom } from "../composables/usZoom";
 
 GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.449/build/pdf.worker.min.mjs';
 
-const uuid  = () => {
-  return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
-    (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
-  );
-}
-
-
 const emit = defineEmits(['file-loaded']);
 
 // General State Variables
-const fileId = uuid();
 const fileInput = ref(null);
 const filename = ref(null);
 const isViewLocked = ref(false);
@@ -118,11 +110,13 @@ const redrawShapeCallback = (context, el) => {
 const { 
     startSession,
     endSession,
-    history,
-    historyStep,
+    uuid,
     addToHistory,
     undo,
     redo,
+    temporaryState,
+    canUndo,
+    canRedo,
     hasUnsavedChanges,
     resetHistory, 
     markSaved,
@@ -133,6 +127,7 @@ const {
     redrawAllStrokes
 } = useHistory(redrawShapeCallback);
 
+const fileId = uuid();
 startSession(fileId);
 
 // Pagination Management
@@ -202,6 +197,7 @@ const closeWhiteboardCallback = () => {
         pageCount.value = savedPageCount;
         pageNum.value = targetPage;
         isFileLoaded.value = true;
+        resetHistory(true); // Reset temporary history
         strokesPerPage.value = JSON.parse(JSON.stringify(savedStrokesPerPage));
         zoomPercentage.value = savedWidth; // Restore zoom width
         whiteboardImage.value = null;
@@ -890,6 +886,7 @@ const captureSelection = () => {
     
     // Switch to whiteboard mode
     showWhiteboard.value = true;
+    temporaryState.value = true;
     pdfDoc = null; // Temporarily clear PDF doc
     pageCount.value = 1;
     strokesPerPage.value = { 1: [] };
@@ -1479,12 +1476,12 @@ onUnmounted(() => {
 
                     <!-- Undo/Redo -->
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="undo()" :class="{ disabled: !isFileLoaded || historyStep < 0 }" title="Undo">
+                        <a class="nav-link" href="#" @click.prevent="undo()" :class="{ disabled: !isFileLoaded || !canUndo }" title="Undo">
                             <i class="bi bi-arrow-counterclockwise"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="redo()" :class="{ disabled: !isFileLoaded || historyStep >= history.length - 1 }" title="Redo">
+                        <a class="nav-link" href="#" @click.prevent="redo()" :class="{ disabled: !isFileLoaded || !canRedo }" title="Redo">
                             <i class="bi bi-arrow-clockwise"></i>
                         </a>
                     </li>

@@ -13,11 +13,16 @@ export function useHistory(redrawShapeCallback) {
     const history = ref([]);
     const historyStep = ref(-1);
     const savedHistoryStep = ref(-1);
-
     const strokesPerPage = ref({}); // Store strokes per page
     const currentStroke = ref([]); // Current stroke being drawn
     const drawingCanvases = ref([]); // Array of drawing canvas elements
     const drawingContexts = ref([]); // Array of drawing contexts
+
+    // For temporary actions like live previews
+    const temporaryState = ref(false);
+    const temporaryHistory = ref([]);
+    const temporaryHistoryStep = ref(-1);
+    const temporarySavedHistoryStep = ref(-1);
 
     const startSession = (fileId) => {
         if (!sessions.value[fileId]) {
@@ -35,32 +40,58 @@ export function useHistory(redrawShapeCallback) {
         }
     };
 
+    const uuid  = () => {
+        return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+            (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+        );
+    }
+
     const addToHistory = (action) => {
-        if (historyStep.value < history.value.length - 1) {
+        action.id = uuid();
+
+        const targetHistory = temporaryState.value ? temporaryHistory : history;
+        const targetHistoryStep = temporaryState.value ? temporaryHistoryStep : historyStep;
+        const targetSavedHistoryStep = temporaryState.value ? temporarySavedHistoryStep : savedHistoryStep;
+
+        if (targetHistoryStep.value < targetHistory.value.length - 1) {
             // If we are branching off and the saved state is in the future (or overwritten), invalidate it
-            if (savedHistoryStep.value > historyStep.value) {
-                savedHistoryStep.value = -2;
+            if (targetSavedHistoryStep.value > targetHistoryStep.value) {
+                targetSavedHistoryStep.value = -2;
             }
-            history.value = history.value.slice(0, historyStep.value + 1);
+            targetHistory.value = targetHistory.value.slice(0, targetHistoryStep.value + 1);
         }
-        history.value.push(markRaw(action));
-        historyStep.value++;
+
+        targetHistory.value.push(markRaw(action));
+        targetHistoryStep.value++;
     };
 
-    const canUndo = computed(() => historyStep.value >= 0);
-    const canRedo = computed(() => historyStep.value < history.value.length - 1);
+    const canUndo = computed(() => {
+        if (temporaryState.value) {
+            return temporaryHistoryStep.value >= 0
+        }
+
+        return historyStep.value >= 0;
+    });
+
+    const canRedo = computed(() => {
+        if (temporaryState.value) {
+            return temporaryHistoryStep.value < temporaryHistory.value.length - 1;
+        }
+
+        return historyStep.value < history.value.length - 1;
+    });
 
     const undo = () => {
         if (!canUndo.value) return;
         
-        const action = history.value[historyStep.value];
+        const action = temporaryState.value ? temporaryHistory.value[temporaryHistoryStep.value] : history.value[historyStep.value];
         
         console.log('Undo action:', action.type);
-    
+
         if (action.type === 'add') {
             const strokes = strokesPerPage.value[action.page];
             if (strokes) {
-                const index = strokes.indexOf(action.stroke);
+                const index = strokes.findIndex(s => s.id === action.stroke.id);
                 if (index > -1) {
                     strokes.splice(index, 1);
                 } else {
@@ -84,14 +115,27 @@ export function useHistory(redrawShapeCallback) {
             }
         }
         
+        if (temporaryState.value) {
+            temporaryHistoryStep.value--;
+            return;
+        }
+
         historyStep.value--;
     };
 
     const redo = () => {
         if (!canRedo.value) return;
         
-        historyStep.value++;
-        const action = history.value[historyStep.value];
+        var action;
+
+        if (temporaryState.value) {
+            temporaryHistoryStep.value++;
+            action = temporaryHistory.value[temporaryHistoryStep.value];
+        } else {
+            historyStep.value++;
+            action = history.value[historyStep.value];
+        }
+
         
         if (action.type === 'add') {
             if (!strokesPerPage.value[action.page]) strokesPerPage.value[action.page] = [];
@@ -121,6 +165,14 @@ export function useHistory(redrawShapeCallback) {
     };
 
     const resetHistory = () => {
+        if (temporaryState.value) {
+            temporaryHistory.value = [];
+            temporaryHistoryStep.value = -1;
+            temporarySavedHistoryStep.value = -1;
+            temporaryState.value = false;
+            return;
+        }
+
         history.value = [];
         historyStep.value = -1;
         savedHistoryStep.value = -1;
@@ -189,10 +241,12 @@ export function useHistory(redrawShapeCallback) {
     return {
         startSession,
         endSession,
+        uuid,
         sessions,
         history,
         historyStep,
         savedHistoryStep,
+        temporaryState,
         addToHistory,
         undo,
         redo,
