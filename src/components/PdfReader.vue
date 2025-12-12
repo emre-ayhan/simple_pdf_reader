@@ -6,6 +6,7 @@ import EmptyState from "./EmptyState.vue";
 import { Electron } from "../composables/useElectron";
 import { useHistory } from "../composables/useHistory";
 import { usePagination } from "../composables/usePagination";
+import { useDrop } from "../composables/useDrop";
 
 const uuid  = () => {
   return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
@@ -34,6 +35,13 @@ const pdfReader = ref(null);
 let intersectionObserver = null;
 let lazyLoadObserver = null;
 const renderedPages = ref(new Set());
+
+// Pagination Management
+const {
+    savePageToLocalStorage,
+    getPageFromLocalStorage,
+    scrollToPage,
+} = usePagination(isFileLoaded, pdfCanvases, pageCount, pageNum, filename);
 
 const emitFileLoadedEvent = (type, path, page_count) => {
     isFileLoaded.value = true;
@@ -407,13 +415,6 @@ const renderAllPages = async () => {
     
     // Don't render any pages here - let lazy loading handle it
 };
-
-// Pagination composable
-const {
-    savePageToLocalStorage,
-    getPageFromLocalStorage,
-    scrollToPage,
-} = usePagination(isFileLoaded, pdfCanvases, pageCount, pageNum, filename);
 
 const toggleZoomMode = () => {
     if (!isFileLoaded.value || showWhiteboard.value) return;
@@ -1185,35 +1186,6 @@ const loadImageFile = (file) => {
     reader.readAsDataURL(file);
 };
 
-const onDragEnter = (e) => {
-    dragCounter.value++;
-    isDragging.value = true;
-};
-
-const onDragLeave = (e) => {
-    dragCounter.value--;
-    if (dragCounter.value <= 0) {
-        isDragging.value = false;
-        dragCounter.value = 0;
-    }
-};
-
-const onDrop = (e) => {
-    isDragging.value = false;
-    dragCounter.value = 0;
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-        const file = files[0];
-        if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-            loadPdfFile(file);
-        } else if (file.type.startsWith('image/') || file.name.toLowerCase().match(/\.(png|jpe?g|gif|webp|bmp|svg)$/)) {
-            loadImageFile(file);
-        } else {
-            alert('Please drop a PDF or image file.');
-        }
-    }
-};
-
 const loadPdfFile = (file) => {
     if (file) {
         filename.value = file.name;
@@ -1238,18 +1210,12 @@ const loadPdfFile = (file) => {
     }
 };
 
-const loadPdfDocument = () => {
-    const file = fileInput.value.files[0];
-
-    if (!file) return;
-    if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-        loadPdfFile(file);
-    } else if (file.type.startsWith('image/') || file.name.toLowerCase().match(/\.(png|jpe?g|gif|webp|bmp|svg)$/)) {
-        loadImageFile(file);
-    } else {
-        alert('Unsupported file type. Please select a PDF or image.');
-    }
-};
+const {
+    onDrop,
+    onDragEnter,
+    onDragLeave,
+    loadFile
+} = useDrop(dragCounter, isDragging, loadPdfFile, loadImageFile);
 
 const electronFilepath = ref(null);
 const originalPdfData = ref(null);
@@ -1923,7 +1889,7 @@ onUnmounted(() => {
                 </div>
             </div>
         </div>
-        <input ref="fileInput" type="file"  accept="application/pdf,image/*" class="d-none" @change="loadPdfDocument" />
+        <input ref="fileInput" type="file"  accept="application/pdf,image/*" class="d-none" @change="loadFile" />
 
         <div v-if="isTextMode && textboxPosition" 
              class="text-input-box" 
