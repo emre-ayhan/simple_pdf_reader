@@ -1515,7 +1515,7 @@ onUnmounted(() => {
 
                     <!-- Zoom -->
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="zoom('out')" :class="{ disabled: !isFileLoaded || isViewLocked }">
+                        <a href="#" class="nav-link" @click.prevent="zoom('out')" :class="{ disabled: !isFileLoaded || isViewLocked || zoomPercentage <= 25 }">
                             <i class="bi bi-zoom-out"></i>
                         </a>
                     </li>
@@ -1523,7 +1523,7 @@ onUnmounted(() => {
                         <input type="text" class="form-control-plaintext" :value="showWhiteboard ? Math.round(whiteboardScale * 100) : zoomPercentage" :disabled="!isFileLoaded || isViewLocked || showWhiteboard">
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="zoom('in')" :class="{ disabled: !isFileLoaded || isViewLocked }">
+                        <a href="#" class="nav-link" @click.prevent="zoom('in')" :class="{ disabled: !isFileLoaded || isViewLocked || zoomPercentage >= 100 }">
                             <i class="bi bi-zoom-in"></i>
                         </a>
                     </li>
