@@ -1,8 +1,8 @@
 <script setup>
+import EmptyState from "./EmptyState.vue";
 import { ref, computed, nextTick, onMounted, onUnmounted } from "vue";
 import { GlobalWorkerOptions, getDocument } from "pdfjs-dist";
 import { PDFDocument, rgb } from "pdf-lib";
-import EmptyState from "./EmptyState.vue";
 import { Electron } from "../composables/useElectron";
 import { useHistory } from "../composables/useHistory";
 import { usePagination } from "../composables/usePagination";
