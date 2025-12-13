@@ -482,24 +482,24 @@ export function useDraw(strokeChangeCallback, captureSelectionCallback) {
     };
 
     const clearDrawing = () => {
-            strokeChangeCallback({
-                type: 'clear',
-                previousState: JSON.parse(JSON.stringify(strokesPerPage.value))
-            });
+        strokeChangeCallback({
+            type: 'clear',
+            previousState: JSON.parse(JSON.stringify(strokesPerPage.value))
+        });
 
-            // Clear all drawings on all pages
-            for (let i = 0; i < drawingCanvases.value.length; i++) {
-                const canvas = drawingCanvases.value[i];
-                const ctx = drawingContexts.value[i];
-                if (canvas && ctx) {
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
-                }
+        // Clear all drawings on all pages
+        for (let i = 0; i < drawingCanvases.value.length; i++) {
+            const canvas = drawingCanvases.value[i];
+            const ctx = drawingContexts.value[i];
+            if (canvas && ctx) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
             }
-            strokesPerPage.value = {};
-            currentStroke.value = [];
-        };
+        }
+        strokesPerPage.value = {};
+        currentStroke.value = [];
+    };
 
-        const eraseAtPoint = (x, y, canvasIndex) => {
+    const eraseAtPoint = (x, y, canvasIndex) => {
         const eraserRadius = 10;
         const pageNumber = canvasIndex + 1;
         const strokes = strokesPerPage.value[pageNumber] || [];
@@ -507,7 +507,7 @@ export function useDraw(strokeChangeCallback, captureSelectionCallback) {
         const strokesToRemove = [];
         const keptStrokes = [];
         let strokeId = null;
- 
+
         strokes.forEach((stroke, index) => {
             strokeId = null;
             let shouldRemove = false;
