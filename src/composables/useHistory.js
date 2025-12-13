@@ -57,7 +57,7 @@ export function useHistory(strokesPerPage, drawingCanvases, drawingContexts, red
     };
 
     const addToHistory = (action) => {
-        action.id = uuid();
+        action.stroke.id = uuid();
 
         if (temporaryState.value) {
             addToTemporaryHistory(action);
