@@ -1,10 +1,8 @@
 import { ref } from "vue";
 
-export function usePagination(pdfCanvases, pdfReader, isFileLoaded, filename, scrollToPageCanvaCallback) {
-    const pagesContainer = ref(null);
+export function usePagination(pagesContainer, pdfCanvases, pdfReader, isFileLoaded, filename, scrollToPageCanvasCallback) {
     const pageCount = ref(0);
     const pageNum = ref(1);
-    const renderedPages = ref(new Set());
     const intersectionObserver = ref(null);
     const lazyLoadObserver = ref(null);
     
@@ -47,8 +45,8 @@ export function usePagination(pdfCanvases, pdfReader, isFileLoaded, filename, sc
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
                     const pageNumber = parseInt(entry.target.getAttribute('data-page'));
-                    if (pageNumber && typeof scrollToPageCanvaCallback === 'function') {
-                        scrollToPageCanvaCallback(pageNumber);
+                    if (pageNumber && typeof scrollToPageCanvasCallback === 'function') {
+                        scrollToPageCanvasCallback(pageNumber);
                     }
                 }
             });
@@ -106,8 +104,6 @@ export function usePagination(pdfCanvases, pdfReader, isFileLoaded, filename, sc
     };
 
     return {
-        pagesContainer,
-        renderedPages,
         pageNum,
         pageCount,
         scrollToPage,

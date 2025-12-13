@@ -3,6 +3,8 @@ import { ref, nextTick } from 'vue';
 export function useDraw(handleStrokeChange, captureSelectionCallback) {
     // Drawing variables
     const pdfCanvases = ref([]); // Reference to PDF canvases for selection capture
+    const pagesContainer = ref(null);
+    const renderedPages = ref(new Set());
     const isDrawing = ref(false);
     const isEraser = ref(false);
     const drawMode = ref('pen'); // 'pen', 'line', 'rectangle', 'circle', 'text'
@@ -13,6 +15,7 @@ export function useDraw(handleStrokeChange, captureSelectionCallback) {
     const currentStroke = ref([]); // Current stroke being drawn
     const drawingCanvases = ref([]); // Array of drawing canvas elements
     const drawingContexts = ref([]); // Array of drawing contexts
+
 
     const colors = [
         ['black', 'dimgray', 'gray', 'darkgray', 'silver', 'white'],
@@ -611,8 +614,46 @@ export function useDraw(handleStrokeChange, captureSelectionCallback) {
         captureSelectionCallback(canvasIndex, selectedCanvas);
     };
 
+    const drawImageCanvas = async (src) => {
+        strokesPerPage.value = { 1: strokesPerPage.value[1] || [] };
+        await nextTick();
+        const canvas = pdfCanvases.value[0];
+        const drawCanvas = drawingCanvases.value[0];
+        if (canvas && drawCanvas) {
+            const img = new Image();
+            img.onload = () => {
+                // Fit image to current width setting
+                const targetWidth = (pagesContainer.value?.clientWidth || canvas.parentElement?.clientWidth || img.width);
+                const scale = targetWidth / img.width;
+                const canvasWidth = img.width * scale;
+                const canvasHeight = img.height * scale;
+
+                canvas.width = canvasWidth;
+                canvas.height = canvasHeight;
+                canvas.style.width = '100%';
+                canvas.style.height = 'auto';
+
+                drawCanvas.width = canvasWidth;
+                drawCanvas.height = canvasHeight;
+                drawCanvas.style.width = '100%';
+                drawCanvas.style.height = '100%';
+
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
+
+                drawingContexts.value[0] = drawCanvas.getContext('2d');
+                redrawAllStrokes(0);
+                renderedPages.value.add(1);
+            };
+            img.src = src;
+        }
+    }
+
     return {
+        pagesContainer,
         pdfCanvases,
+        renderedPages,
         strokesPerPage,
         currentStroke,
         drawingCanvases,
@@ -643,6 +684,7 @@ export function useDraw(handleStrokeChange, captureSelectionCallback) {
         resetToolState,
         handleTextboxBlur,
         clearDrawing,
-        redrawAllStrokes
+        redrawAllStrokes,
+        drawImageCanvas
     }
 }

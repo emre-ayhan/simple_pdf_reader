@@ -9,6 +9,12 @@ const fileHasUnsavedChanges = (fileId) => {
     return session.historyStep !== session.savedHistoryStep;
 }
 
+const uuid  = () => {
+    return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+        (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+    );
+}
+
 export function useHistory(strokesPerPage, drawingCanvases, drawingContexts, redrawAllStrokes) {
     const history = ref([]);
     const historyStep = ref(-1);
@@ -20,7 +26,9 @@ export function useHistory(strokesPerPage, drawingCanvases, drawingContexts, red
     const temporaryHistoryStep = ref(-1);
     const temporarySavedHistoryStep = ref(-1);
 
-    const startSession = (fileId) => {
+    const fileId = uuid();
+
+    const startSession = () => {
         if (!sessions.value[fileId]) {
             sessions.value[fileId] = {
                 history,
@@ -35,12 +43,6 @@ export function useHistory(strokesPerPage, drawingCanvases, drawingContexts, red
             delete sessions.value[fileId];
         }
     };
-
-    const uuid  = () => {
-        return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
-            (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
-        );
-    }
 
     const addToTemporaryHistory = (action) => {
         if (temporaryHistoryStep.value < temporaryHistory.value.length - 1) {
@@ -57,6 +59,8 @@ export function useHistory(strokesPerPage, drawingCanvases, drawingContexts, red
     };
 
     const addToHistory = (action) => {
+        console.log(action.stroke);
+        
         action.stroke.id = uuid();
 
         if (temporaryState.value) {
@@ -101,8 +105,11 @@ export function useHistory(strokesPerPage, drawingCanvases, drawingContexts, red
 
         if (action.type === 'add') {
             const strokes = strokesPerPage.value[action.page];
+            console.log(strokes);
+            
             if (strokes) {
                 const index = strokes.findIndex(s => s.id === action.stroke.id);
+                console.log('Undo add action at index:', index);
                 if (index > -1) {
                     strokes.splice(index, 1);
                 } else {
@@ -200,7 +207,7 @@ export function useHistory(strokesPerPage, drawingCanvases, drawingContexts, red
     return {
         startSession,
         endSession,
-        uuid,
+        fileId,
         sessions,
         history,
         historyStep,

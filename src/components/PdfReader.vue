@@ -11,9 +11,10 @@ import { useWhiteBoard } from "../composables/useWhiteBoard";
 import { useZoom } from "../composables/usZoom";
 import { useDraw } from "../composables/useDraw";
 
-GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.449/build/pdf.worker.min.mjs';
-
 const emit = defineEmits(['file-loaded']);
+
+GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.449/build/pdf.worker.min.mjs';
+var pdfDoc = null;
 
 // General State Variables
 const fileInput = ref(null);
@@ -24,6 +25,15 @@ const isFileLoaded = ref(false);
 const pdfReader = ref(null);
 const imagePage = ref(null); // when opening images as a single page
 
+// Cursor Style
+const cursorStyle = computed(() => {
+    if (isSelectionMode.value) return 'crosshair';
+    if (isTextMode.value) return 'text';
+    if (!isEraser.value && drawMode.value != 'pen') return 'crosshair';
+    if (isDrawing.value && drawMode.value == 'pen') return 'pen';
+    return isEraser.value ? 'eraser' : 'default';
+});
+
 // Saved State Variables
 let savedPdfDoc = null;
 let savedPageCount = 0;
@@ -31,31 +41,40 @@ let savedPageNum = 1;
 let savedStrokesPerPage = {};
 let savedWidth = 100; // Save page width before entering whiteboard
 
-// Custom cursor
-const cursorStyle = computed(() => {
-    if (isSelectionMode.value) {
-        return 'crosshair';
-    }
-    
-    if (isTextMode.value) {
-        return 'text';
+const clearSavedState = () => {
+    savedPdfDoc = null;
+    savedPageCount = 0;
+    savedPageNum = 1;
+    savedStrokesPerPage = {};
+    savedWidth = 100;
+};
+
+const updateSavedState = () => {
+    savedPdfDoc = pdfDoc;
+    savedPageCount = pageCount.value;
+    savedPageNum = pageNum.value;
+    savedStrokesPerPage = JSON.parse(JSON.stringify(strokesPerPage.value));
+    savedWidth = zoomPercentage.value;
+};
+
+const restoreSavedState = () => {
+    if (savedPdfDoc) {
+        pdfDoc = savedPdfDoc;
+        pageCount.value = savedPageCount;
+        pageNum.value = savedPageNum;
+    } else if (imagePage.value) {
+        pdfDoc = null;
+        pageCount.value = 1;
+        pageNum.value = 1;
     }
 
-    if (!isEraser.value && drawMode.value != 'pen') {
-        return 'crosshair';
-    }
+    strokesPerPage.value = JSON.parse(JSON.stringify(savedStrokesPerPage));
+    zoomPercentage.value = savedWidth; // Restore zoom width
+};
 
-    if (isDrawing.value && drawMode.value == 'pen') {
-        return 'pen';
-    }
-    
-    return isEraser.value ? 'eraser' : 'default';
-});
-
-var pdfDoc = null;
 
 // Drawing Management
-const handleStrokeChange = (action) => {
+const strokeChangeCallback = (action) => {
     addToHistory(action);
 };
 
@@ -65,11 +84,7 @@ const captureSelectionCallback = (canvasIndex, selectedCanvas) => {
     whiteboardScale.value = 1;
 
     // Save current PDF state and zoom settings
-    savedPdfDoc = pdfDoc;
-    savedPageCount = pageCount.value;
-    savedPageNum = pageNum.value;
-    savedStrokesPerPage = JSON.parse(JSON.stringify(strokesPerPage.value));
-    savedWidth = zoomPercentage.value;
+    updateSavedState();
 
     // Switch to whiteboard mode
     showWhiteboard.value = true;
@@ -90,7 +105,9 @@ const captureSelectionCallback = (canvasIndex, selectedCanvas) => {
 }
 
 const {
+    pagesContainer,
     pdfCanvases,
+    renderedPages,
     strokesPerPage,
     drawingCanvases,
     drawingContexts,
@@ -115,15 +132,16 @@ const {
     resetToolState,
     handleTextboxBlur,
     clearDrawing,
-    redrawAllStrokes
-} = useDraw(handleStrokeChange, captureSelectionCallback);
+    redrawAllStrokes,
+    drawImageCanvas
+} = useDraw(strokeChangeCallback, captureSelectionCallback);
 
 
 // History management
 const { 
     startSession,
     endSession,
-    uuid,
+    fileId,
     addToHistory,
     undo,
     redo,
@@ -135,8 +153,8 @@ const {
     markSaved,
 } = useHistory(strokesPerPage, drawingCanvases, drawingContexts, redrawAllStrokes);
 
-const fileId = uuid();
-startSession(fileId);
+startSession();
+
 
 // Pagination Management
 const scrollToPageCanvas = async (pageNumber) => {
@@ -178,8 +196,6 @@ const scrollToPageCanvas = async (pageNumber) => {
 };
 
 const {
-    pagesContainer,
-    renderedPages,
     pageCount,
     pageNum,
     getPageFromLocalStorage,
@@ -188,7 +204,7 @@ const {
     setupLazyLoadObserver,
     intersectionObserver,
     lazyLoadObserver
-} = usePagination(pdfCanvases, pdfReader, isFileLoaded, filename, scrollToPageCanvas);
+} = usePagination(pagesContainer, pdfCanvases, pdfReader, isFileLoaded, filename, scrollToPageCanvas);
 
 
 // Whiteboard Management
@@ -197,56 +213,26 @@ const whiteboardRenderCallback = () => {
 };
 
 const closeWhiteboardCallback = () => {
-    // Restore PDF state
-    if (savedPdfDoc) {
-        const targetPage = savedPageNum;
-        pdfDoc = savedPdfDoc;
-        pageCount.value = savedPageCount;
-        pageNum.value = targetPage;
-        isFileLoaded.value = true;
-        resetHistory(true); // Reset temporary history
-        strokesPerPage.value = JSON.parse(JSON.stringify(savedStrokesPerPage));
-        zoomPercentage.value = savedWidth; // Restore zoom width
-        whiteboardImage.value = null;
-        renderedPages.value.clear();
-        drawingContexts.value = [];
-        
-        // Re-render PDF pages
-        renderAllPagesAndSetupObservers();
-        
-        // Clear saved state
-        savedPdfDoc = null;
-        savedPageCount = 0;
-        savedPageNum = 1;
-        savedStrokesPerPage = {};
-        savedWidth = 100;
-    } else if (imagePage.value) {
-        // Restore image page (preserves imagePage)
-        whiteboardImage.value = null;
-        pdfDoc = null;
-        isFileLoaded.value = true;
-        pageCount.value = 1;
-        pageNum.value = 1;
-        strokesPerPage.value = { 1: [] };
-        renderedPages.value.clear();
-        drawingContexts.value = [];
-        
-        // Re-render image page
-        nextTick(() => {
-            renderAllPages();
-        });
-    } else {
+    whiteboardImage.value = null;
+    renderedPages.value.clear();
+    drawingContexts.value = [];
+
+    if (!savedPdfDoc && !imagePage.value) {
         // No PDF or image to return to
         pdfDoc = null;
         imagePage.value = null;
-        whiteboardImage.value = null;
         isFileLoaded.value = false;
         pageCount.value = 0;
         pageNum.value = 1;
         strokesPerPage.value = {};
-        renderedPages.value.clear();
-        drawingContexts.value = [];
+        return;
     }
+
+    isFileLoaded.value = true;
+    restoreSavedState();
+    resetHistory(true); // Reset temporary history
+    renderAllPagesAndSetupObservers();
+    clearSavedState();
 };
 
 const {
@@ -294,40 +280,7 @@ const renderAllPages = async () => {
 
     if (imagePage.value) {
         pageCount.value = 1;
-        strokesPerPage.value = { 1: strokesPerPage.value[1] || [] };
-        await nextTick();
-
-        const canvas = pdfCanvases.value[0];
-        const drawCanvas = drawingCanvases.value[0];
-        if (canvas && drawCanvas) {
-            const img = new Image();
-            img.onload = () => {
-                // Fit image to current width setting
-                const targetWidth = (pagesContainer.value?.clientWidth || canvas.parentElement?.clientWidth || img.width);
-                const scale = targetWidth / img.width;
-                const canvasWidth = img.width * scale;
-                const canvasHeight = img.height * scale;
-
-                canvas.width = canvasWidth;
-                canvas.height = canvasHeight;
-                canvas.style.width = '100%';
-                canvas.style.height = 'auto';
-
-                drawCanvas.width = canvasWidth;
-                drawCanvas.height = canvasHeight;
-                drawCanvas.style.width = '100%';
-                drawCanvas.style.height = '100%';
-
-                const ctx = canvas.getContext('2d');
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
-
-                drawingContexts.value[0] = drawCanvas.getContext('2d');
-                redrawAllStrokes(0);
-                renderedPages.value.add(1);
-            };
-            img.src = imagePage.value;
-        }
+        await drawImageCanvas(imagePage.value);
         return;
     }
     
@@ -356,10 +309,7 @@ const resetForNewFile = () => {
     showWhiteboard.value = false;
     whiteboardImage.value = null;
     whiteboardScale.value = 1;
-    savedPdfDoc = null;
-    savedPageCount = 0;
-    savedPageNum = 1;
-    savedStrokesPerPage = {};
+    clearSavedState();
 };
 
 const lockView = () => {
@@ -426,6 +376,7 @@ const renderAllPagesAndSetupObservers = () => {
     nextTick(() => {
         renderAllPages().then(() => {
             // Setup observers after pages structure is ready
+            if (imagePage.value) return;
             setupIntersectionObserver();
             setupLazyLoadObserver();
             scrollToPage(pageNum.value);
@@ -435,7 +386,6 @@ const renderAllPagesAndSetupObservers = () => {
 
 const getDocumentCallback = (pdfDoc_) => {
     resetForNewFile();
-    
     pdfDoc = pdfDoc_;
     imagePage.value = null;
     emitFileLoadedEvent('pdf', pdfDoc.numPages);
