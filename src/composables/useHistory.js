@@ -1,4 +1,5 @@
 import { ref, markRaw, computed } from 'vue';
+import { uuid } from './useUuid.js';
 
 const sessions = ref({});
 
@@ -7,12 +8,6 @@ const fileHasUnsavedChanges = (fileId) => {
     
     if (!session) return false;
     return session.historyStep !== session.savedHistoryStep;
-}
-
-const uuid  = () => {
-    return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
-        (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
-    );
 }
 
 export function useHistory(strokesPerPage, drawingCanvases, drawingContexts, redrawAllStrokes) {
@@ -59,10 +54,6 @@ export function useHistory(strokesPerPage, drawingCanvases, drawingContexts, red
     };
 
     const addToHistory = (action) => {
-        console.log(action.stroke);
-        
-        action.stroke.id = uuid();
-
         if (temporaryState.value) {
             addToTemporaryHistory(action);
             return;
@@ -98,18 +89,16 @@ export function useHistory(strokesPerPage, drawingCanvases, drawingContexts, red
 
     const undo = () => {
         if (!canUndo.value) return;
-        
+
         const action = temporaryState.value ? temporaryHistory.value[temporaryHistoryStep.value] : history.value[historyStep.value];
-        
+
         console.log('Undo action:', action.type);
 
         if (action.type === 'add') {
             const strokes = strokesPerPage.value[action.page];
-            console.log(strokes);
-            
+
             if (strokes) {
-                const index = strokes.findIndex(s => s.id === action.stroke.id);
-                console.log('Undo add action at index:', index);
+                const index = strokes.findIndex(stroke => stroke[0].id === action.id);
                 if (index > -1) {
                     strokes.splice(index, 1);
                 } else {

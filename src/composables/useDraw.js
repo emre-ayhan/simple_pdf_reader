@@ -1,6 +1,7 @@
 import { ref, nextTick } from 'vue';
+import { uuid } from './useUuid.js';
 
-export function useDraw(handleStrokeChange, captureSelectionCallback) {
+export function useDraw(strokeChangeCallback, captureSelectionCallback) {
     // Drawing variables
     const pdfCanvases = ref([]); // Reference to PDF canvases for selection capture
     const pagesContainer = ref(null);
@@ -12,6 +13,7 @@ export function useDraw(handleStrokeChange, captureSelectionCallback) {
     const drawThickness = ref(2);
 
     const strokesPerPage = ref({}); // Store strokes per page
+    const currentStrokeId = ref(null);
     const currentStroke = ref([]); // Current stroke being drawn
     const drawingCanvases = ref([]); // Array of drawing canvas elements
     const drawingContexts = ref([]); // Array of drawing contexts
@@ -78,6 +80,8 @@ export function useDraw(handleStrokeChange, captureSelectionCallback) {
         }
     };
 
+
+
     const startDrawing = (e) => {
         if (!isDrawing.value && !isEraser.value && !isSelectionMode.value && !isTextMode.value) return;
         
@@ -89,6 +93,9 @@ export function useDraw(handleStrokeChange, captureSelectionCallback) {
 
         // Only allow pen/stylus and mouse input, not touch
         if (e.pointerType === 'touch') return;
+
+        // Generate a new stroke ID
+        currentStrokeId.value = uuid();
         
         // Handle text mode
         if (isTextMode.value) {
@@ -191,6 +198,7 @@ export function useDraw(handleStrokeChange, captureSelectionCallback) {
             eraseAtPoint(lastX, lastY, currentCanvasIndex);
         } else if (drawMode.value === 'pen') {
             currentStroke.value = [{
+                id: currentStrokeId.value,
                 x: lastX,
                 y: lastY,
                 color: drawColor.value,
@@ -278,6 +286,7 @@ export function useDraw(handleStrokeChange, captureSelectionCallback) {
             eraseAtPoint(currentX, currentY, currentCanvasIndex);
         } else if (drawMode.value === 'pen') {
             currentStroke.value.push({
+                id: currentStrokeId.value,
                 x: currentX,
                 y: currentY,
                 color: drawColor.value,
@@ -355,6 +364,7 @@ export function useDraw(handleStrokeChange, captureSelectionCallback) {
         if (isDrawing.value && drawMode.value !== 'pen' && canvasSnapshot) {
             // Save shape as a stroke
             const shape = {
+                id: currentStrokeId.value,
                 type: drawMode.value,
                 startX,
                 startY,
@@ -373,11 +383,14 @@ export function useDraw(handleStrokeChange, captureSelectionCallback) {
         }
 
         if (newStroke) {
-            handleStrokeChange({
+            strokeChangeCallback({
+                id: currentStrokeId.value,
                 type: 'add',
                 page: pageIndex,
                 stroke: newStroke
             });
+
+            currentStrokeId.value = null;
         }
         
         const drawingContext = drawingContexts.value[currentCanvasIndex];
@@ -412,8 +425,11 @@ export function useDraw(handleStrokeChange, captureSelectionCallback) {
         if (!strokesPerPage.value[pageIndex]) {
             strokesPerPage.value[pageIndex] = [];
         }
+
+        const id = uuid();
         
         const textStroke = [{
+            id,
             x: textPosition.value.x,
             y: textPosition.value.y - 4,
             color: drawColor.value,
@@ -425,7 +441,8 @@ export function useDraw(handleStrokeChange, captureSelectionCallback) {
         
         strokesPerPage.value[pageIndex].push(textStroke);
         
-        handleStrokeChange({
+        strokeChangeCallback({
+            id,
             type: 'add',
             page: pageIndex,
             stroke: textStroke
@@ -465,7 +482,7 @@ export function useDraw(handleStrokeChange, captureSelectionCallback) {
     };
 
     const clearDrawing = () => {
-            handleStrokeChange({
+            strokeChangeCallback({
                 type: 'clear',
                 previousState: JSON.parse(JSON.stringify(strokesPerPage.value))
             });
@@ -489,12 +506,15 @@ export function useDraw(handleStrokeChange, captureSelectionCallback) {
         
         const strokesToRemove = [];
         const keptStrokes = [];
-        
+        let strokeId = null;
+ 
         strokes.forEach((stroke, index) => {
+            strokeId = null;
             let shouldRemove = false;
             for (let point of stroke) {
                 const distance = Math.sqrt(Math.pow(point.x - x, 2) + Math.pow(point.y - y, 2));
                 if (distance < eraserRadius) {
+                    strokeId = stroke.id;
                     shouldRemove = true;
                     break;
                 }
@@ -509,7 +529,8 @@ export function useDraw(handleStrokeChange, captureSelectionCallback) {
         
         if (strokesToRemove.length > 0) {
             strokesPerPage.value[pageNumber] = keptStrokes;
-            handleStrokeChange({
+            strokeChangeCallback({
+                id: strokeId,
                 type: 'erase',
                 page: pageNumber,
                 strokes: strokesToRemove
