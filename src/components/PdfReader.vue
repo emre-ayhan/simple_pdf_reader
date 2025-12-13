@@ -192,8 +192,7 @@ const {
 
 
 // Whiteboard Management
-const whiteboardRenderCallback = async () => {
-    // After whiteboard canvas is rendered, redraw strokes
+const whiteboardRenderCallback = () => {
     redrawAllStrokes(0);
 };
 
@@ -213,16 +212,7 @@ const closeWhiteboardCallback = () => {
         drawingContexts.value = [];
         
         // Re-render PDF pages
-        nextTick(() => {
-            renderAllPages().then(() => {
-                setupIntersectionObserver();
-                setupLazyLoadObserver();
-                // Scroll to saved page
-                nextTick(() => {
-                    scrollToPage(targetPage);
-                });
-            });
-        });
+        renderAllPagesAndSetupObservers();
         
         // Clear saved state
         savedPdfDoc = null;
@@ -431,13 +421,7 @@ const loadImageFile = (file) => {
     reader.readAsDataURL(file);
 };
 
-const getDocumentCallback = (pdfDoc_) => {
-    resetForNewFile();
-    
-    pdfDoc = pdfDoc_;
-    imagePage.value = null;
-    emitFileLoadedEvent('pdf', pdfDoc.numPages);
-    
+const renderAllPagesAndSetupObservers = () => {
     // Wait for next tick to ensure refs are populated
     nextTick(() => {
         renderAllPages().then(() => {
@@ -447,6 +431,15 @@ const getDocumentCallback = (pdfDoc_) => {
             scrollToPage(pageNum.value);
         });
     });
+};
+
+const getDocumentCallback = (pdfDoc_) => {
+    resetForNewFile();
+    
+    pdfDoc = pdfDoc_;
+    imagePage.value = null;
+    emitFileLoadedEvent('pdf', pdfDoc.numPages);
+    renderAllPagesAndSetupObservers();
 }
 
 const loadPdfFile = (file) => {
