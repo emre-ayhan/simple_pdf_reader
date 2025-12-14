@@ -4,7 +4,7 @@
   "description": "A simple PDF reader built with Vue 3",
   "type": "module",
   "main": "main.js",
-  "author": "Emre Ayhan",
+  "author": "Emre Ayhan <contact.me@emreayhan.com> (https://emreayhan.com)",
   "homepage": "https://github.com/emre-ayhan/simple_pdf_reader",
   "scripts": {
     "dev": "vite",
