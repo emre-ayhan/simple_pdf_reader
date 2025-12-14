@@ -1,22 +1,15 @@
 import { ref, nextTick } from 'vue';
 import { uuid } from './useUuid.js';
 
-export function useDraw(strokeChangeCallback, captureSelectionCallback) {
+export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPage, drawingCanvases, drawingContexts, strokeChangeCallback, captureSelectionCallback) {
     // Drawing variables
-    const pdfCanvases = ref([]); // Reference to PDF canvases for selection capture
-    const pagesContainer = ref(null);
-    const renderedPages = ref(new Set());
     const isDrawing = ref(false);
     const isEraser = ref(false);
     const drawMode = ref('pen'); // 'pen', 'line', 'rectangle', 'circle', 'text'
     const drawColor = ref('blue');
     const drawThickness = ref(2);
-
-    const strokesPerPage = ref({}); // Store strokes per page
     const currentStrokeId = ref(null);
     const currentStroke = ref([]); // Current stroke being drawn
-    const drawingCanvases = ref([]); // Array of drawing canvas elements
-    const drawingContexts = ref([]); // Array of drawing contexts
 
 
     const colors = [
@@ -30,6 +23,7 @@ export function useDraw(strokeChangeCallback, captureSelectionCallback) {
     // Text mode variables
     const isTextMode = ref(false);
     const textInput = ref('');
+    const textInputField = ref(null);
     const textPosition = ref(null);
     const textCanvasIndex = ref(-1);
     const fontSize = ref(16);
@@ -126,10 +120,9 @@ export function useDraw(strokeChangeCallback, captureSelectionCallback) {
             
             // Focus will be handled by the template's text input
             nextTick(() => {
-                const textInputEl = document.getElementById('textInputField');
-                if (textInputEl) {
-                    textInputEl.focus();
-                    textInputEl.select();
+                if (textInputField.value) {
+                    textInputField.value.focus();
+                    textInputField.value.select();
                 }
             });
             return;
@@ -672,9 +665,7 @@ export function useDraw(strokeChangeCallback, captureSelectionCallback) {
     }
 
     return {
-        pagesContainer,
         pdfCanvases,
-        renderedPages,
         strokesPerPage,
         currentStroke,
         drawingCanvases,
@@ -687,6 +678,7 @@ export function useDraw(strokeChangeCallback, captureSelectionCallback) {
         colors,
         isTextMode,
         textInput,
+        textInputField,
         textPosition,
         textCanvasIndex,
         fontSize,

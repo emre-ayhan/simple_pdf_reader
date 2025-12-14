@@ -1,16 +1,8 @@
 import { ref, markRaw, computed } from 'vue';
-import { uuid } from './useUuid.js';
 
 const sessions = ref({});
 
-const fileHasUnsavedChanges = (fileId) => {
-    const session = sessions.value[fileId];
-    
-    if (!session) return false;
-    return session.historyStep !== session.savedHistoryStep;
-}
-
-export function useHistory(strokesPerPage, drawingCanvases, drawingContexts, redrawAllStrokes) {
+export function useHistory(fileId, strokesPerPage, drawingCanvases, drawingContexts, redrawAllStrokes) {
     const history = ref([]);
     const historyStep = ref(-1);
     const savedHistoryStep = ref(-1);
@@ -20,9 +12,6 @@ export function useHistory(strokesPerPage, drawingCanvases, drawingContexts, red
     const temporaryHistory = ref([]);
     const temporaryHistoryStep = ref(-1);
     const temporarySavedHistoryStep = ref(-1);
-
-    const fileId = uuid();
-
     const startSession = () => {
         if (!sessions.value[fileId]) {
             sessions.value[fileId] = {
@@ -185,7 +174,7 @@ export function useHistory(strokesPerPage, drawingCanvases, drawingContexts, red
         savedHistoryStep.value = -1;
     };
 
-    const markSaved = () => {
+    const saveCurrentHistoryStep = () => {
         savedHistoryStep.value = historyStep.value;
     };
 
@@ -209,7 +198,6 @@ export function useHistory(strokesPerPage, drawingCanvases, drawingContexts, red
         canRedo,
         hasUnsavedChanges,
         resetHistory,
-        markSaved,
-        fileHasUnsavedChanges,
+        saveCurrentHistoryStep,
     };
 }

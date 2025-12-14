@@ -3,7 +3,14 @@ import { ref, computed } from 'vue';
 import { Electron } from '../composables/useElectron';
 import { useHistory } from '../composables/useHistory';
 
-const { fileHasUnsavedChanges } = useHistory();
+const { sessions } = useHistory();
+
+const fileHasUnsavedChanges = (fileId) => {
+    const session = sessions.value[fileId];
+
+    if (!session) return false;
+    return session.historyStep !== session.savedHistoryStep;
+}
 
 const electronButtons = [
     { action: 'fullscreen', icon: 'bi-arrows-fullscreen', title: 'Fullscreen' },

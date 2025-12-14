@@ -1,8 +1,7 @@
 import { ref } from 'vue';
 
-export function useWhiteBoard(drawingCanvases, drawingContexts, pdfCanvases, pdfReader, renderedPages, renderCallback, closeCallback) {
+export function useWhiteBoard(showWhiteboard, drawingCanvases, drawingContexts, pdfCanvases, pdfReader, renderedPages, renderCallback, closeCallback) {
 
-    const showWhiteboard = ref(false);
     const whiteboardScale = ref(1);
     const whiteboardImage = ref(null);
 
@@ -117,7 +116,6 @@ export function useWhiteBoard(drawingCanvases, drawingContexts, pdfCanvases, pdf
 
 
     return {
-        showWhiteboard,
         whiteboardScale,
         whiteboardImage,
         renderedPages,
