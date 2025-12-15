@@ -1,8 +1,6 @@
 import { onMounted, onUnmounted } from "vue";
 
 export function useKeydownEvents(options = {}) {
-    const keys = Object.keys(options);
-
     const handleKeydown = (event) => {
         const settings = options[event.key];
         
