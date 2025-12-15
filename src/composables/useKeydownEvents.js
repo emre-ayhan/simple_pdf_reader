@@ -3,14 +3,14 @@ import { onMounted, onUnmounted } from "vue";
 export function useKeydownEvents(options = {}) {
     const handleKeydown = (event) => {
         const settings = options[event.key];
-        
+
         if (!settings) return;
 
-        const ctrlRequired = !!settings.ctrl || !!event.metaKey;
-        const ctrlWithKeyPressed = !!settings.withKey && settings.withKey === event.key;
+        if (!!settings.ctrl === (event.ctrlKey || event.metaKey)) {
+            if (!!settings.ctrl) {
+                event.preventDefault()
+            };
 
-        if (ctrlRequired === !!settings.ctrl && ctrlWithKeyPressed) {
-            if (ctrlRequired) event.preventDefault();
             settings.action(event);
         }
     };

@@ -187,16 +187,12 @@
     padding: 4px 8px;
     outline: none;
     font-family: Arial, sans-serif;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     border-radius: 2px;
+    border-color: $primary;
+    min-width: 128px;
     
     &::placeholder {
-        color: rgba(0, 0, 0, 0.4);
-    }
-    
-    &:focus {
-        border-color: lighten($primary, 10%);
-        box-shadow: 0 2px 12px rgba($primary, 0.4);
+        color: $secondary !important;
     }
 }
 
