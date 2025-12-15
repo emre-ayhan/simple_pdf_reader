@@ -560,9 +560,9 @@ onUnmounted(() => {
         <div class="pdf-reader" ref="pdfReader" :class="{ 'overflow-hidden': isViewLocked || showWhiteboard }">
             <EmptyState v-if="!isFileLoaded" @open-file="handleFileOpen" />
 
-            <div v-else class="pages-container" ref="pagesContainer" :style="{ width: showWhiteboard ? '100%' : `${zoomPercentage}%`, padding: showWhiteboard ? '0' : '20px 0' }">
+            <div v-else class="pages-container" :class="{ 'whiteboard-mode': showWhiteboard }" ref="pagesContainer" :style="{ width: `${zoomPercentage}%` }">
                 <div v-for="page in pageCount" :key="page" class="page-container" :data-page="page">
-                    <div class="canvas-container" :class="{ 'whiteboard-mode': showWhiteboard, 'canvas-loading': !renderedPages.has(page) }">
+                    <div class="canvas-container" :class="{ 'canvas-loading': !renderedPages.has(page) }">
                         <canvas class="pdf-canvas" :ref="el => { if (el) pdfCanvases[page - 1] = el }"></canvas>
                         <canvas 
                             :ref="el => { if (el) drawingCanvases[page - 1] = el }"

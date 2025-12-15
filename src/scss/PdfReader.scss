@@ -61,6 +61,18 @@
     justify-content: start;
     gap: 20px;
     padding: 20px 0;
+
+    &.whiteboard-mode {
+        padding: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+
+        .page-container,
+        canvas {
+            width: 100% !important;
+            height: 100% !important;
+        }
+    }
 }
 
 .page-container {
@@ -103,24 +115,6 @@
     background-color: #fff;
     width: 100%;
     max-width: 100%;
-
-    &.whiteboard-mode {
-        display: flex;
-        align-items: flex-start;
-        justify-content: flex-start;
-        width: 100%;
-        height: 100%;
-        padding: 20px;
-        overflow: hidden;
-
-        .pdf-canvas,
-        .drawing-canvas {
-            width: auto;
-            height: auto;
-            max-width: none;
-            max-height: none;
-        }
-    }
 
     &.canvas-loading {
         min-height: 800px;
