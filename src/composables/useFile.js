@@ -556,7 +556,6 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
                     
                     if (result.success) {
                         console.log('PDF saved successfully to:', result.filepath);
-                        alert('PDF saved successfully!');
                         fileSavedCallback();
                         return;
                     } else {
