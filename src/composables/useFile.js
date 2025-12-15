@@ -390,7 +390,7 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
     };
 
     const handleSaveFile = async () => {
-        if (!pdfDoc) return;
+        if (!pdfDoc || !isFileLoaded.value) return;
 
         try {
             // Get the original PDF data

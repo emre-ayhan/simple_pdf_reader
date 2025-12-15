@@ -100,7 +100,7 @@ const closeTab = (index) => {
 
 defineExpose({
     setCurrentTab,
-    closeTab
+    addNewTab,
 });
 </script>
 <template>

@@ -18,7 +18,7 @@ const cursorStyle = computed(() => {
     return isEraser.value ? 'eraser' : 'default';
 });
 
-const emit = defineEmits(['file-loaded']);
+const emit = defineEmits(['file-loaded', 'new-tab']);
 
 const showWhiteboardCallback = () => {
     renderWhiteboardCanvas();
@@ -284,6 +284,13 @@ const hasActiveTool = computed(() => {
 
 // Page Event Handlers
 useKeydownEvents({
+    t: {
+        action: (event) => {
+            if (hasActiveTool.value && isTextMode.value) return;
+            event.preventDefault();
+            selectText();
+        }
+    },
     o: {
         ctrl: true,
         action: () => {
@@ -407,7 +414,7 @@ onUnmounted(() => {
                         </div>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="selectDrawingTool('pen')" :class="{ active: isDrawing && drawMode === 'pen', disabled: !isFileLoaded }" title="Freehand Draw">
+                        <a class="nav-link" href="#" @click.prevent="selectDrawingTool('pen')" :class="{ active: isDrawing && drawMode === 'pen', disabled: !isFileLoaded }" title="Draw">
                             <i class="bi bi-pencil-fill"></i>
                         </a>
                     </li>
@@ -432,7 +439,7 @@ onUnmounted(() => {
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="selectText" :class="{ active: isTextMode, disabled: !isFileLoaded }" title="Add Text">
+                        <a href="#" class="nav-link" @click.prevent="selectText" :class="{ active: isTextMode, disabled: !isFileLoaded }" title="Add Text (T)">
                             <i class="bi bi-textarea-t"></i>
                         </a>
                     </li>
@@ -445,12 +452,12 @@ onUnmounted(() => {
 
                     <!-- Undo/Redo -->
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="undo()" :class="{ disabled: !isFileLoaded || !canUndo }" title="Undo">
+                        <a class="nav-link" href="#" @click.prevent="undo()" :class="{ disabled: !isFileLoaded || !canUndo }" title="Undo (Ctrl+Z)">
                             <i class="bi bi-arrow-counterclockwise"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="redo()" :class="{ disabled: !isFileLoaded || !canRedo }" title="Redo">
+                        <a class="nav-link" href="#" @click.prevent="redo()" :class="{ disabled: !isFileLoaded || !canRedo }" title="Redo (Ctrl+Y)">
                             <i class="bi bi-arrow-clockwise"></i>
                         </a>
                     </li>
@@ -512,7 +519,7 @@ onUnmounted(() => {
 
                     <!-- Whiteboard Controls -->
                     <template v-if="showWhiteboard">
-                        <li class="nav-item" title="Copy to Clipboard">
+                        <li class="nav-item" title="Copy to Clipboard (Ctrl+C)">
                             <a href="#" class="nav-link" @click.prevent="copyWhiteboardToClipboard()">
                                 <i class="bi bi-clipboard"></i>
                             </a>
@@ -530,12 +537,12 @@ onUnmounted(() => {
                     </template>
                     <template v-else>
                         <!-- File Controls -->
-                        <li class="nav-item" title="Save File">
+                        <li class="nav-item" title="Save File (Ctrl+S)">
                             <a href="#" class="nav-link" @click.prevent="handleSaveFile" :class="{ disabled: !isFileLoaded || !hasUnsavedChanges }">
                                 <i class="bi bi-floppy-fill"></i>
                             </a>
                         </li>
-                        <li class="nav-item" :title="isFileLoaded ? 'Open Another File' : 'Open File'">
+                        <li class="nav-item" title="Open File (Ctrl+O)">
                             <a href="#" class="nav-link" @click.prevent="handleFileOpen">
                                 <i class="bi bi-folder-fill"></i>
                             </a>

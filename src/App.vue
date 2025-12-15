@@ -10,9 +10,15 @@ const handleFileLoad = (fileData) => {
         fileTabs.value.setCurrentTab(fileData);
     }
 };
+
+const addNewTab = () => {
+    if (fileTabs.value) {
+        fileTabs.value.addNewTab();
+    }
+};
 </script>
 <template>
     <nav-tabs ref="fileTabs">
-        <PdfReader @file-loaded="handleFileLoad" />
+        <PdfReader @file-loaded="handleFileLoad" @new-tab="addNewTab" />
     </nav-tabs>
 </template>

@@ -5,9 +5,13 @@ export function useKeydownEvents(options = {}) {
         const settings = options[event.key];
         
         if (!settings) return;
-        if ((event.ctrlKey || event.metaKey) === !!settings.ctrl) {
-            event.preventDefault();
-            settings.action();
+
+        const ctrlRequired = !!settings.ctrl || !!event.metaKey;
+        const ctrlWithKeyPressed = !!settings.withKey && settings.withKey === event.key;
+
+        if (ctrlRequired === !!settings.ctrl && ctrlWithKeyPressed) {
+            if (ctrlRequired) event.preventDefault();
+            settings.action(event);
         }
     };
 
