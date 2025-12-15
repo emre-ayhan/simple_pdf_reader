@@ -264,6 +264,9 @@ const toggleZoomMode = () => {
     });
 };
 
+const maxZoom = 300;
+const minZoom = 20;
+
 const zoom = (mode) => {
     if (!isFileLoaded.value) return;
     if (showWhiteboard.value) {
@@ -273,8 +276,8 @@ const zoom = (mode) => {
         renderWhiteboardCanvas();
     } else {
         zoomPercentage.value = mode === 'in' 
-            ? Math.min(zoomPercentage.value + 10, 100)
-            : Math.max(zoomPercentage.value - 10, 25);
+            ? Math.min(zoomPercentage.value + 10, maxZoom)
+            : Math.max(zoomPercentage.value - 10, minZoom);
     }
 }
 
@@ -493,15 +496,15 @@ onUnmounted(() => {
 
                     <!-- Zoom -->
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="zoom('out')" :class="{ disabled: !isFileLoaded || isViewLocked || (showWhiteboard ? whiteboardScale <= 0.5 : zoomPercentage <= 25) }">
+                        <a href="#" class="nav-link" @click.prevent="zoom('out')" :class="{ disabled: !isFileLoaded || isViewLocked || (showWhiteboard ? whiteboardScale <= 0.5 : zoomPercentage <= minZoom) }">
                             <i class="bi bi-zoom-out"></i>
                         </a>
                     </li>
                     <li class="nav-item d-none d-lg-block">
-                        <input type="text" class="form-control-plaintext" :value="showWhiteboard ? Math.round(whiteboardScale * 100) : zoomPercentage" :disabled="!isFileLoaded || isViewLocked || showWhiteboard">
+                        <input type="text" class="form-control-plaintext" :value="showWhiteboard ? Math.round(whiteboardScale * 100) : zoomPercentage" :disabled="!isFileLoaded || isViewLocked || showWhiteboard" readonly>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="zoom('in')" :class="{ disabled: !isFileLoaded || isViewLocked || (showWhiteboard ? whiteboardScale >= 2 : zoomPercentage >= 100) }">
+                        <a href="#" class="nav-link" @click.prevent="zoom('in')" :class="{ disabled: !isFileLoaded || isViewLocked || (showWhiteboard ? whiteboardScale >= 2 : zoomPercentage >= maxZoom) }">
                             <i class="bi bi-zoom-in"></i>
                         </a>
                     </li>
