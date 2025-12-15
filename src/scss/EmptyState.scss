@@ -12,19 +12,6 @@
   position: relative;
 }
 
-.empty-eyebrow {
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-size: 16px;
-  color: $text-accent;
-  font-weight: 700;
-
-  a {
-    text-decoration: none;
-    color: $text-accent;
-  }
-}
-
 .empty-title {
   font-size: clamp(26px, 3vw, 34px);
   margin: 0;
@@ -77,39 +64,11 @@
   }
 }
 
-.empty-download {
-  position: absolute;
-  right: 24px;
-  bottom: 24px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
 .empty-footer {
   display: flex;
   margin-top: 12px;
   padding-top: 18px;
   border-top: 1px solid $border-color;
-}
-
-.empty-github-link {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: $primary;
-  text-decoration: none;
-  font-weight: 500;
-  font-size: 14px;
-  transition: color 0.2s;
-
-  &:hover {
-    color: $text-highlight;
-  }
-
-  i {
-    font-size: 16px;
-  }
 }
 
 .btn-primary {

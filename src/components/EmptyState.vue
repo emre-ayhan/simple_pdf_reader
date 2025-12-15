@@ -11,10 +11,13 @@ const openFile = () => emit('open-file');
       <div class="row">
         <div class="col-12">
           <div class="empty-card">
-            <div class="empty-eyebrow">
-              <a href="https://emre-ayhan.github.io/simple_pdf_reader/" target="_blank" rel="noopener noreferrer">
+            <div class="d-flex">
+              <a href="https://emre-ayhan.github.io/simple_pdf_reader/" target="_blank" rel="noopener noreferrer" class="link-accent">
                 <i class="bi bi-file-earmark-pdf-fill"></i>
                 Simple PDF Reader
+              </a>
+              <a href="https://github.com/emre-ayhan/simple_pdf_reader" target="_blank" rel="noopener noreferrer" class="ms-auto">
+                <i class="bi bi-github"></i>
               </a>
             </div>
             <h1 class="empty-title">Fast, focused reading with ink-ready tools.</h1>
@@ -60,21 +63,17 @@ const openFile = () => emit('open-file');
                 </div>
               </div>
             </div>
-            <div class="empty-download" v-if="!Electron">
-              <div class="d-flex gap-2 align-items-center">
-                <i class="bi bi-windows"></i>
-                <!-- <i class="bi bi-apple"></i> -->
-                <i class="bi bi-tux"></i>
+            <div class="empty-footer" v-if="!Electron">
+              <div class="ms-auto">
+                <div class="d-flex gap-2 align-items-center">
+                  <i class="bi bi-windows"></i>
+                  <!-- <i class="bi bi-apple"></i> -->
+                  <i class="bi bi-tux"></i>
+                  <a href="https://github.com/emre-ayhan/simple_pdf_reader/releases/latest" target="_blank" rel="noopener noreferrer" class="btn btn-link">
+                    Download
+                  </a>
+                </div>
               </div>
-              <a href="https://github.com/emre-ayhan/simple_pdf_reader/releases/latest" target="_blank" rel="noopener noreferrer" class="btn btn-link">
-                Download
-              </a>
-            </div>
-            <div class="empty-footer">
-              <a href="https://github.com/emre-ayhan/simple_pdf_reader" target="_blank" rel="noopener noreferrer" class="empty-github-link">
-                <i class="bi bi-github"></i>
-                <span class="d-none d-md-inline-block">github/emre-ayhan/simple_pdf_reader</span>
-              </a>
             </div>
           </div>
         </div>
