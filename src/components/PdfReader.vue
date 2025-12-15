@@ -251,8 +251,7 @@ const toggleZoomMode = () => {
 
     if (zoomMode.value === 'fit-width') {
         zoomMode.value = 'fit-height';
-        const margin = scale * 65.5; // Account for navbar and padding
-        zoomPercentage.value = ((pdfReader.value.clientHeight - margin) * 100) / canvas.height;
+        zoomPercentage.value = (window.innerHeight * 100) / canvas.height;
     } else {
         zoomMode.value = 'fit-width';
         zoomPercentage.value = 100; // Full width
@@ -275,6 +274,7 @@ const zoom = (mode) => {
             : Math.max(0.1, +(whiteboardScale.value - 0.1).toFixed(2));
         renderWhiteboardCanvas();
     } else {
+        zoomMode.value = 'fit-height'; // Reset to fit-height on manual zoom
         zoomPercentage.value = mode === 'in' 
             ? Math.min(zoomPercentage.value + 10, maxZoom)
             : Math.max(zoomPercentage.value - 10, minZoom);
@@ -510,7 +510,7 @@ onUnmounted(() => {
                     </li>
                     <li class="nav-item">
                         <a href="#" class="nav-link" @click.prevent="toggleZoomMode()" :class="{ disabled: !isFileLoaded || isViewLocked || showWhiteboard }" :title="zoomMode === 'fit-width' ? 'Fit Height' : 'Fit Width'">
-                            <i :class="`bi bi-arrows-expand${zoomMode === 'fit-width' ? '-vertical' : ''}`"></i>
+                            <i :class="`bi bi-arrows-expand${zoomMode === 'fit-height' ? '-vertical' : ''}`"></i>
                         </a>
                     </li>
                     <li class="nav-item vr bg-white mx-2"></li>
