@@ -7,7 +7,7 @@ import { useDraw } from "../composables/useDraw";
 import { useHistory } from "../composables/useHistory";
 import { useWhiteBoard } from "../composables/useWhiteBoard";
 import EmptyState from "./EmptyState.vue";
-import { useKeydownEvents } from "../composables/useKeydownEvents";
+import { useWindowEvents } from "../composables/useWindowEvents";
 
 // Cursor Style
 const cursorStyle = computed(() => {
@@ -283,59 +283,61 @@ const hasActiveTool = computed(() => {
 });
 
 // Page Event Handlers
-useKeydownEvents({
-    t: {
-        action: (event) => {
-            if (hasActiveTool.value && isTextMode.value) return;
-            event.preventDefault();
-            selectText();
-        }
-    },
-    o: {
-        ctrl: true,
-        action: () => {
-            handleFileOpen();
-        }
-    },
-    s: {
-        ctrl: true,
-        action: () => {
-            handleSaveFile();
-        }
-    },
-    z: {
-        ctrl: true,
-        action: () => {
-            undo();
-        }
-    },
-    y: {
-        ctrl: true,
-        action: () => {
-            redo();
-        }
-    },
-    Escape: {
-        action: () => {
-            if (hasActiveTool.value) {
-                resetToolState();
+useWindowEvents({
+    keydown: {
+        t: {
+            action: (event) => {
+                if (isTextMode.value) return;
+                event.preventDefault();
+                selectText();
             }
-        }
-    },
-    ArrowLeft: {
-        action: () => {
-            if (pageNum.value > 1) {
-                scrollToPage(pageNum.value - 1);
+        },
+        o: {
+            ctrl: true,
+            action: () => {
+                handleFileOpen();
             }
-        }
-    },
-    ArrowRight: {
-        action: () => {
-            if (pageNum.value < pageCount.value) {
-                scrollToPage(pageNum.value + 1);
+        },
+        s: {
+            ctrl: true,
+            action: () => {
+                handleSaveFile();
             }
-        }
-    },
+        },
+        z: {
+            ctrl: true,
+            action: () => {
+                undo();
+            }
+        },
+        y: {
+            ctrl: true,
+            action: () => {
+                redo();
+            }
+        },
+        Escape: {
+            action: () => {
+                if (hasActiveTool.value) {
+                    resetToolState();
+                }
+            }
+        },
+        ArrowLeft: {
+            action: () => {
+                if (pageNum.value > 1) {
+                    scrollToPage(pageNum.value - 1);
+                }
+            }
+        },
+        ArrowRight: {
+            action: () => {
+                if (pageNum.value < pageCount.value) {
+                    scrollToPage(pageNum.value + 1);
+                }
+            }
+        },
+    }
 });
 
 
