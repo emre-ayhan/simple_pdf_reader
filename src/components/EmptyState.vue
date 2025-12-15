@@ -16,7 +16,7 @@ const openFile = () => emit('open-file');
                 <i class="bi bi-file-earmark-pdf-fill"></i>
                 Simple PDF Reader
               </a>
-              <a href="https://github.com/emre-ayhan/simple_pdf_reader" target="_blank" rel="noopener noreferrer" class="ms-auto">
+              <a href="https://github.com/emre-ayhan/simple_pdf_reader" target="_blank" rel="noopener noreferrer" class="ms-auto" v-if="!Electron">
                 <i class="bi bi-github"></i>
               </a>
             </div>
@@ -63,13 +63,18 @@ const openFile = () => emit('open-file');
                 </div>
               </div>
             </div>
-            <div class="empty-footer" v-if="!Electron">
-              <div class="ms-auto">
-                <div class="d-flex gap-2 align-items-center">
+            <div class="empty-footer">
+              <div class="mx-auto" v-if="Electron">
+                <a href="https://github.com/emre-ayhan/simple_pdf_reader" target="_blank" class="text-decoration-none" rel="noopener noreferrer">
+                  <i class="bi bi-github"></i> github.com/emre-ayhan/simple_pdf_reader
+                </a>
+              </div>
+              <div class="ms-auto" v-else>
+                <div class="d-flex align-items-center gap-2">
                   <i class="bi bi-windows"></i>
                   <!-- <i class="bi bi-apple"></i> -->
                   <i class="bi bi-tux"></i>
-                  <a href="https://github.com/emre-ayhan/simple_pdf_reader/releases/latest" target="_blank" rel="noopener noreferrer" class="btn btn-link">
+                  <a href="https://github.com/emre-ayhan/simple_pdf_reader/releases/latest" target="_blank" rel="noopener noreferrer" class="btn btn-link px-0">
                     Download
                   </a>
                 </div>

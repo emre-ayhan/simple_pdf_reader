@@ -62,7 +62,7 @@ function createWindow() {
     // Load from Vite dev server in development, built files in production
     const isDev = !app.isPackaged;
     if (isDev) {
-        win.loadURL("http://127.0.0.1:5173/");
+        win.loadURL("http://127.0.0.1:3000/");
         win.webContents.openDevTools({ mode: "undocked" });
     } else {
         win.loadFile(join(__dirname, "dist", "index.html"));
