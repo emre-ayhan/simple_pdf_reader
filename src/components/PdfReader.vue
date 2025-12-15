@@ -7,7 +7,7 @@ import { useDraw } from "../composables/useDraw";
 import { useHistory } from "../composables/useHistory";
 import { useWhiteBoard } from "../composables/useWhiteBoard";
 import EmptyState from "./EmptyState.vue";
-import { usePageEvents } from "../composables/usePageEvents";
+import { useKeydownEvents } from "../composables/useKeydownEvents";
 
 // Cursor Style
 const cursorStyle = computed(() => {
@@ -283,7 +283,19 @@ const hasActiveTool = computed(() => {
 });
 
 // Page Event Handlers
-const { handleKeydown } = usePageEvents({
+useKeydownEvents({
+    o: {
+        ctrl: true,
+        action: () => {
+            handleFileOpen();
+        }
+    },
+    s: {
+        ctrl: true,
+        action: () => {
+            handleSaveFile();
+        }
+    },
     z: {
         ctrl: true,
         action: () => {
@@ -321,9 +333,6 @@ const { handleKeydown } = usePageEvents({
 
 
 onMounted(() => {
-    // Add keyboard event listener
-    window.addEventListener('keydown', handleKeydown);
-    
     // Listen for files opened from system (when set as default app)
     if (Electron.value?.onFileOpened) {
         Electron.value.onFileOpened((fileData) => {
@@ -337,9 +346,6 @@ onMounted(() => {
 
 onUnmounted(() => {
     endSession(fileId);
-
-    // Remove keyboard event listener
-    window.removeEventListener('keydown', handleKeydown);
     
     if (intersectionObserver.value) {
         intersectionObserver.value.disconnect();

@@ -1,4 +1,6 @@
-export function usePageEvents(options = {}) {
+import { onMounted, onUnmounted } from "vue";
+
+export function useKeydownEvents(options = {}) {
     const keys = Object.keys(options);
 
     const handleKeydown = (event) => {
@@ -11,7 +13,7 @@ export function usePageEvents(options = {}) {
         }
     };
 
-    return {
-        handleKeydown,
-    };
+    
+    onMounted(() => window.addEventListener('keydown', handleKeydown));
+    onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
 }

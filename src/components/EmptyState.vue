@@ -25,7 +25,7 @@ const openFile = () => emit('open-file');
               <span class="empty-hint">or drop a file anywhere</span>
             </div>
       
-            <div class="empty-grid row row-cols-1 row-cols-md-2 row-cols-xl-4 g-3">
+            <div class="empty-grid row row-cols-1 row-cols-xl-3 g-3">
               <div class="col">
                 <div class="empty-section">
                   <div class="empty-section-title">Whiteboard & Image Support</div>
@@ -56,17 +56,6 @@ const openFile = () => emit('open-file');
                     <li>Adjustable stroke thickness and undo/redo history.</li>
                     <li>Stylus-ready pointer support for smooth inking.</li>
                     <li>One-click clear when you need a fresh slate.</li>
-                  </ul>
-                </div>
-              </div>
-              <div class="col">
-                <div class="empty-section">
-                  <div class="empty-section-title">Technical Features</div>
-                  <ul>
-                    <li>PDF.js rendering with lazy loading for speed.</li>
-                    <li>Bootstrap 5 UI with Bootstrap Icons.</li>
-                    <li>Docker and Nginx ready for production deploys.</li>
-                    <li>LocalStorage-powered page persistence.</li>
                   </ul>
                 </div>
               </div>
