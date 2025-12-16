@@ -198,6 +198,7 @@ const closeWhiteboardCallback = () => {
 const {
     whiteboardScale,
     whiteboardImage,
+    whiteboardRecentlyCopied,
     renderWhiteboardCanvas,
     closeWhiteboard,
     copyWhiteboardToClipboard,
@@ -540,7 +541,7 @@ onUnmounted(() => {
                     <template v-if="showWhiteboard">
                         <li class="nav-item" title="Copy to Clipboard (Ctrl+C)">
                             <a href="#" class="nav-link" @click.prevent="copyWhiteboardToClipboard()">
-                                <i class="bi bi-clipboard"></i>
+                                <i :class="`bi bi-clipboard${whiteboardRecentlyCopied ? '-check' : ''}`"></i>
                             </a>
                         </li>
                         <li class="nav-item" title="Download Whiteboard">

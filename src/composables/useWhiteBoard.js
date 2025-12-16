@@ -4,6 +4,7 @@ export function useWhiteBoard(showWhiteboard, drawingCanvases, drawingContexts, 
 
     const whiteboardScale = ref(1);
     const whiteboardImage = ref(null);
+    const whiteboardRecentlyCopied = ref(false);
 
     const renderWhiteboardCanvas = () => {
         const canvas = pdfCanvases.value[0];
@@ -87,6 +88,8 @@ export function useWhiteBoard(showWhiteboard, drawingCanvases, drawingContexts, 
         return tempCanvas;
     };
 
+    let clipboardTimeout = null;
+
     const copyWhiteboardToClipboard = async () => {
         const tempCanvas = getWhiteboardCanvas();
         if (!tempCanvas) return;
@@ -95,7 +98,11 @@ export function useWhiteBoard(showWhiteboard, drawingCanvases, drawingContexts, 
             const blob = await new Promise(resolve => tempCanvas.toBlob(resolve, 'image/png'));
             if (!blob) return;
             await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-            alert('Whiteboard copied to clipboard');
+            whiteboardRecentlyCopied.value = true;
+            clearTimeout(clipboardTimeout);
+            clipboardTimeout = setTimeout(() => {
+                whiteboardRecentlyCopied.value = false;
+            }, 2000);
         } catch (err) {
             console.error('Failed to copy to clipboard:', err);
             alert('Failed to copy to clipboard');
@@ -118,6 +125,7 @@ export function useWhiteBoard(showWhiteboard, drawingCanvases, drawingContexts, 
     return {
         whiteboardScale,
         whiteboardImage,
+        whiteboardRecentlyCopied,
         renderedPages,
         renderWhiteboardCanvas,
         closeWhiteboard,
