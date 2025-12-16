@@ -329,6 +329,27 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
         }
     };
 
+    const alertUnsupportedFile = () => {
+        alert('Unsupported file type. Please select a PDF or image.');
+    }
+
+    const loadFile = (event) => {
+        const file = event?.target?.files?.[0] || event;
+        
+        if (!file) {
+            alertUnsupportedFile();
+            return
+        };
+
+        if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+            loadPdfFile(file);
+        } else if (file.type.startsWith('image/') || file.name.toLowerCase().match(/\.(png|jpe?g|gif|webp|bmp|svg)$/)) {
+            loadImageFile(file);
+        } else {
+            alertUnsupportedFile();
+        }
+    };
+
     const processFileOpenResult = (result) => {
         if (!result) return;
 
@@ -665,9 +686,10 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
         restoreSavedState,
         renderAllPages,
         loadImageFile,
+        loadPdfFile,
+        loadFile,
         renderAllPagesAndSetupObservers,
         getDocumentCallback,
-        loadPdfFile,
         processFileOpenResult,
         handleFileOpen,
         handleSaveFile,

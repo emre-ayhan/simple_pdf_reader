@@ -71,9 +71,8 @@ const {
     updateSavedState,
     restoreSavedState,
     renderAllPages,
-    loadImageFile,
     renderAllPagesAndSetupObservers,
-    loadPdfFile,
+    loadFile,
     processFileOpenResult,
     handleFileOpen,
     handleSaveFile,
@@ -88,8 +87,7 @@ const {
     onDrop,
     onDragEnter,
     onDragLeave,
-    loadFile
-} = useDrop(loadPdfFile, loadImageFile);
+} = useDrop(loadFile);
 
 // Drawing Management
 const strokeChangeCallback = (action) => {
