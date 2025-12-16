@@ -45,6 +45,7 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
     const showWhiteboard = ref(false);
 
     // Saved State Variables
+    const fileRecentlySaved = ref(false);
     let savedPdfDoc = null;
     let savedPageCount = 0;
     let savedPageNum = 1;
@@ -389,6 +390,8 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
         }
     };
 
+    let saveFileTimeout = null;
+
     const handleSaveFile = async () => {
         if (!pdfDoc || !isFileLoaded.value) return;
 
@@ -557,6 +560,11 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
                     if (result.success) {
                         console.log('PDF saved successfully to:', result.filepath);
                         fileSavedCallback();
+                        fileRecentlySaved.value = true;
+                        clearTimeout(saveFileTimeout);
+                        saveFileTimeout = setTimeout(() => {
+                            fileRecentlySaved.value = false;
+                        }, 2000);
                         return;
                     } else {
                         console.error('Electron save failed:', result.error);
@@ -648,6 +656,7 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
         zoomPercentage,
         showWhiteboard,
         zoomMode,
+        fileRecentlySaved,
         resetPdfDoc,
         hasSavedPdfDoc,
         emitFileLoadedEvent,

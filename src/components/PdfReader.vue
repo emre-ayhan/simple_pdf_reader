@@ -64,6 +64,7 @@ const {
     zoomPercentage,
     zoomMode,
     showWhiteboard,
+    fileRecentlySaved,
     resetPdfDoc,
     hasSavedPdfDoc,
     clearSavedState,
@@ -559,7 +560,7 @@ onUnmounted(() => {
                         <!-- File Controls -->
                         <li class="nav-item" title="Save File (Ctrl+S)">
                             <a href="#" class="nav-link" @click.prevent="handleSaveFile" :class="{ disabled: !isFileLoaded || !hasUnsavedChanges }">
-                                <i class="bi bi-floppy-fill"></i>
+                                <i :class="`bi bi-floppy${fileRecentlySaved ? '-fill' : ''}`"></i>
                             </a>
                         </li>
                         <li class="nav-item" title="Open File (Ctrl+O)">
