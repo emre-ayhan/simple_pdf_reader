@@ -245,16 +245,14 @@ const selectSelection = () => {
     isSelectionMode.value = !wasActive;
 };
 
-const scale = 2;
-    
 const toggleZoomMode = () => {
     if (!isFileLoaded.value || showWhiteboard.value) return;
     const currentPage = pageNum.value;
-    const canvas = pdfCanvases.value[currentPage - 1];
 
     if (zoomMode.value === 'fit-width') {
         zoomMode.value = 'fit-height';
-        zoomPercentage.value = (window.innerHeight * 100) / canvas.height;
+        const canvasContainer = document.querySelector('.canvas-container');
+        zoomPercentage.value = pdfReader.value.clientHeight * 100 / canvasContainer.clientHeight;
     } else {
         zoomMode.value = 'fit-width';
         zoomPercentage.value = 100; // Full width
