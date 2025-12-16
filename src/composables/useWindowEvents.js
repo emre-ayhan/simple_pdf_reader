@@ -15,6 +15,9 @@ export function useWindowEvents(eventOptions = {}) {
 
                 settings.action(event);
             }
+        },
+        resize(event, options) {
+            options.action();
         }
     }
 

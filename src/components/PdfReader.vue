@@ -286,8 +286,21 @@ const hasActiveTool = computed(() => {
     return isDrawing.value || isEraser.value || isTextMode.value || isSelectionMode.value;
 });
 
+let resizeTimeout = null;
+
 // Page Event Handlers
 useWindowEvents({
+    resize: {
+        action() {
+            if (!isFileLoaded.value) return;
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                nextTick(() => {
+                    scrollToPage(pageNum.value);
+                })
+            });
+        }
+    },
     keydown: {
         t: {
             action: (event) => {
