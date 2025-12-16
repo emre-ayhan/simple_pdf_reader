@@ -1,6 +1,6 @@
 import { onMounted, onUnmounted } from "vue";
 
-export function useWindowEvents(eventOptions = {}) {
+export function useWindowEvents(eventSettings = {}) {
     const handlers = {
         keydown(event, options) {
             if (Object.keys(options).length === 0) return;
@@ -15,34 +15,26 @@ export function useWindowEvents(eventOptions = {}) {
 
                 settings.action(event);
             }
-        },
-        resize(event, options) {
-            options.action();
         }
     }
 
-    const events = Object.keys(eventOptions);
+    
+    const registerEvents = (mode) => {
+        const events = Object.keys(eventSettings);
 
-    onMounted(() => {
         for (let i = 0; i < events.length; i++) {
             const event = events[i];
+            const options = eventSettings[event];
+            const handler = handlers[event] || options?.action || null;
             
-            if (handlers[event]) {
-                window.addEventListener(event, (e) => {
-                    handlers[event](e, eventOptions[event]);
+            if (handler) {
+                window[`${mode}EventListener`](event, (e) => {
+                    handler(e, options);
                 }) 
             };
         }
-    });
+    }
 
-    onUnmounted(() => {
-        for (let i = 0; i < events.length; i++) {
-            const event = events[i];
-            if (handlers[event]) {
-                window.removeEventListener(event, (e) => {
-                    handlers[event](e, eventOptions[event]);
-                }) 
-            };
-        }
-    });
+    onMounted(() => registerEvents('add'));
+    onUnmounted(() => registerEvents('remove'));
 }
