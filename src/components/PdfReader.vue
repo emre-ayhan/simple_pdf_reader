@@ -249,7 +249,6 @@ const selectSelection = () => {
 
 const toggleZoomMode = () => {
     if (!isFileLoaded.value || showWhiteboard.value) return;
-    const currentPage = pageNum.value;
 
     if (zoomMode.value === 'fit-width') {
         zoomMode.value = 'fit-height';
@@ -262,7 +261,7 @@ const toggleZoomMode = () => {
     
     // Restore scroll position to current page after DOM updates
     nextTick(() => {
-        scrollToPage(currentPage);
+        scrollToPage(pageNum.value);
     });
 };
 
