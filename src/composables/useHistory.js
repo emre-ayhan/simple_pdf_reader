@@ -22,7 +22,7 @@ export function useHistory(fileId, strokesPerPage, drawingCanvases, drawingConte
         }
     };
 
-    const endSession = (fileId) => {
+    const endSession = () => {
         if (sessions.value[fileId]) {
             delete sessions.value[fileId];
         }

@@ -370,7 +370,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-    endSession(fileId);
+    endSession();
     
     if (intersectionObserver.value) {
         intersectionObserver.value.disconnect();
