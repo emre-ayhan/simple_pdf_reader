@@ -21,7 +21,7 @@ const electronButtons = [
 
 const getDefaultTab = () => ({
     filename: 'New Tab',
-    default: true,
+    emptyState: true,
     closed: false
 });
 
@@ -46,13 +46,13 @@ const handleElectronButtonClick = (action) => {
 };
 
 const isLastTabDefault = computed(() => {
-    return tabs.value[tabs.value.length - 1].default;
+    return tabs.value[tabs.value.length - 1].emptyState;
 });
 
 const setCurrentTab = (fileData) => {
     tabs.value[activeTabIndex.value] = {
         ...fileData,
-        default: false,
+        emptyState: false,
         closed: false
     };
 };
@@ -74,7 +74,7 @@ const closeTab = (index) => {
     if (tab) {
         if (fileHasUnsavedChanges(tab.id) && !confirm('You have unsaved changes. Are you sure you want to close this tab?')) return;
 
-        if (tab.default) {
+        if (tab.emptyState) {
             tabs.value.splice(index, 1);
         } else {
             tab.closed = true;
@@ -135,7 +135,7 @@ defineExpose({
     </ul>
     <div class="tab-content" id="appTabContent">
         <template v-for="(tab, index) in tabs">
-            <div class="tab-pane" :class="{ 'active show': index === activeTabIndex }" tabindex="0" v-if="!tab.closed">
+            <div class="tab-pane" :class="{ 'active show': index === activeTabIndex }" tabindex="0" v-if="!tab.closed && index === activeTabIndex">
                 <slot></slot>
             </div>
         </template>
