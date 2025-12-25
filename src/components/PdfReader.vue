@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, nextTick, onMounted, onUnmounted } from "vue";
+import { ref, computed, nextTick, onMounted, onUnmounted, onBeforeUnmount } from "vue";
 import { Electron } from "../composables/useElectron";
 import { useFile } from "../composables/useFile";
 import { useDrop } from "../composables/useDrop";
@@ -357,16 +357,22 @@ useWindowEvents({
 });
 
 
+let unsubscribeFileOpen = null;
+
 onMounted(() => {
-    // Listen for files opened from system (when set as default app)
     if (Electron.value?.onFileOpened) {
-        Electron.value.onFileOpened((fileData) => {
-            if (fileData) {
-                console.log('File opened from system:', fileData.filename);
-                processFileOpenResult(fileData);
-            }
+        unsubscribeFileOpen = Electron.value.onFileOpened((fileData) => {
+            if (!fileData) return;
+
+            console.log('File opened from system:', fileData.filename);
+            processFileOpenResult(fileData);
         });
     }
+});
+
+onBeforeUnmount(() => {
+    unsubscribeFileOpen?.();
+    unsubscribeFileOpen = null;
 });
 
 onUnmounted(() => {

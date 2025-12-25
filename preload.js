@@ -1,17 +1,19 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
-// Store file data if received before listener is attached
-let pendingFileData = null;
+let pendingFiles = [];
 let fileOpenedListeners = [];
 
-// Set up listener immediately on preload
 ipcRenderer.on('file:opened', (event, fileData) => {
-    console.log('[Preload] Received file:opened event:', fileData?.filename);
-    if (fileData) {
-        pendingFileData = fileData;
-        // Notify all registered listeners
-        fileOpenedListeners.forEach(callback => callback(fileData));
-    }
+    console.log('[Preload] Received file:opened:', fileData?.filename);
+    if (!fileData) return;
+
+    pendingFiles.push(fileData);
+
+    fileOpenedListeners.forEach(cb => {
+        pendingFiles.forEach(file => cb(file));
+    });
+
+    pendingFiles = [];
 });
 
 contextBridge.exposeInMainWorld("electronAPI", {
@@ -20,15 +22,20 @@ contextBridge.exposeInMainWorld("electronAPI", {
     maximize: () => ipcRenderer.invoke("window:maximize"),
     close: () => ipcRenderer.invoke("window:close"),
     openFile: () => ipcRenderer.invoke("file:open"),
-    saveFile: (filepath, content, encoding) => ipcRenderer.invoke("file:save", filepath, content, encoding),
+    saveFile: (filepath, content, encoding) =>
+        ipcRenderer.invoke("file:save", filepath, content, encoding),
+
     onFileOpened: (callback) => {
-        console.log('[Preload] onFileOpened callback registered');
+        console.log('[Preload] onFileOpened registered');
         fileOpenedListeners.push(callback);
-        // If file data was already received, call the callback immediately
-        if (pendingFileData) {
-            console.log('[Preload] Calling callback with pending file data:', pendingFileData.filename);
-            callback(pendingFileData);
-            pendingFileData = null; // Clear after use
-        }
+
+        // Flush pending files
+        pendingFiles.forEach(file => callback(file));
+        pendingFiles = [];
+
+        // Return unsubscribe
+        return () => {
+            fileOpenedListeners = fileOpenedListeners.filter(cb => cb !== callback);
+        };
     }
 });
