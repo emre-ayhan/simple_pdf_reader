@@ -19,14 +19,14 @@ const electronButtons = [
     { action: 'close', icon: 'bi-x-lg', title: 'Close' }
 ];
 
-const getDefaultTab = () => ({
+const getEmptyStateTab = () => ({
     filename: 'New Tab',
     emptyState: true,
     closed: false
 });
 
 const tabHistory = ref([0]);
-const tabs = ref([getDefaultTab()]);
+const tabs = ref([getEmptyStateTab()]);
 const activeTabIndex = ref(0);
 
 const openTabs = computed(() => {
@@ -45,7 +45,7 @@ const handleElectronButtonClick = (action) => {
     Electron.value[action]();
 };
 
-const isLastTabDefault = computed(() => {
+const isLastTabOnEmptyState = computed(() => {
     return tabs.value[tabs.value.length - 1].emptyState;
 });
 
@@ -57,15 +57,15 @@ const setCurrentTab = (fileData) => {
     };
 };
 
-const addDefaultTab = () => {
-    tabs.value.push(getDefaultTab());
+const openEmptyStateTab = () => {
+    tabs.value.push(getEmptyStateTab());
     activeTabIndex.value = tabs.value.length - 1;
 };
 
-const addNewTab = () => {
-    if (isLastTabDefault.value) return;
+const openNewTab = () => {
+    if (isLastTabOnEmptyState.value) return;
     tabHistory.value.push(tabs.value.length);
-    addDefaultTab();
+    openEmptyStateTab();
 };
 
 const closeTab = (index) => {
@@ -92,15 +92,14 @@ const closeTab = (index) => {
             : tabs.value.findIndex(tab => !tab.closed);
 
         if (!openTabs.value.length) {
-            addDefaultTab();
+            openEmptyStateTab();
         }
 
     }
 };
 
 defineExpose({
-    setCurrentTab,
-    addNewTab,
+    setCurrentTab
 });
 </script>
 <template>
@@ -113,13 +112,13 @@ defineExpose({
                             <span class="align-top fs-5 lh-1" v-if="fileHasUnsavedChanges(tab.id)">*</span>
                             {{ tab.filename }}
                         </div>
-                        <i class="bi bi-x-lg d-none d-lg-block" v-if="(index === activeTabIndex && !isLastTabDefault) || openTabs.length > 1" @click.stop.prevent="closeTab(index)"></i>
+                        <i class="bi bi-x-lg d-none d-lg-block" v-if="(index === activeTabIndex && !isLastTabOnEmptyState) || openTabs.length > 1" @click.stop.prevent="closeTab(index)"></i>
                     </div>
                 </button>
             </li>
         </template>
         <li class="nav-item d-none d-lg-block" role="presentation">
-            <button class="nav-link nav-add" id="add-tab" type="button" role="tab" aria-selected="false" :disabled="isLastTabDefault" @click="addNewTab">
+            <button class="nav-link nav-add" id="add-tab" type="button" role="tab" aria-selected="false" :disabled="isLastTabOnEmptyState" @click="openNewTab">
                 <i class="bi bi-plus-lg"></i>
             </button>
         </li>
@@ -135,7 +134,7 @@ defineExpose({
     </ul>
     <div class="tab-content" id="appTabContent">
         <template v-for="(tab, index) in tabs">
-            <div class="tab-pane" :class="{ 'active show': index === activeTabIndex }" tabindex="0" v-if="!tab.closed && index === activeTabIndex">
+            <div class="tab-pane" :class="{ 'active show': index === activeTabIndex }" tabindex="0" v-if="!tab.closed">
                 <slot></slot>
             </div>
         </template>
