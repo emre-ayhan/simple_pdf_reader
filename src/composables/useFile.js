@@ -667,7 +667,6 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
         pdfReader,
         isFileLoaded,
         originalPdfData,
-        renderedPages,
         fileInput,
         filename,
         filepath,
