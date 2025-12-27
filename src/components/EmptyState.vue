@@ -71,10 +71,11 @@ const openFile = () => emit('open-file');
               </div>
               <div class="ms-auto" v-else>
                 <div class="d-flex align-items-center gap-2">
-                  <i class="bi bi-windows"></i>
-                  <!-- <i class="bi bi-apple"></i> -->
-                  <i class="bi bi-tux"></i>
-                  <a href="https://github.com/emre-ayhan/simple_pdf_reader/releases/latest" target="_blank" rel="noopener noreferrer" class="btn btn-link px-0">
+                  <!-- <i class="bi bi-windows"></i>
+                  <i class="bi bi-apple"></i>
+                  <i class="bi bi-tux"></i> -->
+                  <a href="https://github.com/emre-ayhan/simple_pdf_reader/releases/latest" target="_blank" rel="noopener noreferrer" class="btn btn-link text-decoration-none">
+                    <i class="bi bi-download me-1"></i>
                     Download
                   </a>
                 </div>
