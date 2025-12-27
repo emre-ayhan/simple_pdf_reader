@@ -344,7 +344,8 @@ useWindowEvents({
             }
         },
         Delete: {
-            action: () => {
+            action: (event) => {
+                event.preventDefault();
                 removePage(pageNum.value);
             }
         },

@@ -57,14 +57,8 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
 
     const pageNumConverted = computed(() => {
         let currentPage = pageNum.value;
-        const deletedArray = Array.from(deletedPages.value).sort((a, b) => a - b);
-        deletedArray.forEach(deletedPage => {
-            if (deletedPage < currentPage) {
-                currentPage--;
-            } else if (deletedPage === currentPage) {
-                currentPage = Math.min(currentPage + 1, pageCount.value - deletedArray.length);
-            }
-        });
+        const numOfDeletedBefore = Array.from(deletedPages.value).filter(p => p < currentPage).length;
+        currentPage -= numOfDeletedBefore;
         return currentPage;
     });
 
