@@ -206,7 +206,7 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
     
     const scrollToPage = (page, inputMode) => {
         if (!isFileLoaded.value) return;
-        const numOfDeletedBefore = Array.from(deletedPages.value).filter(p => p < (page + 1)).length;
+        const numOfDeletedBefore = Array.from(deletedPages.value).filter(p => p <= page).length;
 
         if (inputMode) {
             page = getOriginalPageNum(page);
