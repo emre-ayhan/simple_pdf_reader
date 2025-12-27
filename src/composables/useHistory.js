@@ -2,7 +2,7 @@ import { ref, markRaw, computed } from 'vue';
 
 const sessions = ref({});
 
-export function useHistory(fileId, strokesPerPage, drawingCanvases, drawingContexts, redrawAllStrokes) {
+export function useHistory(fileId, strokesPerPage, drawingCanvases, drawingContexts, deletedPages, redrawAllStrokes) {
     const history = ref([]);
     const historyStep = ref(-1);
     const savedHistoryStep = ref(-1);
@@ -109,6 +109,8 @@ export function useHistory(fileId, strokesPerPage, drawingCanvases, drawingConte
             for (let i = 0; i < drawingCanvases.value.length; i++) {
                 redrawAllStrokes(i);
             }
+        } else if (action.type === 'delete-page') {
+            deletedPages.value.delete(action.page);
         }
         
         if (temporaryState.value) {
@@ -157,6 +159,8 @@ export function useHistory(fileId, strokesPerPage, drawingCanvases, drawingConte
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
                 }
             }
+        } else if (action.type === 'delete-page') {
+            deletedPages.value.add(action.page);
         }
     };
 

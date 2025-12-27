@@ -1,4 +1,4 @@
-import { ref, nextTick } from "vue";
+import { ref, nextTick, computed } from "vue";
 import { PDFDocument, rgb } from "pdf-lib";
 import { Electron } from "./useElectron";
 import { GlobalWorkerOptions, getDocument } from "pdfjs-dist";
@@ -24,6 +24,9 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
     const pdfCanvases = ref([]); // Reference to PDF canvases for selection capture
     const isFileLoaded = ref(false);
     const originalPdfData = ref(null);
+
+    // Deleted Pages Set
+    const deletedPages = ref(new Set());
 
     // Drawing State Variables
     const strokesPerPage = ref({}); // Store strokes per page
@@ -51,6 +54,27 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
     let savedPageNum = 1;
     let savedStrokesPerPage = {};
     let savedWidth = 100; // Save page width before entering whiteboard
+
+    const pageNumConverted = computed(() => {
+        let currentPage = pageNum.value;
+        const deletedArray = Array.from(deletedPages.value).sort((a, b) => a - b);
+        deletedArray.forEach(deletedPage => {
+            if (deletedPage < currentPage) {
+                currentPage--;
+            } else if (deletedPage === currentPage) {
+                currentPage = Math.min(currentPage + 1, pageCount.value - deletedArray.length);
+            }
+        });
+        return currentPage;
+    });
+
+    const isFirstPage = computed(() => {
+        return pageNumConverted.value <= 1;
+    });
+
+    const isLastPage = computed(() => {
+        return pageNumConverted.value >= (pageCount.value - deletedPages.value.size);
+    });
 
     const resetPdfDoc = () => {
         pdfDoc = null;
@@ -175,17 +199,37 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
         const page = localStorage.getItem(filename.value);
         return page ? Number(page) : 1;
     }
+
+    const getOriginalPageNum = (page) => {
+        const deletedArray = Array.from(deletedPages.value).sort((a, b) => a - b);
+        deletedArray.forEach(deletedPage => {
+            if (deletedPage <= page) {
+                page++;
+            }
+        });
+        return page;
+    }
     
-    const scrollToPage = (page) => {
+    const scrollToPage = (page, inputMode) => {
         if (!isFileLoaded.value) return;
+        const numOfDeletedBefore = Array.from(deletedPages.value).filter(p => p < (page + 1)).length;
+
+        if (inputMode) {
+            page = getOriginalPageNum(page);
+        } else if (deletedPages.value.has(page)) {
+            const direction = page === 1 ? 1 : (page < pageNum.value || page === pageCount.value ? -1 : 1);
+            let newPage = page + direction;
+            scrollToPage(newPage);
+            return;
+        }
 
         if (page >= 1 && page <= pageCount.value) {
             const pageIndex = page - 1;
             const canvas = pdfCanvases.value[pageIndex];
             if (canvas) {
                 canvas.scrollIntoView({ block: 'start' });
-                pageNum.value = page;
-                savePageToLocalStorage(filename.value, page);
+                pageNum.value = page + numOfDeletedBefore;
+                savePageToLocalStorage(filename.value, pageNum.value);
             }
         }
     };
@@ -559,6 +603,30 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
                 });
             }
 
+            // Remove any pages that were deleted by the user before saving
+            if (deletedPages.value && deletedPages.value.size > 0) {
+                try {
+                    // Convert deleted page numbers to zero-based indexes and sort descending
+                    const indices = Array.from(deletedPages.value)
+                        .map(p => p - 1)
+                        .filter(i => Number.isInteger(i) && i >= 0)
+                        .sort((a, b) => b - a);
+
+                    // Remove pages from the PDF document in descending order
+                    indices.forEach(idx => {
+                        try {
+                            if (typeof pdfLibDoc.removePage === 'function') {
+                                pdfLibDoc.removePage(idx);
+                            }
+                        } catch (err) {
+                            console.error('Failed to remove page index', idx, err);
+                        }
+                    });
+                } catch (err) {
+                    console.error('Error removing deleted pages before save:', err);
+                }
+            }
+
             // Save the modified PDF
             const pdfBytes = await pdfLibDoc.save();
             
@@ -656,6 +724,18 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
         }
     };
 
+    const deletePage = async (page, callback) => {
+        if (!pdfDoc || page < 1 || page > pageCount.value) return;
+
+        if (!confirm(`Are you sure you want to delete page ${page}?`)) return;
+        deletedPages.value.add(page);
+        pageNum.value = Math.min(page + 1, pageCount.value);
+
+        if (typeof callback === 'function') {
+            callback();
+        }
+    };
+
     return {
         fileId,
         pagesContainer,
@@ -673,6 +753,9 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
         imagePage,
         pageCount,
         pageNum,
+        pageNumConverted,
+        isFirstPage,
+        isLastPage,
         zoomPercentage,
         showWhiteboard,
         zoomMode,
@@ -698,6 +781,8 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
         setupLazyLoadObserver,
         scrollToPage,
         savePageToLocalStorage,
-        getPageFromLocalStorage
+        getPageFromLocalStorage,
+        deletedPages,
+        deletePage,
     }
 }

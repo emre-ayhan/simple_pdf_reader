@@ -61,6 +61,9 @@ const {
     imagePage,
     pageCount,
     pageNum,
+    pageNumConverted,
+    isFirstPage,
+    isLastPage,
     zoomPercentage,
     zoomMode,
     showWhiteboard,
@@ -79,6 +82,8 @@ const {
     intersectionObserver,
     lazyLoadObserver,
     scrollToPage,
+    deletedPages,
+    deletePage,
 } = useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoadCallback, fileSavedCallback, showWhiteboardCallback);
 
 // Drag and Drop Handlers
@@ -161,7 +166,7 @@ const {
     hasUnsavedChanges,
     resetHistory, 
     saveCurrentHistoryStep,
-} = useHistory(fileId, strokesPerPage, drawingCanvases, drawingContexts, redrawAllStrokes);
+} = useHistory(fileId, strokesPerPage, drawingCanvases, drawingContexts, deletedPages, redrawAllStrokes);
 
 startSession();
 
@@ -281,6 +286,12 @@ const zoom = (mode) => {
     }
 }
 
+const removePage = (page) => {
+    deletePage(page, () => {
+        addToHistory({ type: 'delete-page', page });
+    });
+};
+
 const hasActiveTool = computed(() => {
     return isDrawing.value || isEraser.value || isTextMode.value || isSelectionMode.value;
 });
@@ -332,6 +343,11 @@ useWindowEvents({
                 redo();
             }
         },
+        Delete: {
+            action: () => {
+                removePage(pageNum.value);
+            }
+        },
         Escape: {
             action: () => {
                 if (hasActiveTool.value) {
@@ -341,16 +357,14 @@ useWindowEvents({
         },
         ArrowLeft: {
             action: () => {
-                if (pageNum.value > 1) {
-                    scrollToPage(pageNum.value - 1);
-                }
+                if (isFirstPage.value) return;
+                scrollToPage(pageNum.value - 1);
             }
         },
         ArrowRight: {
             action: () => {
-                if (pageNum.value < pageCount.value) {
-                    scrollToPage(pageNum.value + 1);
-                }
+                if (isLastPage.value) return;
+                scrollToPage(pageNum.value + 1);
             }
         },
     }
@@ -489,25 +503,25 @@ onUnmounted(() => {
 
                     <!-- Pagination -->
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="scrollToPage(1)" :class="{ disabled: !isFileLoaded || showWhiteboard || pageNum <= 1 }" title="First Page">
+                        <a href="#" class="nav-link" @click.prevent="scrollToPage(1)" :class="{ disabled: !isFileLoaded || showWhiteboard || isFirstPage }" title="First Page">
                             <i class="bi bi-chevron-double-left"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageNum - 1)" :class="{ disabled: !isFileLoaded || showWhiteboard || pageNum <= 1 }" title="Previous Page">
+                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageNum - 1)" :class="{ disabled: !isFileLoaded || showWhiteboard || isFirstPage }" title="Previous Page">
                             <i class="bi bi-chevron-left"></i>
                         </a>
                     </li>
                     <li class="nav-item d-none d-lg-block">
-                        <input type="text" class="form-control-plaintext" :value="pageNum" @input="scrollToPage($event.target.value)" :disabled="!isFileLoaded || showWhiteboard" />
+                        <input type="text" class="form-control-plaintext" :value="pageNumConverted" @input="scrollToPage($event.target.value*1, 1)" :disabled="!isFileLoaded || showWhiteboard" />
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageNum + 1)" :class="{ disabled: !isFileLoaded || showWhiteboard || pageNum >= pageCount }" title="Next Page">
+                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageNum + 1)" :class="{ disabled: !isFileLoaded || showWhiteboard || isLastPage }" title="Next Page">
                             <i class="bi bi-chevron-right"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageCount)" :class="{ disabled: !isFileLoaded || showWhiteboard || pageNum >= pageCount }" :title="`Last Page (${pageCount})`">
+                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageCount)" :class="{ disabled: !isFileLoaded || showWhiteboard || isLastPage }" :title="`Last Page (${pageCount - deletedPages.size})`">
                             <i class="bi bi-chevron-double-right"></i>
                         </a>
                     </li>
@@ -560,6 +574,12 @@ onUnmounted(() => {
                         </li>
                     </template>
                     <template v-else>
+                        <!-- Remove Page -->
+                        <li class="nav-item" title="Delete Current Page (Delete)">
+                            <a href="#" class="nav-link" @click.prevent="removePage(pageNum)" :class="{ disabled: !isFileLoaded }">
+                                <i class="bi bi-trash-fill"></i>
+                            </a>
+                        </li>
                         <!-- File Controls -->
                         <li class="nav-item" title="Save File (Ctrl+S)">
                             <a href="#" class="nav-link" @click.prevent="handleSaveFile" :class="{ disabled: !isFileLoaded || !hasUnsavedChanges }">
@@ -580,26 +600,28 @@ onUnmounted(() => {
             <EmptyState v-if="!isFileLoaded" @open-file="handleFileOpen" />
 
             <div v-else class="pages-container" :class="{ 'whiteboard-mode': showWhiteboard }" ref="pagesContainer" :style="{ width: `${zoomPercentage}%` }">
-                <div v-for="page in pageCount" :key="page" class="page-container" :data-page="page">
-                    <div class="canvas-container" :class="{ 'canvas-loading': !renderedPages.has(page) }">
-                        <canvas class="pdf-canvas" :ref="el => { if (el) pdfCanvases[page - 1] = el }"></canvas>
-                        <canvas 
-                            :ref="el => { if (el) drawingCanvases[page - 1] = el }"
-                            class="drawing-canvas"
-                            @pointerdown="startDrawing"
-                            @pointermove="onPointerMove"
-                            @pointerup="stopDrawing"
-                            @pointerleave="onPointerLeave"
-                            @pointercancel="stopDrawing"
-                            :style="{
-                                cursor: cursorStyle,
-                                pointerEvents: 'auto',
-                                touchAction: isViewLocked || isPenHovering ? 'none' : 'pan-y pan-x',
-                            }"
-                            :data-color="drawColor"
-                        ></canvas>
+                <template v-for="page in pageCount" :key="page">
+                    <div  class="page-container" :data-page="page" v-show="!deletedPages.has(page)">
+                        <div class="canvas-container" :class="{ 'canvas-loading': !renderedPages.has(page) }">
+                            <canvas class="pdf-canvas" :ref="el => { if (el) pdfCanvases[page - 1] = el }"></canvas>
+                            <canvas 
+                                :ref="el => { if (el) drawingCanvases[page - 1] = el }"
+                                class="drawing-canvas"
+                                @pointerdown="startDrawing"
+                                @pointermove="onPointerMove"
+                                @pointerup="stopDrawing"
+                                @pointerleave="onPointerLeave"
+                                @pointercancel="stopDrawing"
+                                :style="{
+                                    cursor: cursorStyle,
+                                    pointerEvents: 'auto',
+                                    touchAction: isViewLocked || isPenHovering ? 'none' : 'pan-y pan-x',
+                                }"
+                                :data-color="drawColor"
+                            ></canvas>
+                        </div>
                     </div>
-                </div>
+                </template>
             </div>
         </div>
         <input ref="fileInput" type="file"  accept="application/pdf,image/*" class="d-none" @change="loadFile" />
