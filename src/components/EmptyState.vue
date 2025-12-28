@@ -7,9 +7,9 @@ const openFile = () => emit('open-file');
 </script>
 
 <template>
-    <div class="container">
-      <div class="row">
-        <div class="col-12">
+    <div class="container h-100">
+      <div class="row h-100">
+        <div class="col-12 my-auto">
           <div class="empty-card">
             <div class="d-flex">
               <a href="https://emre-ayhan.github.io/simple_pdf_reader/" target="_blank" rel="noopener noreferrer" class="link-accent">
