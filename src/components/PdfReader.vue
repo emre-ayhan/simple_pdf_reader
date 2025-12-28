@@ -458,7 +458,7 @@ onUnmounted(() => {
                         </div>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="toggleTouchDrawing" :class="{ active: enableTouchDrawing, disabled: !isFileLoaded }" title="Toggle Touch Drawing">
+                        <a class="nav-link" href="#" @click.prevent="toggleTouchDrawing" :class="{ active: enableTouchDrawing, disabled: !isFileLoaded }" :title="`${enableTouchDrawing ? 'Disable' : 'Enable'} Touch Drawing`">
                             <i class="bi bi-hand-index-thumb-fill"></i>
                         </a>
                     </li>
