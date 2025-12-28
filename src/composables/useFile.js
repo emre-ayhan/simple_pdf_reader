@@ -723,8 +723,7 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
 
         if (!confirm(`Are you sure you want to delete page ${page}?`)) return;
         deletedPages.value.add(page);
-        pageNum.value = Math.min(page + 1, pageCount.value);
-
+        scrollToPage(page);
         if (typeof callback === 'function') {
             callback();
         }
