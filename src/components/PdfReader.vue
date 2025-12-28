@@ -128,6 +128,7 @@ const captureSelectionCallback = (canvasIndex, selectedCanvas) => {
 const {
     isDrawing,
     isEraser,
+    enableTouchDrawing,
     drawMode,
     drawColor,
     drawThickness,
@@ -248,6 +249,10 @@ const selectSelection = () => {
     const wasActive = isSelectionMode.value;
     resetToolState();
     isSelectionMode.value = !wasActive;
+};
+
+const toggleTouchDrawing = () => {
+    enableTouchDrawing.value = !enableTouchDrawing.value;
 };
 
 const toggleZoomMode = () => {
@@ -453,6 +458,11 @@ onUnmounted(() => {
                         </div>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link" href="#" @click.prevent="toggleTouchDrawing" :class="{ active: enableTouchDrawing, disabled: !isFileLoaded }" title="Toggle Touch Drawing">
+                            <i class="bi bi-hand-index-thumb-fill"></i>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link" href="#" @click.prevent="selectDrawingTool('pen')" :class="{ active: isDrawing && drawMode === 'pen', disabled: !isFileLoaded }" title="Draw">
                             <i class="bi bi-pencil-fill"></i>
                         </a>
@@ -616,7 +626,7 @@ onUnmounted(() => {
                                 :style="{
                                     cursor: cursorStyle,
                                     pointerEvents: 'auto',
-                                    touchAction: isViewLocked || isPenHovering ? 'none' : 'pan-y pan-x',
+                                    touchAction: (isViewLocked || isPenHovering || enableTouchDrawing) ? 'none' : 'pan-y pan-x',
                                 }"
                                 :data-color="drawColor"
                             ></canvas>

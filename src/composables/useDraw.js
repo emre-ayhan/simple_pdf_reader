@@ -10,6 +10,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     const drawThickness = ref(2);
     const currentStrokeId = ref(null);
     const currentStroke = ref([]); // Current stroke being drawn
+    const enableTouchDrawing = ref(false);
 
 
     const colors = [
@@ -85,8 +86,8 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             isPenHovering.value = true;
         }
 
-        // Only allow pen/stylus and mouse input, not touch
-        if (e.pointerType === 'touch') return;
+        // Allow touch only when enableTouchDrawing is true
+        if (e.pointerType === 'touch' && !enableTouchDrawing.value) return;
 
         // Generate a new stroke ID
         currentStrokeId.value = uuid();
@@ -248,8 +249,8 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         // Only continue with the same pointer that started
         if (e.pointerId !== activePointerId.value) return;
         
-        // Block touch
-        if (e.pointerType === 'touch') return;
+        // Block touch unless touch drawing is enabled
+        if (e.pointerType === 'touch' && !enableTouchDrawing.value) return;
         
         // Check if pen secondary button is pressed for erasing
         const isPenSecondaryButton = e.pointerType === 'pen' && (e.buttons === 2 || e.buttons === 32 || e.button === 5);
@@ -674,6 +675,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         isEraser,
         drawMode,
         drawColor,
+        enableTouchDrawing,
         drawThickness,
         colors,
         isTextMode,
