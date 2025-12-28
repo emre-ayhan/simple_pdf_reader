@@ -253,6 +253,7 @@ const selectSelection = () => {
 
 const toggleTouchDrawing = () => {
     enableTouchDrawing.value = !enableTouchDrawing.value;
+    localStorage.setItem('enableTouchDrawing', enableTouchDrawing.value);
 };
 
 const toggleZoomMode = () => {
@@ -626,7 +627,7 @@ onUnmounted(() => {
                                 :style="{
                                     cursor: cursorStyle,
                                     pointerEvents: 'auto',
-                                    touchAction: (isViewLocked || isPenHovering || enableTouchDrawing) ? 'none' : 'pan-y pan-x',
+                                    touchAction: (isViewLocked || isPenHovering || (enableTouchDrawing && hasActiveTool)) ? 'none' : 'pan-y pan-x',
                                 }"
                                 :data-color="drawColor"
                             ></canvas>

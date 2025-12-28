@@ -10,7 +10,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     const drawThickness = ref(2);
     const currentStrokeId = ref(null);
     const currentStroke = ref([]); // Current stroke being drawn
-    const enableTouchDrawing = ref(false);
+    const enableTouchDrawing = ref(localStorage.getItem('enableTouchDrawing') === 'true');
 
 
     const colors = [
