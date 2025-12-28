@@ -4,8 +4,6 @@ import { useHistory } from "./useHistory";
 const { activeSessionId } = useHistory();
 
 export function useWindowEvents(fileId, eventSettings = {}) {
-    console.log(activeSessionId.value, fileId);
-    
     const handlers = {
         keydown(event, options) {
             if (activeSessionId.value !== fileId) return;
