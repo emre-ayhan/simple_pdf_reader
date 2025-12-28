@@ -305,7 +305,7 @@ const hasActiveTool = computed(() => {
 let resizeTimeout = null;
 
 // Page Event Handlers
-useWindowEvents({
+useWindowEvents(fileId, {
     resize: {
         action() {
             if (!isFileLoaded.value) return;
@@ -357,9 +357,8 @@ useWindowEvents({
         },
         Escape: {
             action: () => {
-                if (hasActiveTool.value) {
-                    resetToolState();
-                }
+                if (!hasActiveTool.value) return;
+                resetToolState();
             }
         },
         ArrowLeft: {

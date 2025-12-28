@@ -3,7 +3,7 @@ import { ref, computed } from 'vue';
 import { Electron } from '../composables/useElectron';
 import { useHistory } from '../composables/useHistory';
 
-const { sessions } = useHistory();
+const { sessions, markAsActive } = useHistory();
 
 const fileHasUnsavedChanges = (fileId) => {
     const session = sessions.value[fileId];
@@ -33,9 +33,10 @@ const openTabs = computed(() => {
     return tabs.value.filter(tab => !tab.closed);
 });
 
-const onTabClick = (index) => {
+const onTabClick = (tab, index) => {
     activeTabIndex.value = index;
     tabHistory.value.push(index);
+    markAsActive(tab.id);
 };
 
 const handleElectronButtonClick = (action) => {
@@ -106,7 +107,7 @@ defineExpose({
     <ul class="nav nav-tabs fixed-top pt-1" id="appTabs" role="tablist">
         <template v-for="(tab, index) in tabs" :key="tab">
             <li class="nav-item" role="presentation" v-if="!tab.closed">
-                <button class="nav-link" :class="{ active: index === activeTabIndex }" type="button" role="tab" @click="onTabClick(index)">
+                <button class="nav-link" :class="{ active: index === activeTabIndex }" type="button" role="tab" @click="onTabClick(tab, index)">
                     <div class="d-flex align-items-center">
                         <div class="text-truncate flex-fill">
                             <span class="align-top fs-5 lh-1" v-if="fileHasUnsavedChanges(tab.id)">*</span>

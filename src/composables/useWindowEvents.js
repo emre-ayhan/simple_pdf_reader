@@ -1,8 +1,14 @@
 import { onMounted, onUnmounted } from "vue";
+import { useHistory } from "./useHistory";
 
-export function useWindowEvents(eventSettings = {}) {
+const { activeSessionId } = useHistory();
+
+export function useWindowEvents(fileId, eventSettings = {}) {
+    console.log(activeSessionId.value, fileId);
+    
     const handlers = {
         keydown(event, options) {
+            if (activeSessionId.value !== fileId) return;
             if (Object.keys(options).length === 0) return;
             const settings = options[event.key];
 

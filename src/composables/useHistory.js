@@ -2,6 +2,21 @@ import { ref, markRaw, computed } from 'vue';
 
 const sessions = ref({});
 
+const markAsActive = (fileId) => {
+    if (sessions.value[fileId]) {
+        const activeSession = Object.values(sessions.value).find(session => session.active);
+        if (activeSession) {
+            activeSession.active = false;
+        }
+
+        sessions.value[fileId].active = true;
+    }
+}
+
+const activeSessionId = computed(() => {
+    return Object.values(sessions.value).find(session => session.active)?.id || null;
+});
+
 export function useHistory(fileId, strokesPerPage, drawingCanvases, drawingContexts, deletedPages, redrawAllStrokes) {
     const history = ref([]);
     const historyStep = ref(-1);
@@ -15,10 +30,14 @@ export function useHistory(fileId, strokesPerPage, drawingCanvases, drawingConte
     const startSession = () => {
         if (!sessions.value[fileId]) {
             sessions.value[fileId] = {
+                id: fileId,
+                active: false,
                 history,
                 historyStep,
                 savedHistoryStep
             };
+
+            markAsActive(fileId);
         }
     };
 
@@ -187,6 +206,7 @@ export function useHistory(fileId, strokesPerPage, drawingCanvases, drawingConte
     });
 
     return {
+        activeSessionId,
         startSession,
         endSession,
         fileId,
@@ -203,5 +223,6 @@ export function useHistory(fileId, strokesPerPage, drawingCanvases, drawingConte
         hasUnsavedChanges,
         resetHistory,
         saveCurrentHistoryStep,
+        markAsActive
     };
 }
