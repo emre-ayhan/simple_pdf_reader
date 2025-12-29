@@ -11,8 +11,8 @@ onMounted(() => {
 </script>
 <template>
 <div class="modal fade" id="page-modal" tabindex="-1" aria-labelledby="pageModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-scrollable modal-dialog-centered rounded-4">
-        <div class="modal-content rounded-4">
+    <div class="modal-dialog modal-dialog-scrollable modal-dialog-centered rounded-3">
+        <div class="modal-content rounded-3">
             <div class="modal-body">
                 <h4 class="modal-title text-danger" id="pageModalLabel">
                     <i class="bi" :class="mustConfirm ? 'bi-exclamation-triangle-fill' : 'bi-info-circle-fill'"></i>

@@ -4,12 +4,17 @@
     border: 0 !important;
     margin: 0 !important;
     font-size: small !important;
+    z-index: 1035;
     -webkit-app-region: drag;
 
     .nav-item {
         border: 0 !important;
         margin: 0 !important;
         font-size: small !important;
+
+        &:first-child {
+            margin-left: .5rem !important;
+        }
     }
 
     .nav-link {
