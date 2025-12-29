@@ -716,7 +716,7 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
         if (!confirm(`Are you sure you want to delete page ${page}?`)) return;
         deletedPages.value.add(page);
         if (typeof callback !== 'function') return;
-        callback(page);
+        callback({ type: 'delete-page', page });
     };
 
     return {

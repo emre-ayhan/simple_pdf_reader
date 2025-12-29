@@ -303,12 +303,6 @@ const zoom = (mode) => {
     }
 }
 
-const removePage = () => {
-    deletePage(pageIndex.value, (page) => {
-        addToHistory({ type: 'delete-page', page });
-    });
-};
-
 const hasActiveTool = computed(() => {
     return isDrawing.value || isEraser.value || isTextMode.value || isSelectionMode.value;
 });
@@ -363,7 +357,7 @@ useWindowEvents(fileId, {
         Delete: {
             action: (event) => {
                 event.preventDefault();
-                removePage(pageIndex.value);
+                deletePage(pageIndex.value, addToHistory);
             }
         },
         Escape: {
@@ -598,7 +592,7 @@ onUnmounted(() => {
                     <template v-else>
                         <!-- Remove Page -->
                         <li class="nav-item" title="Delete Current Page (Delete)">
-                            <a href="#" class="nav-link" @click.prevent="removePage" :class="{ disabled: !isFileLoaded }">
+                            <a href="#" class="nav-link" @click.prevent="deletePage(pageIndex.value, addToHistory)" :class="{ disabled: !isFileLoaded }">
                                 <i class="bi bi-trash-fill"></i>
                             </a>
                         </li>
