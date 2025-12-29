@@ -712,12 +712,13 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
         const page = activePages.value[index];
         if (!pdfDoc || !page) return;
         
-        await showModal(`Are you sure you want to delete page ${page}?`, () => {
-            deletedPages.value.add(page);
-    
-            if (typeof callback !== 'function') return;
-            callback({ type: 'delete-page', page });
-        });
+        const confirmed = await showModal(`Are you sure you want to delete page ${page}?`, true);
+        if (!confirmed) return;
+
+        deletedPages.value.add(page);
+
+        if (typeof callback !== 'function') return;
+        callback({ type: 'delete-page', page });
     };
 
     return {

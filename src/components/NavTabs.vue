@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import { Electron } from '../composables/useElectron';
 import { useHistory } from '../composables/useHistory';
+import {  showModal } from '../composables/useModal';
 
 const { sessions, markAsActive } = useHistory();
 
@@ -39,10 +40,14 @@ const onTabClick = (tab, index) => {
     markAsActive(tab.id);
 };
 
-const handleElectronButtonClick = (action) => {
+const handleElectronButtonClick = async (action) => {
     if (!Electron.value) return;
 
-    if (action === 'close' && openTabs.value.filter(tab => fileHasUnsavedChanges(tab.id)).length && !confirm('You have unsaved changes in one or more tabs. Are you sure you want to close the application?')) return;
+    if (action === 'close' && openTabs.value.filter(tab => fileHasUnsavedChanges(tab.id)).length) {
+        const confirmed = await showModal('You have unsaved changes in one or more tabs. Are you sure you want to close the application?', true);
+        if (!confirmed) return;
+    };
+
     Electron.value[action]();
 };
 
@@ -69,11 +74,14 @@ const openNewTab = () => {
     openEmptyStateTab();
 };
 
-const closeTab = (index) => {
+const closeTab = async (index) => {
     const tab = tabs.value[index];
 
     if (tab) {
-        if (fileHasUnsavedChanges(tab.id) && !confirm('You have unsaved changes. Are you sure you want to close this tab?')) return;
+        if (fileHasUnsavedChanges(tab.id)) {
+            const confirmed = await showModal('You have unsaved changes in this tab. Are you sure you want to close it?', true);
+            if (!confirmed) return;
+        };
 
         if (tab.emptyState) {
             tabs.value.splice(index, 1);

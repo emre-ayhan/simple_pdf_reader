@@ -4,16 +4,14 @@ const message = ref("");
 const mustConfirm = ref(false);
 
 let resolver = null;
-let onConfirmedCallback = null;
 
-const showModal = (msg, onConfirmed) => {
+const showModal = (msg, requireConfirmation) => {
     if (modal.value) {
         modal.value.show();
         message.value = msg || "";
-        mustConfirm.value = typeof onConfirmed === "function";
+        mustConfirm.value = requireConfirmation || false;
 
         if (mustConfirm.value) {
-            onConfirmedCallback = onConfirmed;
             return new Promise((resolve) => {
                 resolver = resolve;
             });
@@ -24,20 +22,15 @@ const showModal = (msg, onConfirmed) => {
 const hideModal = () => {
     if (modal.value) {
         modal.value.hide();
+        mustConfirm.value = false;
+        message.value = "";
     }
 };
 
 const confirm = () => {
     if (typeof resolver !== "function") return;
-
     resolver(true);
     resolver = null;
-
-    if (typeof onConfirmedCallback !== "function") return;
-
-    onConfirmedCallback();
-    onConfirmedCallback = null;
-
     hideModal();
 };
 
