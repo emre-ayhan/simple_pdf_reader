@@ -3,6 +3,8 @@ import { PDFDocument, rgb } from "pdf-lib";
 import { Electron } from "./useElectron";
 import { GlobalWorkerOptions, getDocument } from "pdfjs-dist";
 import { uuid } from "./useUuid";
+import { showModal } from "./useModal";
+
 GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.449/build/pdf.worker.min.mjs';
 
 export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoadCallback, fileSavedCallback, showWhiteboardCallback) {
@@ -352,22 +354,18 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
             filename.value = file.name;
             filepath.value = file.path || null;
             const url = URL.createObjectURL(file);
-            getDocument(url).promise.then(getDocumentCallback).catch(error => {
+            getDocument(url).promise.then(getDocumentCallback).catch(async error => {
                 console.error('Error loading PDF:', error);
-                alert('Error loading PDF: ' + error.message);
+                await showModal('Error loading PDF: ' + error.message);
             });
         }
     };
 
-    const alertUnsupportedFile = () => {
-        alert('Unsupported file type. Please select a PDF or image.');
-    }
-
-    const loadFile = (event) => {
+    const loadFile = async (event) => {
         const file = event?.target?.files?.[0] || event;
         
         if (!file) {
-            alertUnsupportedFile();
+            await showModal('Unsupported file type. Please select a PDF or image.');
             return
         };
 
@@ -376,11 +374,11 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
         } else if (file.type.startsWith('image/') || file.name.toLowerCase().match(/\.(png|jpe?g|gif|webp|bmp|svg)$/)) {
             loadImageFile(file);
         } else {
-            alertUnsupportedFile();
+            await showModal('Unsupported file type. Please select a PDF or image.');
         }
     };
 
-    const processFileOpenResult = (result) => {
+    const processFileOpenResult =  async (result) => {
         if (!result) return;
 
         filepath.value = result.filepath;
@@ -400,9 +398,9 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
             originalPdfData.value = new Uint8Array(bytes);
             
             // Load PDF from binary data
-            getDocument({ data: bytes }).promise.then(getDocumentCallback).catch(error => {
+            getDocument({ data: bytes }).promise.then(getDocumentCallback).catch(async error => {
                 console.error('Error loading PDF:', error);
-                alert('Error loading PDF: ' + error.message);
+                await showModal('Error loading PDF: ' + error.message);
             });
         }
         // Handle image files
@@ -425,7 +423,7 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
             });
         }
         else {
-            alert('Unsupported file type. Please select a PDF or image.');
+            await showModal('Unsupported file type. Please select a PDF or image.');
         }
     };
 
@@ -644,7 +642,7 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
                     } else {
                         console.error('Electron save failed:', result.error);
                         console.error('Error code:', result.errorCode);
-                        alert(`Failed to save PDF: ${result.error}\nError code: ${result.errorCode || 'unknown'}\nFalling back to download.`);
+                        await showModal(`Failed to save PDF: ${result.error}\nError code: ${result.errorCode || 'unknown'}\nFalling back to download.`);
                         // Don't throw - fall through to download method
                     }
                 } catch (err) {
@@ -654,7 +652,7 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
                         stack: err.stack,
                         filepath: filepath.value
                     });
-                    alert(`Failed to save PDF with Electron: ${err.message}\nFalling back to download.`);
+                    await showModal(`Failed to save PDF with Electron: ${err.message}\nFalling back to download.`);
                     // Don't throw - fall through to download method
                 }
             }
@@ -706,17 +704,20 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
                 hasFilepath: !!filepath.value,
                 hasPdfData: !!originalPdfData.value
             });
-            alert('Failed to save PDF: ' + error.message);
+            await showModal('Failed to save PDF: ' + error.message);
         }
     };
 
     const deletePage = async (index, callback) => {
         const page = activePages.value[index];
         if (!pdfDoc || !page) return;
-        if (!confirm(`Are you sure you want to delete page ${page}?`)) return;
-        deletedPages.value.add(page);
-        if (typeof callback !== 'function') return;
-        callback({ type: 'delete-page', page });
+        
+        await showModal(`Are you sure you want to delete page ${page}?`, () => {
+            deletedPages.value.add(page);
+    
+            if (typeof callback !== 'function') return;
+            callback({ type: 'delete-page', page });
+        });
     };
 
     return {

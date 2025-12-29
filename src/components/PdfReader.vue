@@ -592,7 +592,7 @@ onUnmounted(() => {
                     <template v-else>
                         <!-- Remove Page -->
                         <li class="nav-item" title="Delete Current Page (Delete)">
-                            <a href="#" class="nav-link" @click.prevent="deletePage(pageIndex.value, addToHistory)" :class="{ disabled: !isFileLoaded }">
+                            <a href="#" class="nav-link" @click.prevent="deletePage(pageIndex, addToHistory)" :class="{ disabled: !isFileLoaded }">
                                 <i class="bi bi-trash-fill"></i>
                             </a>
                         </li>
