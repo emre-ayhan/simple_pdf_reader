@@ -10,7 +10,7 @@ onMounted(() => {
 })
 </script>
 <template>
-<div class="modal fade" id="page-modal" tabindex="-1" aria-labelledby="pageModalLabel">
+<div class="modal fade" id="page-modal" tabindex="-1" aria-labelledby="pageModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-scrollable modal-dialog-centered rounded-4">
         <div class="modal-content rounded-4">
             <div class="modal-body">
