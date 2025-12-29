@@ -1,4 +1,4 @@
-import { ref, nextTick, computed } from "vue";
+import { ref, nextTick, computed, watch } from "vue";
 import { PDFDocument, rgb } from "pdf-lib";
 import { Electron } from "./useElectron";
 import { GlobalWorkerOptions, getDocument } from "pdfjs-dist";
@@ -36,10 +36,6 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
     // when opening images as a single page
     const imagePage = ref(null);
 
-    // Pagination State Variables
-    const pageCount = ref(0);
-    const pageNum = ref(1);
-
     // Zoom State Variables
     const zoomPercentage = ref(100); // 25 to 100
     const zoomMode = ref('fit-width'); // 'fit-width' or 'fit-height'
@@ -51,23 +47,30 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
     const fileRecentlySaved = ref(false);
     let savedPdfDoc = null;
     let savedPageCount = 0;
-    let savedPageNum = 1;
+    let savedPageIndex = 0;
     let savedStrokesPerPage = {};
     let savedWidth = 100; // Save page width before entering whiteboard
 
-    const pageNumConverted = computed(() => {
-        let currentPage = pageNum.value;
-        const numOfDeletedBefore = Array.from(deletedPages.value).filter(p => p < currentPage).length;
-        currentPage -= numOfDeletedBefore;
-        return currentPage;
+    // Pagination State Variables
+    const pageCount = ref(0);
+    const pageIndex = ref(0);
+    const pageNum = ref(1);
+    const activePages = computed(() => {
+        return Array.from({ length: pageCount.value }, (_, i) => i + 1).filter(p => !deletedPages.value.has(p));
+    });
+
+    watch(pageIndex, (newIndex) => {
+        pageNum.value = newIndex + 1;
+        savePageIndexToLocalStorage(filename.value, newIndex);
+        scrollToPage();
     });
 
     const isFirstPage = computed(() => {
-        return pageNumConverted.value <= 1;
+        return pageNum.value <= 1;
     });
 
     const isLastPage = computed(() => {
-        return pageNumConverted.value >= (pageCount.value - deletedPages.value.size);
+        return pageNum.value >= (pageCount.value - deletedPages.value.size);
     });
 
     const resetPdfDoc = () => {
@@ -169,9 +172,10 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
             
             if (mostVisiblePage) {
                 const pageNumber = parseInt(mostVisiblePage.getAttribute('data-page'));
-                if (pageNumber && pageNumber !== pageNum.value) {
-                    pageNum.value = pageNumber;
-                    savePageToLocalStorage();
+                const page = activePages.value[pageIndex.value];
+                if (pageNumber && pageNumber !== page) {
+                    pageIndex.value = activePages.value.indexOf(pageNumber);
+                    savePageIndexToLocalStorage();
                 }
             }
         }, options);
@@ -185,13 +189,13 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
         }
     };
 
-    const savePageToLocalStorage = () => {
-        localStorage.setItem(filename.value, pageNum.value);
+    const savePageIndexToLocalStorage = () => {
+        localStorage.setItem(filename.value, pageIndex.value);
     }
 
-    const getPageFromLocalStorage = () => {
-        const page = localStorage.getItem(filename.value);
-        return page ? Number(page) : 1;
+    const getPageIndexFromLocalStorage = () => {
+        const index = localStorage.getItem(filename.value);
+        pageIndex.value = index ? Number(index) : 0;
     }
 
     const getOriginalPageNum = (page) => {
@@ -204,27 +208,15 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
         return page;
     }
     
-    const scrollToPage = (page, inputMode) => {
-        if (!isFileLoaded.value) return;
-        const numOfDeletedBefore = Array.from(deletedPages.value).filter(p => p <= page).length;
-
-        if (inputMode) {
-            page = getOriginalPageNum(page);
-        } else if (deletedPages.value.has(page)) {
-            const direction = page === 1 ? 1 : (page < pageNum.value || page === pageCount.value ? -1 : 1);
-            let newPage = page + direction;
-            scrollToPage(newPage);
-            return;
-        }
+    const scrollToPage = () => {
+        const page = activePages.value[pageIndex.value];
+        if (!isFileLoaded.value || deletedPages.value.has(page)) return;
 
         if (page >= 1 && page <= pageCount.value) {
-            const pageIndex = page - 1;
-            const canvas = pdfCanvases.value[pageIndex];
-            if (canvas) {
-                canvas.scrollIntoView({ block: 'start' });
-                pageNum.value = page + numOfDeletedBefore;
-                savePageToLocalStorage(filename.value, pageNum.value);
-            }
+            const canvasIndex = page - 1;
+            const canvas = pdfCanvases.value[canvasIndex];
+            if (!canvas) return;
+            canvas.scrollIntoView({ block: 'start' });
         }
     };
 
@@ -232,7 +224,7 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
     const emitFileLoadedEvent = (type, page_count) => {
         isFileLoaded.value = true;
         pageCount.value = page_count || 1;
-        pageNum.value = getPageFromLocalStorage();
+        getPageIndexFromLocalStorage();
 
         emit('file-loaded', {
             id: fileId,
@@ -245,7 +237,7 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
     const clearSavedState = () => {
         savedPdfDoc = null;
         savedPageCount = 0;
-        savedPageNum = 1;
+        savedPageIndex = 0;
         savedStrokesPerPage = {};
         savedWidth = 100;
     };
@@ -253,7 +245,7 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
     const updateSavedState = () => {
         savedPdfDoc = pdfDoc;
         savedPageCount = pageCount.value;
-        savedPageNum = pageNum.value;
+        savedPageIndex = pageIndex.value;
         savedStrokesPerPage = JSON.parse(JSON.stringify(strokesPerPage.value));
         savedWidth = zoomPercentage.value;
     };
@@ -262,11 +254,11 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
         if (savedPdfDoc) {
             pdfDoc = savedPdfDoc;
             pageCount.value = savedPageCount;
-            pageNum.value = savedPageNum;
+            pageIndex.value = savedPageIndex;
         } else if (imagePage.value) {
             pdfDoc = null;
             pageCount.value = 1;
-            pageNum.value = 1;
+            pageIndex.value = 0;
         }
 
         strokesPerPage.value = JSON.parse(JSON.stringify(savedStrokesPerPage));
@@ -337,7 +329,7 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
                 if (imagePage.value) return;
                 setupIntersectionObserver();
                 setupLazyLoadObserver();
-                scrollToPage(pageNum.value);
+                scrollToPage();
             });
         });
     };
@@ -718,15 +710,13 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
         }
     };
 
-    const deletePage = async (page, callback) => {
-        if (!pdfDoc || page < 1 || page > pageCount.value) return;
-
+    const deletePage = async (index, callback) => {
+        const page = activePages.value[index];
+        if (!pdfDoc || !page) return;
         if (!confirm(`Are you sure you want to delete page ${page}?`)) return;
         deletedPages.value.add(page);
-        scrollToPage(page);
-        if (typeof callback === 'function') {
-            callback();
-        }
+        if (typeof callback !== 'function') return;
+        callback(page);
     };
 
     return {
@@ -746,7 +736,8 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
         imagePage,
         pageCount,
         pageNum,
-        pageNumConverted,
+        pageIndex,
+        activePages,
         isFirstPage,
         isLastPage,
         zoomPercentage,
@@ -773,8 +764,7 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
         setupIntersectionObserver,
         setupLazyLoadObserver,
         scrollToPage,
-        savePageToLocalStorage,
-        getPageFromLocalStorage,
+        savePageIndexToLocalStorage,
         deletedPages,
         deletePage,
     }

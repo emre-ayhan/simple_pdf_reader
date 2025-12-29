@@ -23,6 +23,7 @@ const cursorStyle = computed(() => {
 
 const emit = defineEmits(['file-loaded', 'new-tab']);
 
+// File Management
 const showWhiteboardCallback = () => {
     renderWhiteboardCanvas();
 }
@@ -45,8 +46,17 @@ const fileSavedCallback = () => {
     saveCurrentHistoryStep();
 }
 
+const handlePageNumber = (event) => {
+    const page = parseInt(event.target.value);
+    if (isNaN(page) || page < 1 || page > pageCount.value - deletedPages.size) {
+        // Invalid page number
+        event.target.value = pageNum.value;
+        return;
+    }
 
-// File Management
+    pageIndex.value = page - 1;
+}
+
 const {
     fileId,
     pdfCanvases,
@@ -60,8 +70,9 @@ const {
     renderedPages,
     imagePage,
     pageCount,
+    pageIndex,
     pageNum,
-    pageNumConverted,
+    activePages,
     isFirstPage,
     isLastPage,
     zoomPercentage,
@@ -188,7 +199,7 @@ const closeWhiteboardCallback = () => {
         imagePage.value = null;
         isFileLoaded.value = false;
         pageCount.value = 0;
-        pageNum.value = 1;
+        pageIndex.value = 0;
         strokesPerPage.value = {};
         return;
     }
@@ -270,7 +281,7 @@ const toggleZoomMode = () => {
     
     // Restore scroll position to current page after DOM updates
     nextTick(() => {
-        scrollToPage(pageNum.value);
+        scrollToPage();
     });
 };
 
@@ -292,8 +303,8 @@ const zoom = (mode) => {
     }
 }
 
-const removePage = (page) => {
-    deletePage(page, () => {
+const removePage = () => {
+    deletePage(pageIndex.value, (page) => {
         addToHistory({ type: 'delete-page', page });
     });
 };
@@ -312,7 +323,7 @@ useWindowEvents(fileId, {
             clearTimeout(resizeTimeout);
             resizeTimeout = setTimeout(() => {
                 nextTick(() => {
-                    scrollToPage(pageNum.value);
+                    scrollToPage();
                 })
             });
         }
@@ -352,7 +363,7 @@ useWindowEvents(fileId, {
         Delete: {
             action: (event) => {
                 event.preventDefault();
-                removePage(pageNum.value);
+                removePage(pageIndex.value);
             }
         },
         Escape: {
@@ -364,13 +375,13 @@ useWindowEvents(fileId, {
         ArrowLeft: {
             action: () => {
                 if (isFirstPage.value) return;
-                scrollToPage(pageNum.value - 1);
+                pageIndex.value--;
             }
         },
         ArrowRight: {
             action: () => {
                 if (isLastPage.value) return;
-                scrollToPage(pageNum.value + 1);
+                pageIndex.value++;
             }
         },
     }
@@ -514,25 +525,25 @@ onUnmounted(() => {
 
                     <!-- Pagination -->
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="scrollToPage(1)" :class="{ disabled: !isFileLoaded || showWhiteboard || isFirstPage }" title="First Page">
+                        <a href="#" class="nav-link" @click.prevent="pageIndex = 0" :class="{ disabled: !isFileLoaded || showWhiteboard || isFirstPage }" title="First Page">
                             <i class="bi bi-chevron-double-left"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageNum - 1)" :class="{ disabled: !isFileLoaded || showWhiteboard || isFirstPage }" title="Previous Page">
+                        <a href="#" class="nav-link" @click.prevent="pageIndex--" :class="{ disabled: !isFileLoaded || showWhiteboard || isFirstPage }" title="Previous Page">
                             <i class="bi bi-chevron-left"></i>
                         </a>
                     </li>
                     <li class="nav-item d-none d-lg-block">
-                        <input type="text" class="form-control-plaintext" :value="pageNumConverted" @input="scrollToPage($event.target.value*1, 1)" :disabled="!isFileLoaded || showWhiteboard" />
+                        <input type="text" class="form-control-plaintext" :value="pageNum" @input="handlePageNumber" :disabled="!isFileLoaded || showWhiteboard" />
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageNum + 1)" :class="{ disabled: !isFileLoaded || showWhiteboard || isLastPage }" title="Next Page">
+                        <a href="#" class="nav-link" @click.prevent="pageIndex++" :class="{ disabled: !isFileLoaded || showWhiteboard || isLastPage }" title="Next Page">
                             <i class="bi bi-chevron-right"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageCount)" :class="{ disabled: !isFileLoaded || showWhiteboard || isLastPage }" :title="`Last Page (${pageCount - deletedPages.size})`">
+                        <a href="#" class="nav-link" @click.prevent="pageIndex = activePages.length - 1" :class="{ disabled: !isFileLoaded || showWhiteboard || isLastPage }" :title="`Last Page (${pageCount - deletedPages.size})`">
                             <i class="bi bi-chevron-double-right"></i>
                         </a>
                     </li>
@@ -587,7 +598,7 @@ onUnmounted(() => {
                     <template v-else>
                         <!-- Remove Page -->
                         <li class="nav-item" title="Delete Current Page (Delete)">
-                            <a href="#" class="nav-link" @click.prevent="removePage(pageNum)" :class="{ disabled: !isFileLoaded }">
+                            <a href="#" class="nav-link" @click.prevent="removePage" :class="{ disabled: !isFileLoaded }">
                                 <i class="bi bi-trash-fill"></i>
                             </a>
                         </li>
