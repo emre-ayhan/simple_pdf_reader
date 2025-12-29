@@ -8,6 +8,7 @@ import { useHistory } from "../composables/useHistory";
 import { useWhiteBoard } from "../composables/useWhiteBoard";
 import EmptyState from "./EmptyState.vue";
 import { useWindowEvents } from "../composables/useWindowEvents";
+import { fileDataCache } from "../composables/useTabs";
 
 // Cursor Style
 const cursorStyle = computed(() => {
@@ -20,8 +21,6 @@ const cursorStyle = computed(() => {
     if (isEraser.value) return `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-eraser-fill" viewBox="0 0 16 16"><path d="M8.086 2.207a2 2 0 0 1 2.828 0l3.879 3.879a2 2 0 0 1 0 2.828l-5.5 5.5A2 2 0 0 1 7.879 15H5.12a2 2 0 0 1-1.414-.586l-2.5-2.5a2 2 0 0 1 0-2.828zm.66 11.34L3.453 8.254 1.914 9.793a1 1 0 0 0 0 1.414l2.5 2.5a1 1 0 0 0 .707.293H7.88a1 1 0 0 0 .707-.293z"/></svg>') 8 8, auto`;
     return 'default';
 });
-
-const emit = defineEmits(['file-loaded', 'new-tab']);
 
 // File Management
 const showWhiteboardCallback = () => {
@@ -95,7 +94,7 @@ const {
     scrollToPage,
     deletedPages,
     deletePage,
-} = useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoadCallback, fileSavedCallback, showWhiteboardCallback);
+} = useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallback, fileSavedCallback, showWhiteboardCallback);
 
 // Drag and Drop Handlers
 const {
@@ -385,10 +384,15 @@ useWindowEvents(fileId, {
 let unsubscribeFileOpen = null;
 
 onMounted(() => {
+    if (fileDataCache.value) {
+        processFileOpenResult(fileDataCache.value);
+        fileDataCache.value = null;
+        return;
+    }
+
     if (Electron.value?.onFileOpened) {
         unsubscribeFileOpen = Electron.value.onFileOpened((fileData) => {
-            if (!fileData) return;
-
+            if (!fileData || isFileLoaded.value) return;
             console.log('File opened from system:', fileData.filename);
             processFileOpenResult(fileData);
         });

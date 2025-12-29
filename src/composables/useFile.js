@@ -4,10 +4,11 @@ import { Electron } from "./useElectron";
 import { GlobalWorkerOptions, getDocument } from "pdfjs-dist";
 import { uuid } from "./useUuid";
 import { showModal } from "./useModal";
+import { setCurrentTab } from "./useTabs";
 
 GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.449/build/pdf.worker.min.mjs';
 
-export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoadCallback, fileSavedCallback, showWhiteboardCallback) {
+export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallback, fileSavedCallback, showWhiteboardCallback) {
     const fileId = uuid();
 
     var pdfDoc = null;
@@ -199,16 +200,6 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
         const index = localStorage.getItem(filename.value);
         pageIndex.value = index ? Number(index) : 0;
     }
-
-    const getOriginalPageNum = (page) => {
-        const deletedArray = Array.from(deletedPages.value).sort((a, b) => a - b);
-        deletedArray.forEach(deletedPage => {
-            if (deletedPage <= page) {
-                page++;
-            }
-        });
-        return page;
-    }
     
     const scrollToPage = () => {
         const page = activePages.value[pageIndex.value];
@@ -223,12 +214,12 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
     };
 
     // File Loaded Event Emitter
-    const emitFileLoadedEvent = (type, page_count) => {
+    const handleFileLoadEvent = (type, page_count) => {
         isFileLoaded.value = true;
         pageCount.value = page_count || 1;
         getPageIndexFromLocalStorage();
 
-        emit('file-loaded', {
+        setCurrentTab({
             id: fileId,
             filename: filename.value,
             path: filepath.value,
@@ -314,7 +305,7 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
             imagePage.value = reader.result;
             strokesPerPage.value = { 1: [] };
             
-            emitFileLoadedEvent('image');
+            handleFileLoadEvent('image');
 
             nextTick(() => {
                 renderAllPages();
@@ -345,7 +336,7 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
         clearSavedState();
         pdfDoc = pdfDoc_;
         imagePage.value = null;
-        emitFileLoadedEvent('pdf', pdfDoc.numPages);
+        handleFileLoadEvent('pdf', pdfDoc.numPages);
         renderAllPagesAndSetupObservers();
     }
 
@@ -416,7 +407,7 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
             
             imagePage.value = dataUrl;
             strokesPerPage.value = { 1: [] };
-            emitFileLoadedEvent('image');
+            handleFileLoadEvent('image');
 
             nextTick(() => {
                 renderAllPages();
@@ -748,7 +739,6 @@ export function useFile(emit, loadFileCallback, renderImageFileCallback, lazyLoa
         fileRecentlySaved,
         resetPdfDoc,
         hasSavedPdfDoc,
-        emitFileLoadedEvent,
         clearSavedState,
         updateSavedState,
         restoreSavedState,
