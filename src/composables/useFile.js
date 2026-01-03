@@ -62,10 +62,13 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         return Array.from({ length: pageCount.value }, (_, i) => i + 1).filter(p => !deletedPages.value.has(p));
     });
 
+    const activePage = computed(() => {
+        return activePages.value[pageIndex.value] || 1;
+    });
+
     watch(pageIndex, (newIndex) => {
         pageNum.value = newIndex + 1;
         savePageIndexToLocalStorage(filename.value, newIndex);
-        scrollToPage();
     });
 
     const isFirstPage = computed(() => {
@@ -175,8 +178,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             
             if (mostVisiblePage) {
                 const pageNumber = parseInt(mostVisiblePage.getAttribute('data-page'));
-                const page = activePages.value[pageIndex.value];
-                if (pageNumber && pageNumber !== page) {
+                if (pageNumber && pageNumber !== activePage.value) {
                     pageIndex.value = activePages.value.indexOf(pageNumber);
                     savePageIndexToLocalStorage();
                 }
@@ -197,12 +199,16 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
     }
 
     const getPageIndexFromLocalStorage = () => {
-        const index = localStorage.getItem(filename.value);
-        pageIndex.value = index ? Number(index) : 0;
+        const index = localStorage.getItem(filename.value) || 0;
+        scrollToPage(parseInt(index));
     }
     
-    const scrollToPage = () => {
-        const page = activePages.value[pageIndex.value];
+    const scrollToPage = (page_index) => {
+        if (!isNaN(page_index)) {
+            pageIndex.value = page_index;
+        }
+
+        const page = activePage.value;
         if (!isFileLoaded.value || deletedPages.value.has(page)) return;
 
         if (page >= 1 && page <= pageCount.value) {

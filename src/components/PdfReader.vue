@@ -53,7 +53,7 @@ const handlePageNumber = (event) => {
         return;
     }
 
-    pageIndex.value = page - 1;
+    scrollToPage(page - 1);
 }
 
 const {
@@ -313,11 +313,10 @@ useWindowEvents(fileId, {
     resize: {
         action() {
             if (!isFileLoaded.value) return;
-            let savedPageIndex = pageIndex.value;
             clearTimeout(resizeTimeout);
             resizeTimeout = setTimeout(() => {
                 nextTick(() => {
-                    pageIndex.value = savedPageIndex;
+                    scrollToPage();
                 })
             });
         }
@@ -524,12 +523,12 @@ onUnmounted(() => {
 
                     <!-- Pagination -->
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="pageIndex = 0" :class="{ disabled: !isFileLoaded || showWhiteboard || isFirstPage }" title="First Page">
+                        <a href="#" class="nav-link" @click.prevent="scrollToPage(0)" :class="{ disabled: !isFileLoaded || showWhiteboard || isFirstPage }" title="First Page">
                             <i class="bi bi-chevron-double-left"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="pageIndex--" :class="{ disabled: !isFileLoaded || showWhiteboard || isFirstPage }" title="Previous Page">
+                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex - 1)" :class="{ disabled: !isFileLoaded || showWhiteboard || isFirstPage }" title="Previous Page">
                             <i class="bi bi-chevron-left"></i>
                         </a>
                     </li>
@@ -537,12 +536,12 @@ onUnmounted(() => {
                         <input type="text" class="form-control-plaintext" :value="pageNum" @input="handlePageNumber" :disabled="!isFileLoaded || showWhiteboard" />
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="pageIndex++" :class="{ disabled: !isFileLoaded || showWhiteboard || isLastPage }" title="Next Page">
+                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex + 1)" :class="{ disabled: !isFileLoaded || showWhiteboard || isLastPage }" title="Next Page">
                             <i class="bi bi-chevron-right"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="pageIndex = activePages.length - 1" :class="{ disabled: !isFileLoaded || showWhiteboard || isLastPage }" :title="`Last Page (${pageCount - deletedPages.size})`">
+                        <a href="#" class="nav-link" @click.prevent="scrollToPage(activePages.length - 1)" :class="{ disabled: !isFileLoaded || showWhiteboard || isLastPage }" :title="`Last Page (${pageCount - deletedPages.size})`">
                             <i class="bi bi-chevron-double-right"></i>
                         </a>
                     </li>
