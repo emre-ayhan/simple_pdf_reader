@@ -29,7 +29,7 @@ onMounted(() => {
                         <button type="button" :class="`btn ${mustConfirm ? 'btn-secondary' : 'btn-danger'} rounded-0`" data-bs-dismiss="modal">
                             {{ mustConfirm ? 'Cancel' : 'Ok' }}
                         </button>
-                        <button type="button" class="btn btn-danger rounded-0" @click.prevent="confirm" v-if="mustConfirm">Confirm</button>
+                        <button type="button" class="btn btn-danger rounded-0" @click.prevent="confirm" v-if="mustConfirm">Ok</button>
                     </div>
                 </div>
             </div>
