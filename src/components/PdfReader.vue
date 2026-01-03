@@ -271,8 +271,8 @@ const toggleZoomMode = () => {
 
     if (zoomMode.value === 'fit-width') {
         zoomMode.value = 'fit-height';
-        const canvasContainer = document.querySelector('.canvas-container');
-        zoomPercentage.value = pdfReader.value.clientHeight * 100 / canvasContainer.clientHeight;
+        const pageContainer = document.querySelector(`.page-container[data-page="${pageIndex.value + 1}"]`);
+        zoomPercentage.value = pdfReader.value.clientHeight * 100 / pageContainer.clientHeight;
     } else {
         zoomMode.value = 'fit-width';
         zoomPercentage.value = 100; // Full width
@@ -313,10 +313,11 @@ useWindowEvents(fileId, {
     resize: {
         action() {
             if (!isFileLoaded.value) return;
+            let savedPageIndex = pageIndex.value;
             clearTimeout(resizeTimeout);
             resizeTimeout = setTimeout(() => {
                 nextTick(() => {
-                    scrollToPage();
+                    pageIndex.value = savedPageIndex;
                 })
             });
         }
