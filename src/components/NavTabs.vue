@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted } from 'vue';
+import { onBeforeUnmount, onMounted } from 'vue';
 import { Electron } from '../composables/useElectron';
 import { openNewTab, closeTab, activeTabIndex, tabs, tabHistory, openTabs, markAsActive, isLastTabOnEmptyState, fileHasUnsavedChanges, handleElectronButtonClick, fileDataCache } from '../composables/useTabs';
 
@@ -27,6 +27,11 @@ onMounted(() => {
             fileDataCache.value = fileData;
         });
     }
+});
+
+onBeforeUnmount(() => {
+    unsubscribeFileOpen?.();
+    unsubscribeFileOpen = null;
 });
 </script>
 <template>
