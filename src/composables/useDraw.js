@@ -42,6 +42,11 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     const isDragging = ref(false);
     const dragOffset = ref({ x: 0, y: 0 });
     const dragStartPos = ref(null);
+    const showStrokeMenu = ref(false);
+    const strokeMenuPosition = ref({ x: 0, y: 0 });
+    const isResizing = ref(false);
+    const resizeHandle = ref(null); // 'nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'
+    const resizeStartBounds = ref(null);
 
     let lastX = 0;
     let lastY = 0;
@@ -159,6 +164,82 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         return null;
     };
 
+    const getStrokeBounds = (stroke) => {
+        if (!stroke || stroke.length === 0) return null;
+        
+        const first = stroke[0];
+        const padding = 5;
+        
+        if (first.type === 'text') {
+            const ctx = drawingContexts.value[0];
+            if (!ctx) return null;
+            ctx.font = `${first.fontSize}px Arial`;
+            const metrics = ctx.measureText(first.text);
+            return {
+                minX: first.x - padding,
+                minY: first.y - padding,
+                maxX: first.x + metrics.width + padding,
+                maxY: first.y + first.fontSize + padding
+            };
+        } else if (first.type === 'line' || first.type === 'rectangle' || first.type === 'circle') {
+            if (first.type === 'circle') {
+                const radius = Math.sqrt((first.endX - first.startX) ** 2 + (first.endY - first.startY) ** 2);
+                return {
+                    minX: first.startX - radius - padding,
+                    minY: first.startY - radius - padding,
+                    maxX: first.startX + radius + padding,
+                    maxY: first.startY + radius + padding
+                };
+            }
+            return {
+                minX: Math.min(first.startX, first.endX) - padding,
+                minY: Math.min(first.startY, first.endY) - padding,
+                maxX: Math.max(first.startX, first.endX) + padding,
+                maxY: Math.max(first.startY, first.endY) + padding
+            };
+        } else {
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            for (let point of stroke) {
+                minX = Math.min(minX, point.x);
+                minY = Math.min(minY, point.y);
+                maxX = Math.max(maxX, point.x);
+                maxY = Math.max(maxY, point.y);
+            }
+            return {
+                minX: minX - padding,
+                minY: minY - padding,
+                maxX: maxX + padding,
+                maxY: maxY + padding
+            };
+        }
+    };
+
+    const getResizeHandle = (x, y, bounds) => {
+        if (!bounds) return null;
+        
+        const handleSize = 8;
+        const threshold = handleSize;
+        
+        const handles = [
+            { x: bounds.minX, y: bounds.minY, handle: 'nw' },
+            { x: bounds.maxX, y: bounds.minY, handle: 'ne' },
+            { x: bounds.minX, y: bounds.maxY, handle: 'sw' },
+            { x: bounds.maxX, y: bounds.maxY, handle: 'se' },
+            { x: (bounds.minX + bounds.maxX) / 2, y: bounds.minY, handle: 'n' },
+            { x: (bounds.minX + bounds.maxX) / 2, y: bounds.maxY, handle: 's' },
+            { x: bounds.minX, y: (bounds.minY + bounds.maxY) / 2, handle: 'w' },
+            { x: bounds.maxX, y: (bounds.minY + bounds.maxY) / 2, handle: 'e' }
+        ];
+        
+        for (let h of handles) {
+            if (Math.abs(x - h.x) <= threshold && Math.abs(y - h.y) <= threshold) {
+                return h.handle;
+            }
+        }
+        
+        return null;
+    };
+
 
 
     const startDrawing = (e) => {
@@ -189,13 +270,41 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             const x = (e.clientX - rect.left) * scaleX;
             const y = (e.clientY - rect.top) * scaleY;
             
+            // Check if clicking on a resize handle of already selected stroke
+            if (selectedStroke.value && selectedStroke.value.pageIndex === canvasIndex) {
+                const bounds = getStrokeBounds(selectedStroke.value.stroke);
+                const handle = getResizeHandle(x, y, bounds);
+                
+                if (handle) {
+                    // Start resizing
+                    isResizing.value = true;
+                    resizeHandle.value = handle;
+                    dragStartPos.value = { x, y };
+                    resizeStartBounds.value = { ...bounds };
+                    
+                    isMouseDown.value = true;
+                    currentCanvasIndex = canvasIndex;
+                    
+                    if (canvas && e.pointerId !== undefined) {
+                        canvas.setPointerCapture(e.pointerId);
+                    }
+                    activePointerId.value = e.pointerId;
+                    
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                }
+            }
+            
             const found = findStrokeAtPoint(x, y, canvasIndex);
             if (found) {
                 selectedStroke.value = {
                     ...found,
                     originalStroke: JSON.parse(JSON.stringify(found.stroke)) // Deep clone original
                 };
-                isDragging.value = true;
+                
+                // Prepare for potential dragging (left-click only)
+                isDragging.value = false; // Don't start dragging immediately
                 dragStartPos.value = { x, y };
                 lastX = x;
                 lastY = y;
@@ -207,6 +316,17 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                     canvas.setPointerCapture(e.pointerId);
                 }
                 activePointerId.value = e.pointerId;
+                
+                // Redraw with highlight
+                redrawAllStrokes(canvasIndex);
+                drawSelectionHighlight(canvasIndex, found.strokeIndex);
+            } else {
+                // Clicked on empty space, clear selection
+                showStrokeMenu.value = false;
+                selectedStroke.value = null;
+                if (currentCanvasIndex >= 0) {
+                    redrawAllStrokes(canvasIndex);
+                }
             }
             
             e.preventDefault();
@@ -335,59 +455,171 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         // Text mode doesn't need draw event handling
         if (isTextMode.value) return;
         
-        // Handle drag mode
-        if (isDragMode.value && isDragging.value && selectedStroke.value) {
-            // Only continue with the same pointer that started
-            if (e.pointerId !== activePointerId.value) return;
-            
-            const canvas = drawingCanvases.value[currentCanvasIndex];
-            const rect = canvas.getBoundingClientRect();
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
-            
-            const currentX = (e.clientX - rect.left) * scaleX;
-            const currentY = (e.clientY - rect.top) * scaleY;
-            
-            const dx = currentX - lastX;
-            const dy = currentY - lastY;
-            
-            // Move the stroke
-            const pageNumber = currentCanvasIndex + 1;
-            const strokes = strokesPerPage.value[pageNumber];
-            const stroke = strokes[selectedStroke.value.strokeIndex];
-            
-            if (stroke) {
-                const first = stroke[0];
+        // Handle drag mode - return early to prevent any drawing
+        if (isDragMode.value) {
+            // Handle resizing
+            if (isResizing.value && selectedStroke.value && resizeHandle.value) {
+                if (e.pointerId !== activePointerId.value) return;
                 
-                // Update stroke positions based on type
-                if (first.type === 'text') {
-                    first.x += dx;
-                    first.y += dy;
-                } else if (first.type === 'line' || first.type === 'rectangle' || first.type === 'circle') {
-                    first.startX += dx;
-                    first.startY += dy;
-                    first.endX += dx;
-                    first.endY += dy;
-                    first.x = first.startX;
-                    first.y = first.startY;
-                } else {
-                    // Pen stroke - move all points
-                    for (let point of stroke) {
-                        point.x += dx;
-                        point.y += dy;
+                const canvas = drawingCanvases.value[currentCanvasIndex];
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                
+                const currentX = (e.clientX - rect.left) * scaleX;
+                const currentY = (e.clientY - rect.top) * scaleY;
+                
+                const dx = currentX - dragStartPos.value.x;
+                const dy = currentY - dragStartPos.value.y;
+                
+                const pageNumber = currentCanvasIndex + 1;
+                const strokes = strokesPerPage.value[pageNumber];
+                const stroke = strokes[selectedStroke.value.strokeIndex];
+                
+                if (stroke) {
+                    const first = stroke[0];
+                    const originalBounds = resizeStartBounds.value;
+                    
+                    // Calculate new bounds based on resize handle
+                    let newMinX = originalBounds.minX;
+                    let newMinY = originalBounds.minY;
+                    let newMaxX = originalBounds.maxX;
+                    let newMaxY = originalBounds.maxY;
+                    
+                    const handle = resizeHandle.value;
+                    if (handle.includes('n')) newMinY += dy;
+                    if (handle.includes('s')) newMaxY += dy;
+                    if (handle.includes('w')) newMinX += dx;
+                    if (handle.includes('e')) newMaxX += dx;
+                    
+                    // Ensure minimum size
+                    if (newMaxX - newMinX < 10) return;
+                    if (newMaxY - newMinY < 10) return;
+                    
+                    const scaleXFactor = (newMaxX - newMinX) / (originalBounds.maxX - originalBounds.minX);
+                    const scaleYFactor = (newMaxY - newMinY) / (originalBounds.maxY - originalBounds.minY);
+                    
+                    // Get original stroke to calculate scaling from
+                    const originalStroke = selectedStroke.value.originalStroke;
+                    const origFirst = originalStroke[0];
+                    
+                    if (origFirst.type === 'text') {
+                        first.x = newMinX + 5;
+                        first.y = newMinY + 5;
+                        first.fontSize = Math.max(8, Math.round(origFirst.fontSize * Math.min(scaleXFactor, scaleYFactor)));
+                    } else if (origFirst.type === 'line' || origFirst.type === 'rectangle' || origFirst.type === 'circle') {
+                        const origMinX = Math.min(origFirst.startX, origFirst.endX);
+                        const origMaxX = Math.max(origFirst.startX, origFirst.endX);
+                        const origMinY = Math.min(origFirst.startY, origFirst.endY);
+                        const origMaxY = Math.max(origFirst.startY, origFirst.endY);
+                        
+                        first.startX = newMinX + 5 + (origFirst.startX - origMinX - 5) * scaleXFactor;
+                        first.startY = newMinY + 5 + (origFirst.startY - origMinY - 5) * scaleYFactor;
+                        first.endX = newMinX + 5 + (origFirst.endX - origMinX - 5) * scaleXFactor;
+                        first.endY = newMinY + 5 + (origFirst.endY - origMinY - 5) * scaleYFactor;
+                        first.x = first.startX;
+                        first.y = first.startY;
+                    } else {
+                        // Pen stroke - scale all points
+                        const origBounds = getStrokeBounds(originalStroke);
+                        for (let i = 0; i < stroke.length; i++) {
+                            const origPoint = originalStroke[i];
+                            stroke[i].x = newMinX + 5 + (origPoint.x - origBounds.minX - 5) * scaleXFactor;
+                            stroke[i].y = newMinY + 5 + (origPoint.y - origBounds.minY - 5) * scaleYFactor;
+                        }
                     }
+                    
+                    // Redraw to show the resize preview
+                    redrawAllStrokes(currentCanvasIndex);
+                    drawSelectionHighlight(currentCanvasIndex, selectedStroke.value.strokeIndex);
                 }
                 
-                // Redraw to show the drag preview
-                redrawAllStrokes(currentCanvasIndex);
-                drawSelectionHighlight(currentCanvasIndex, selectedStroke.value.strokeIndex);
+                e.preventDefault();
+                e.stopPropagation();
+                return;
             }
             
-            lastX = currentX;
-            lastY = currentY;
+            // Handle active dragging
+            if (isDragging.value && selectedStroke.value) {
+                // Only continue with the same pointer that started
+                if (e.pointerId !== activePointerId.value) return;
+                
+                const canvas = drawingCanvases.value[currentCanvasIndex];
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                
+                const currentX = (e.clientX - rect.left) * scaleX;
+                const currentY = (e.clientY - rect.top) * scaleY;
+                
+                const dx = currentX - lastX;
+                const dy = currentY - lastY;
+                
+                // Move the stroke
+                const pageNumber = currentCanvasIndex + 1;
+                const strokes = strokesPerPage.value[pageNumber];
+                const stroke = strokes[selectedStroke.value.strokeIndex];
+                
+                if (stroke) {
+                    const first = stroke[0];
+                    
+                    // Update stroke positions based on type
+                    if (first.type === 'text') {
+                        first.x += dx;
+                        first.y += dy;
+                    } else if (first.type === 'line' || first.type === 'rectangle' || first.type === 'circle') {
+                        first.startX += dx;
+                        first.startY += dy;
+                        first.endX += dx;
+                        first.endY += dy;
+                        first.x = first.startX;
+                        first.y = first.startY;
+                    } else {
+                        // Pen stroke - move all points
+                        for (let point of stroke) {
+                            point.x += dx;
+                            point.y += dy;
+                        }
+                    }
+                    
+                    // Redraw to show the drag preview
+                    redrawAllStrokes(currentCanvasIndex);
+                    drawSelectionHighlight(currentCanvasIndex, selectedStroke.value.strokeIndex);
+                }
+                
+                lastX = currentX;
+                lastY = currentY;
+                
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            // Check if we should start dragging
+            else if (isMouseDown.value && selectedStroke.value) {
+                if (e.pointerId !== activePointerId.value) return;
+                
+                const canvas = drawingCanvases.value[currentCanvasIndex];
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                
+                const currentX = (e.clientX - rect.left) * scaleX;
+                const currentY = (e.clientY - rect.top) * scaleY;
+                
+                const distance = Math.sqrt(
+                    Math.pow(currentX - dragStartPos.value.x, 2) + 
+                    Math.pow(currentY - dragStartPos.value.y, 2)
+                );
+                
+                // Start dragging if moved more than 5 pixels
+                if (distance > 5) {
+                    isDragging.value = true;
+                    showStrokeMenu.value = false; // Hide menu when dragging starts
+                    lastX = currentX;
+                    lastY = currentY;
+                }
+            }
             
-            e.preventDefault();
-            e.stopPropagation();
+            // Always return when in drag mode to prevent any drawing
             return;
         }
         
@@ -498,8 +730,8 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         // Text mode is handled by confirmText function
         if (isTextMode.value) return;
         
-        // Handle drag mode completion
-        if (isDragMode.value && isDragging.value && selectedStroke.value) {
+        // Handle drag/resize mode completion
+        if (isDragMode.value && isMouseDown.value && selectedStroke.value) {
             // Only stop if it's the same pointer
             if (e && e.pointerId !== activePointerId.value) return;
             
@@ -515,8 +747,8 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             const pageNumber = currentCanvasIndex + 1;
             const stroke = strokesPerPage.value[pageNumber][selectedStroke.value.strokeIndex];
             
-            // Only save to history if the stroke actually moved
-            if (dragStartPos.value) {
+            // Save to history if resized or dragged
+            if (isResizing.value || isDragging.value) {
                 const canvas = drawingCanvases.value[currentCanvasIndex];
                 const rect = canvas.getBoundingClientRect();
                 const scaleX = canvas.width / rect.width;
@@ -532,7 +764,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                     // Save to history with previous state
                     strokeChangeCallback({
                         id: stroke[0].id,
-                        type: 'move',
+                        type: isResizing.value ? 'resize' : 'move',
                         page: pageNumber,
                         strokeIndex: selectedStroke.value.strokeIndex,
                         stroke: JSON.parse(JSON.stringify(stroke)),
@@ -541,14 +773,23 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 }
             }
             
+            // Redraw without highlight after drag/resize
+            if (isDragging.value || isResizing.value) {
+                redrawAllStrokes(currentCanvasIndex);
+                // Redraw highlight to show final position
+                if (selectedStroke.value) {
+                    drawSelectionHighlight(currentCanvasIndex, selectedStroke.value.strokeIndex);
+                }
+            }
+            
             isDragging.value = false;
+            isResizing.value = false;
+            resizeHandle.value = null;
+            resizeStartBounds.value = null;
             isMouseDown.value = false;
             activePointerId.value = null;
             activePointerType.value = null;
             dragStartPos.value = null;
-            
-            // Redraw without highlight
-            redrawAllStrokes(currentCanvasIndex);
             
             e.preventDefault();
             e.stopPropagation();
@@ -703,6 +944,108 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         isDragMode.value = false;
         selectedStroke.value = null;
         isDragging.value = false;
+        isResizing.value = false;
+        resizeHandle.value = null;
+        showStrokeMenu.value = false;
+    };
+
+    const changeStrokeColor = (newColor) => {
+        if (!selectedStroke.value) return;
+        
+        const pageNumber = selectedStroke.value.pageIndex + 1;
+        const strokes = strokesPerPage.value[pageNumber];
+        const stroke = strokes[selectedStroke.value.strokeIndex];
+        
+        if (stroke) {
+            const originalStroke = JSON.parse(JSON.stringify(stroke));
+            
+            // Change color for all points in the stroke
+            for (let point of stroke) {
+                point.color = newColor;
+            }
+            
+            // Save to history
+            strokeChangeCallback({
+                id: stroke[0].id,
+                type: 'color-change',
+                page: pageNumber,
+                strokeIndex: selectedStroke.value.strokeIndex,
+                stroke: JSON.parse(JSON.stringify(stroke)),
+                previousStroke: originalStroke
+            });
+            
+            // Redraw
+            redrawAllStrokes(selectedStroke.value.pageIndex);
+            drawSelectionHighlight(selectedStroke.value.pageIndex, selectedStroke.value.strokeIndex);
+        }
+        
+        showStrokeMenu.value = false;
+    };
+
+    const deleteSelectedStroke = () => {
+        if (!selectedStroke.value) return;
+        
+        const pageNumber = selectedStroke.value.pageIndex + 1;
+        const strokes = strokesPerPage.value[pageNumber];
+        const stroke = strokes[selectedStroke.value.strokeIndex];
+        
+        if (stroke) {
+            // Remove the stroke
+            strokes.splice(selectedStroke.value.strokeIndex, 1);
+            
+            // Save to history
+            strokeChangeCallback({
+                id: stroke[0].id,
+                type: 'erase',
+                page: pageNumber,
+                strokes: [{ index: selectedStroke.value.strokeIndex, data: stroke }]
+            });
+            
+            // Redraw
+            redrawAllStrokes(selectedStroke.value.pageIndex);
+        }
+        
+        selectedStroke.value = null;
+        showStrokeMenu.value = false;
+    };
+
+    const handleContextMenu = (e) => {
+        if (!isDragMode.value) return;
+        
+        const canvasIndex = getCanvasIndexFromEvent(e);
+        if (canvasIndex === -1) return;
+        
+        const canvas = drawingCanvases.value[canvasIndex];
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
+        
+        const found = findStrokeAtPoint(x, y, canvasIndex);
+        if (found) {
+            selectedStroke.value = {
+                ...found,
+                originalStroke: JSON.parse(JSON.stringify(found.stroke))
+            };
+            
+            // Show context menu
+            showStrokeMenu.value = true;
+            strokeMenuPosition.value = {
+                x: e.clientX,
+                y: e.clientY
+            };
+            
+            currentCanvasIndex = canvasIndex;
+            
+            // Redraw with highlight
+            redrawAllStrokes(canvasIndex);
+            drawSelectionHighlight(canvasIndex, found.strokeIndex);
+        }
+        
+        e.preventDefault();
+        e.stopPropagation();
     };
 
     const drawSelectionHighlight = (canvasIndex, strokeIndex) => {
@@ -723,43 +1066,67 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         ctx.lineWidth = 2;
         ctx.setLineDash([5, 5]);
         
+        let minX, minY, maxX, maxY, padding = 5;
+        
         if (first.type === 'text') {
             ctx.font = `${first.fontSize}px Arial`;
             const metrics = ctx.measureText(first.text);
-            const padding = 5;
-            ctx.strokeRect(
-                first.x - padding, 
-                first.y - padding, 
-                metrics.width + padding * 2, 
-                first.fontSize + padding * 2
-            );
+            minX = first.x - padding;
+            minY = first.y - padding;
+            maxX = first.x + metrics.width + padding;
+            maxY = first.y + first.fontSize + padding;
+            ctx.strokeRect(minX, minY, maxX - minX, maxY - minY);
         } else if (first.type === 'line' || first.type === 'rectangle' || first.type === 'circle') {
-            const minX = Math.min(first.startX, first.endX);
-            const maxX = Math.max(first.startX, first.endX);
-            const minY = Math.min(first.startY, first.endY);
-            const maxY = Math.max(first.startY, first.endY);
-            const padding = 5;
+            minX = Math.min(first.startX, first.endX);
+            maxX = Math.max(first.startX, first.endX);
+            minY = Math.min(first.startY, first.endY);
+            maxY = Math.max(first.startY, first.endY);
             
             if (first.type === 'circle') {
                 const radius = Math.sqrt((first.endX - first.startX) ** 2 + (first.endY - first.startY) ** 2);
                 ctx.beginPath();
                 ctx.arc(first.startX, first.startY, radius + padding, 0, 2 * Math.PI);
                 ctx.stroke();
+                minX = first.startX - radius - padding;
+                maxX = first.startX + radius + padding;
+                minY = first.startY - radius - padding;
+                maxY = first.startY + radius + padding;
             } else {
                 ctx.strokeRect(minX - padding, minY - padding, maxX - minX + padding * 2, maxY - minY + padding * 2);
             }
         } else {
             // Pen stroke - draw bounding box
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            minX = Infinity;
+            minY = Infinity;
+            maxX = -Infinity;
+            maxY = -Infinity;
             for (let point of stroke) {
                 minX = Math.min(minX, point.x);
                 minY = Math.min(minY, point.y);
                 maxX = Math.max(maxX, point.x);
                 maxY = Math.max(maxY, point.y);
             }
-            const padding = 5;
             ctx.strokeRect(minX - padding, minY - padding, maxX - minX + padding * 2, maxY - minY + padding * 2);
         }
+        
+        // Draw resize handles
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#0066ff';
+        const handleSize = 8;
+        const handles = [
+            { x: minX, y: minY, handle: 'nw' },
+            { x: maxX, y: minY, handle: 'ne' },
+            { x: minX, y: maxY, handle: 'sw' },
+            { x: maxX, y: maxY, handle: 'se' },
+            { x: (minX + maxX) / 2, y: minY, handle: 'n' },
+            { x: (minX + maxX) / 2, y: maxY, handle: 's' },
+            { x: minX, y: (minY + maxY) / 2, handle: 'w' },
+            { x: maxX, y: (minY + maxY) / 2, handle: 'e' }
+        ];
+        
+        handles.forEach(h => {
+            ctx.fillRect(h.x - handleSize / 2, h.y - handleSize / 2, handleSize, handleSize);
+        });
         
         ctx.restore();
     };
@@ -990,6 +1357,9 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         isDragMode,
         selectedStroke,
         isDragging,
+            isResizing,
+        showStrokeMenu,
+        strokeMenuPosition,
         startDrawing,
         draw,
         stopDrawing,
@@ -1001,6 +1371,9 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         handleTextboxBlur,
         clearDrawing,
         redrawAllStrokes,
-        drawImageCanvas
+        drawImageCanvas,
+        changeStrokeColor,
+        deleteSelectedStroke,
+        handleContextMenu
     }
 }

@@ -132,6 +132,24 @@ export function useHistory(fileId, strokesPerPage, drawingCanvases, drawingConte
                 }
                 redrawAllStrokes(action.page - 1);
             }
+        } else if (action.type === 'color-change') {
+            // Restore previous color
+            if (action.previousStroke) {
+                const strokes = strokesPerPage.value[action.page];
+                if (strokes && strokes[action.strokeIndex]) {
+                    strokes[action.strokeIndex] = JSON.parse(JSON.stringify(action.previousStroke));
+                }
+                redrawAllStrokes(action.page - 1);
+            }
+        } else if (action.type === 'resize') {
+            // Restore previous size
+            if (action.previousStroke) {
+                const strokes = strokesPerPage.value[action.page];
+                if (strokes && strokes[action.strokeIndex]) {
+                    strokes[action.strokeIndex] = JSON.parse(JSON.stringify(action.previousStroke));
+                }
+                redrawAllStrokes(action.page - 1);
+            }
         } else if (action.type === 'clear') {
             strokesPerPage.value = JSON.parse(JSON.stringify(action.previousState));
             for (let i = 0; i < drawingCanvases.value.length; i++) {
@@ -180,6 +198,20 @@ export function useHistory(fileId, strokesPerPage, drawingCanvases, drawingConte
             redrawAllStrokes(action.page - 1);
         } else if (action.type === 'move') {
             // Restore moved state
+            const strokes = strokesPerPage.value[action.page];
+            if (strokes && strokes[action.strokeIndex]) {
+                strokes[action.strokeIndex] = JSON.parse(JSON.stringify(action.stroke));
+            }
+            redrawAllStrokes(action.page - 1);
+        } else if (action.type === 'color-change') {
+            // Restore color change
+            const strokes = strokesPerPage.value[action.page];
+            if (strokes && strokes[action.strokeIndex]) {
+                strokes[action.strokeIndex] = JSON.parse(JSON.stringify(action.stroke));
+            }
+            redrawAllStrokes(action.page - 1);
+        } else if (action.type === 'resize') {
+            // Restore resized state
             const strokes = strokesPerPage.value[action.page];
             if (strokes && strokes[action.strokeIndex]) {
                 strokes[action.strokeIndex] = JSON.parse(JSON.stringify(action.stroke));

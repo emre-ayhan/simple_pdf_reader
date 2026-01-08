@@ -99,7 +99,7 @@ const {
 
 // Drag and Drop Handlers
 const {
-    isDragging,
+    isDragging: isDraggingFile,
     onDrop,
     onDragEnter,
     onDragLeave,
@@ -154,6 +154,9 @@ const {
     isDragMode,
     selectedStroke,
     isDragging: isDraggingStroke,
+        isResizing,
+    showStrokeMenu,
+    strokeMenuPosition,
     startDrawing,
     stopDrawing,
     onPointerMove,
@@ -165,6 +168,9 @@ const {
     clearDrawing,
     redrawAllStrokes,
     drawImageCanvas,
+    changeStrokeColor,
+    deleteSelectedStroke,
+    handleContextMenu
 } = useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPage, drawingCanvases, drawingContexts, strokeChangeCallback, captureSelectionCallback);
 
 
@@ -414,11 +420,45 @@ onMounted(() => {
             processFileOpenResult(fileData);
         });
     }
+    
+    // Close stroke menu and clear selection when clicking outside
+    const handleClickOutside = (e) => {
+        const clickedMenu = e.target.closest('.stroke-menu');
+        const clickedCanvas = e.target.closest('.drawing-canvas');
+
+        // Hide the menu when clicking outside it
+        if (showStrokeMenu.value && !clickedMenu) {
+            showStrokeMenu.value = false;
+        }
+
+        // Clear selection when clicking outside canvases and menu
+        if (!clickedCanvas && !clickedMenu && selectedStroke.value) {
+            const pageIndex = selectedStroke.value.pageIndex;
+            selectedStroke.value = null;
+            showStrokeMenu.value = false;
+            if (pageIndex !== undefined && drawingCanvases[pageIndex]) {
+                redrawAllStrokes(pageIndex);
+            }
+        }
+    };
+    
+    document.addEventListener('click', handleClickOutside);
+    
+    // Store cleanup function
+    window._cleanupStrokeMenu = () => {
+        document.removeEventListener('click', handleClickOutside);
+    };
 });
 
 onBeforeUnmount(() => {
     unsubscribeFileOpen?.();
     unsubscribeFileOpen = null;
+    
+    // Cleanup stroke menu listener
+    if (window._cleanupStrokeMenu) {
+        window._cleanupStrokeMenu();
+        delete window._cleanupStrokeMenu;
+    }
 });
 
 onUnmounted(() => {
@@ -654,6 +694,7 @@ onUnmounted(() => {
                                 @pointerup="stopDrawing"
                                 @pointerleave="onPointerLeave"
                                 @pointercancel="stopDrawing"
+                                @contextmenu="handleContextMenu"
                                 :style="{
                                     cursor: cursorStyle,
                                     pointerEvents: 'auto',
@@ -693,7 +734,33 @@ onUnmounted(() => {
             />
         </div>
 
-        <div v-if="isDragging" class="drag-overlay">
+        <div v-if="showStrokeMenu && selectedStroke" 
+             class="stroke-menu" 
+             :style="{ 
+                 left: strokeMenuPosition.x + 'px', 
+                 top: strokeMenuPosition.y + 'px'
+             }">
+            <div class="stroke-menu-content">
+                <div class="stroke-menu-section">
+                    <label class="stroke-menu-label">Color</label>
+                    <div class="stroke-menu-colors">
+                        <button 
+                            v-for="(color, index) in ['black', 'red', 'blue', 'green', 'yellow', 'orange', 'purple', 'pink']" 
+                            :key="index"
+                            class="color-btn"
+                            :style="{ backgroundColor: color }"
+                            :title="color"
+                            @click.stop="changeStrokeColor(color)"
+                        ></button>
+                    </div>
+                </div>
+                <button class="stroke-menu-btn delete-btn" @click.stop="deleteSelectedStroke()">
+                    <i class="bi bi-trash-fill"></i> Delete
+                </button>
+            </div>
+        </div>
+
+        <div v-if="isDraggingFile" class="drag-overlay">
             <div class="drag-message">
                 <i class="bi bi-file-earmark-pdf-fill display-1"></i>
                 <h3>Drop PDF here to open</h3>
