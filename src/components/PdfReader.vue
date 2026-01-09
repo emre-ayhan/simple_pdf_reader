@@ -12,6 +12,7 @@ import { fileDataCache } from "../composables/useTabs";
 
 // Cursor Style
 const cursorStyle = computed(() => {
+    if (resizeCursor.value) return resizeCursor.value;
     if (isSelectionMode.value) return 'crosshair';
     if (isTextMode.value) return 'text';
     if (isDragMode.value) return selectedStroke.value ? 'move' : 'default';
@@ -157,6 +158,7 @@ const {
         isResizing,
     showStrokeMenu,
     strokeMenuPosition,
+    resizeCursor,
     startDrawing,
     stopDrawing,
     onPointerMove,

@@ -47,6 +47,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     const isResizing = ref(false);
     const resizeHandle = ref(null); // 'nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'
     const resizeStartBounds = ref(null);
+    const resizeCursor = ref(null);
 
     let lastX = 0;
     let lastY = 0;
@@ -553,6 +554,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 
                 e.preventDefault();
                 e.stopPropagation();
+                resizeCursor.value = mapHandleToCursor(resizeHandle.value);
                 return;
             }
             
@@ -803,6 +805,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             isResizing.value = false;
             resizeHandle.value = null;
             resizeStartBounds.value = null;
+            resizeCursor.value = null;
             isMouseDown.value = false;
             activePointerId.value = null;
             activePointerType.value = null;
@@ -845,6 +848,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         isMouseDown.value = false;
         activePointerId.value = null;
         activePointerType.value = null;
+        resizeCursor.value = null;
         
         const pageIndex = currentCanvasIndex + 1;
         
@@ -893,6 +897,23 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         if (e.pointerType === 'pen') {
             isPenHovering.value = true;
         }
+
+        // Update cursor when hovering handles in drag mode even before mousedown
+        if (isDragMode.value && selectedStroke.value && !isMouseDown.value) {
+            const canvasIndex = getCanvasIndexFromEvent(e);
+            if (canvasIndex !== -1) {
+                const canvas = drawingCanvases.value[canvasIndex];
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                const x = (e.clientX - rect.left) * scaleX;
+                const y = (e.clientY - rect.top) * scaleY;
+                const bounds = getStrokeBounds(selectedStroke.value.stroke, 5);
+                const handle = getResizeHandle(x, y, bounds);
+                resizeCursor.value = mapHandleToCursor(handle);
+            }
+        }
+
         draw(e);
     };
 
@@ -1063,6 +1084,15 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         
         e.preventDefault();
         e.stopPropagation();
+    };
+
+    const mapHandleToCursor = (handle) => {
+        if (!handle) return null;
+        if (handle === 'n' || handle === 's') return 'ns-resize';
+        if (handle === 'e' || handle === 'w') return 'ew-resize';
+        if (handle === 'ne' || handle === 'sw') return 'nesw-resize';
+        if (handle === 'nw' || handle === 'se') return 'nwse-resize';
+        return null;
     };
 
     const drawSelectionHighlight = (canvasIndex, strokeIndex) => {
@@ -1391,6 +1421,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         drawImageCanvas,
         changeStrokeColor,
         deleteSelectedStroke,
-        handleContextMenu
+        handleContextMenu,
+        resizeCursor
     }
 }
