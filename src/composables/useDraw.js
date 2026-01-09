@@ -7,7 +7,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     const isEraser = ref(false);
     const drawMode = ref('pen'); // 'pen', 'line', 'rectangle', 'circle', 'text'
     const drawColor = ref('blue');
-    const drawThickness = ref(2);
+    const drawThickness = ref(1);
     const currentStrokeId = ref(null);
     const currentStroke = ref([]); // Current stroke being drawn
     const enableTouchDrawing = ref(localStorage.getItem('enableTouchDrawing') === 'true');
