@@ -716,15 +716,19 @@ onUnmounted(() => {
             <div class="stroke-menu-content">
                 <div class="stroke-menu-section">
                     <label class="stroke-menu-label">Color</label>
-                    <div class="stroke-menu-colors">
-                        <button 
-                            v-for="(color, index) in ['black', 'red', 'blue', 'green', 'yellow', 'orange', 'purple', 'pink']" 
-                            :key="index"
-                            class="color-btn"
-                            :style="{ backgroundColor: color }"
-                            :title="color"
-                            @click.stop="changeStrokeColor(color)"
-                        ></button>
+                    <div class="stroke-menu-colors d-flex flex-column">
+                        <template v-for="(colorGroup, groupIndex) in colors">
+                            <div class="d-flex gap-2 mb-2">
+                                <template v-for="(color, colorIndex) in colorGroup" :key="`color-${groupIndex}-${colorIndex}`">
+                                    <button
+                                        class="color-btn"
+                                        :style="{ backgroundColor: color }"
+                                        :title="color"
+                                        @click.stop="changeStrokeColor(color)"
+                                    ></button>
+                                </template>
+                            </div>
+                        </template>
                     </div>
                 </div>
                 <button class="stroke-menu-btn delete-btn" @click.stop="deleteSelectedStroke()">
