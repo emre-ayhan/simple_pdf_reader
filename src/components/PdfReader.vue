@@ -427,45 +427,11 @@ onMounted(() => {
             processFileOpenResult(fileData);
         });
     }
-    
-    // Close stroke menu and clear selection when clicking outside
-    const handleClickOutside = (e) => {
-        const clickedMenu = e.target.closest('.stroke-menu');
-        const clickedCanvas = e.target.closest('.drawing-canvas');
-
-        // Hide the menu when clicking outside it
-        if (showStrokeMenu.value && !clickedMenu) {
-            showStrokeMenu.value = false;
-        }
-
-        // Clear selection when clicking outside canvases and menu
-        if (!clickedCanvas && !clickedMenu && selectedStroke.value) {
-            const pageIndex = selectedStroke.value.pageIndex;
-            selectedStroke.value = null;
-            showStrokeMenu.value = false;
-            if (pageIndex !== undefined && drawingCanvases[pageIndex]) {
-                redrawAllStrokes(pageIndex);
-            }
-        }
-    };
-    
-    document.addEventListener('click', handleClickOutside);
-    
-    // Store cleanup function
-    window._cleanupStrokeMenu = () => {
-        document.removeEventListener('click', handleClickOutside);
-    };
 });
 
 onBeforeUnmount(() => {
     unsubscribeFileOpen?.();
     unsubscribeFileOpen = null;
-    
-    // Cleanup stroke menu listener
-    if (window._cleanupStrokeMenu) {
-        window._cleanupStrokeMenu();
-        delete window._cleanupStrokeMenu;
-    }
 });
 
 onUnmounted(() => {

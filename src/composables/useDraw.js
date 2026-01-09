@@ -159,6 +159,9 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         for (let i = strokes.length - 1; i >= 0; i--) {
             if (isPointNearStroke(x, y, strokes[i])) {
                 return { pageIndex: canvasIndex, strokeIndex: i, stroke: strokes[i] };
+            } else {
+                selectedStroke.value = null;
+                redrawAllStrokes(canvasIndex);
             }
         }
         
