@@ -1,4 +1,4 @@
-import { ref, nextTick } from 'vue';
+import { ref, nextTick, computed } from 'vue';
 import { uuid } from './useUuid.js';
 
 export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPage, drawingCanvases, drawingContexts, strokeChangeCallback, captureSelectionCallback) {
@@ -37,7 +37,10 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     const isSelecting = ref(false);
 
     // Stroke selection and dragging
-    const isDragMode = ref(false);
+    const isDragMode = computed(() => {
+        // Drag mode is active when no other tool is active
+        return !isDrawing.value && !isEraser.value && !isTextMode.value && !isSelectionMode.value;
+    });
     const selectedStroke = ref(null); // { pageIndex, strokeIndex, stroke }
     const isDragging = ref(false);
     const dragOffset = ref({ x: 0, y: 0 });
@@ -996,7 +999,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         isDrawing.value = false;
         isEraser.value = false;
         isSelectionMode.value = false;
-        isDragMode.value = false;
+        // isDragMode is now computed, don't set it
         selectedStroke.value = null;
         isDragging.value = false;
         isResizing.value = false;
