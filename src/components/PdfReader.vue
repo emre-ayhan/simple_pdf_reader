@@ -172,6 +172,7 @@ const {
     drawImageCanvas,
     changeStrokeColor,
     changeStrokeThickness,
+    changeStrokeText,
     deleteSelectedStroke,
     handleContextMenu
 } = useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPage, drawingCanvases, drawingContexts, strokeChangeCallback, captureSelectionCallback);
@@ -720,7 +721,18 @@ onUnmounted(() => {
                         </template>
                     </div>
                 </div>
-                <div class="stroke-menu-section">
+                <div v-if="selectedStroke?.stroke[0]?.type === 'text'" class="stroke-menu-section">
+                    <label class="stroke-menu-label">Text</label>
+                    <input 
+                        type="text" 
+                        class="form-control form-control-sm" 
+                        :value="selectedStroke?.stroke[0]?.text || ''"
+                        @input="(e) => changeStrokeText(e.target.value)"
+                        @click.stop
+                        placeholder="Enter text"
+                    />
+                </div>
+                <div class="stroke-menu-section" v-else>
                     <label class="stroke-menu-label">Thickness</label>
                     <div class="d-flex align-items-center gap-2">
                         <input type="range" class="form-range" min="1" max="10" @input="(e) => changeStrokeThickness(parseInt(e.target.value))" :value="selectedStroke?.stroke[0]?.thickness || 1" />

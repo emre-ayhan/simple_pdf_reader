@@ -164,7 +164,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 return { pageIndex: canvasIndex, strokeIndex: i, stroke: strokes[i] };
             }
         }
-        
+        showStrokeMenu.value = false;
         selectedStroke.value = null;
         redrawAllStrokes(canvasIndex);
         return null;
@@ -1071,6 +1071,35 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         }
     };
 
+    const changeStrokeText = (newText) => {
+        if (!selectedStroke.value) return;
+        
+        const pageNumber = selectedStroke.value.pageIndex + 1;
+        const strokes = strokesPerPage.value[pageNumber];
+        const stroke = strokes[selectedStroke.value.strokeIndex];
+        
+        if (stroke && stroke[0].type === 'text') {
+            const originalStroke = JSON.parse(JSON.stringify(stroke));
+            
+            // Change text content
+            stroke[0].text = newText;
+            
+            // Save to history
+            strokeChangeCallback({
+                id: stroke[0].id,
+                type: 'text-change',
+                page: pageNumber,
+                strokeIndex: selectedStroke.value.strokeIndex,
+                stroke: JSON.parse(JSON.stringify(stroke)),
+                previousStroke: originalStroke
+            });
+            
+            // Redraw
+            redrawAllStrokes(selectedStroke.value.pageIndex);
+            drawSelectionHighlight(selectedStroke.value.pageIndex, selectedStroke.value.strokeIndex);
+        }
+    };
+
     const deleteSelectedStroke = () => {
         if (!selectedStroke.value) return;
         
@@ -1472,6 +1501,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         drawImageCanvas,
         changeStrokeColor,
         changeStrokeThickness,
+        changeStrokeText,
         deleteSelectedStroke,
         handleContextMenu,
         resizeCursor
