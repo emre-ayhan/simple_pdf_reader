@@ -521,7 +521,24 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                         first.x = newRawMinX;
                         first.y = newRawMinY;
                         first.fontSize = Math.max(8, Math.round(origFirst.fontSize * Math.min(scaleXFactor, scaleYFactor)));
-                    } else if (origFirst.type === 'line' || origFirst.type === 'rectangle' || origFirst.type === 'circle') {
+                    } else if (origFirst.type === 'circle') {
+                        // Keep the circle aligned with its bounding box by scaling center and radius vector from original bounds
+                        const origBounds = startRawBounds;
+                        const origCenterX = origFirst.startX;
+                        const origCenterY = origFirst.startY;
+                        const origRadiusVecX = origFirst.endX - origFirst.startX;
+                        const origRadiusVecY = origFirst.endY - origFirst.startY;
+
+                        const newCenterX = newRawMinX + (origCenterX - origBounds.minX) * scaleXFactor;
+                        const newCenterY = newRawMinY + (origCenterY - origBounds.minY) * scaleYFactor;
+
+                        first.startX = newCenterX;
+                        first.startY = newCenterY;
+                        first.endX = newCenterX + origRadiusVecX * scaleXFactor;
+                        first.endY = newCenterY + origRadiusVecY * scaleYFactor;
+                        first.x = first.startX;
+                        first.y = first.startY;
+                    } else if (origFirst.type === 'line' || origFirst.type === 'rectangle') {
                         const origMinX = Math.min(origFirst.startX, origFirst.endX);
                         const origMaxX = Math.max(origFirst.startX, origFirst.endX);
                         const origMinY = Math.min(origFirst.startY, origFirst.endY);
