@@ -161,7 +161,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 return { pageIndex: canvasIndex, strokeIndex: i, stroke: strokes[i] };
             }
         }
-
+        
         selectedStroke.value = null;
         redrawAllStrokes(canvasIndex);
         return null;
@@ -1037,6 +1037,37 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         showStrokeMenu.value = false;
     };
 
+    const changeStrokeThickness = (newThickness) => {
+        if (!selectedStroke.value) return;
+        
+        const pageNumber = selectedStroke.value.pageIndex + 1;
+        const strokes = strokesPerPage.value[pageNumber];
+        const stroke = strokes[selectedStroke.value.strokeIndex];
+        
+        if (stroke) {
+            const originalStroke = JSON.parse(JSON.stringify(stroke));
+            
+            // Change thickness for all points in the stroke
+            for (let point of stroke) {
+                point.thickness = newThickness;
+            }
+            
+            // Save to history
+            strokeChangeCallback({
+                id: stroke[0].id,
+                type: 'thickness-change',
+                page: pageNumber,
+                strokeIndex: selectedStroke.value.strokeIndex,
+                stroke: JSON.parse(JSON.stringify(stroke)),
+                previousStroke: originalStroke
+            });
+            
+            // Redraw
+            redrawAllStrokes(selectedStroke.value.pageIndex);
+            drawSelectionHighlight(selectedStroke.value.pageIndex, selectedStroke.value.strokeIndex);
+        }
+    };
+
     const deleteSelectedStroke = () => {
         if (!selectedStroke.value) return;
         
@@ -1437,6 +1468,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         redrawAllStrokes,
         drawImageCanvas,
         changeStrokeColor,
+        changeStrokeThickness,
         deleteSelectedStroke,
         handleContextMenu,
         resizeCursor

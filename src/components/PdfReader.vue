@@ -171,6 +171,7 @@ const {
     redrawAllStrokes,
     drawImageCanvas,
     changeStrokeColor,
+    changeStrokeThickness,
     deleteSelectedStroke,
     handleContextMenu
 } = useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPage, drawingCanvases, drawingContexts, strokeChangeCallback, captureSelectionCallback);
@@ -729,6 +730,13 @@ onUnmounted(() => {
                                 </template>
                             </div>
                         </template>
+                    </div>
+                </div>
+                <div class="stroke-menu-section">
+                    <label class="stroke-menu-label">Thickness</label>
+                    <div class="d-flex align-items-center gap-2">
+                        <input type="range" class="form-range" min="1" max="10" @input="(e) => changeStrokeThickness(parseInt(e.target.value))" :value="selectedStroke?.stroke[0]?.thickness || 1" />
+                        <input type="text" class="form-control-plaintext" min="1" max="10" :value="selectedStroke?.stroke[0]?.thickness || 1" readonly />
                     </div>
                 </div>
                 <button class="stroke-menu-btn delete-btn" @click.stop="deleteSelectedStroke()">
