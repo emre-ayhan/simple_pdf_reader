@@ -379,6 +379,11 @@ useWindowEvents(fileId, {
         Delete: {
             action: (event) => {
                 event.preventDefault();
+                if (selectedStroke.value) {
+                    deleteSelectedStroke();
+                    return;
+                }
+
                 deletePage(pageIndex.value, addToHistory);
             }
         },

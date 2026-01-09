@@ -164,11 +164,11 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         return null;
     };
 
-    const getStrokeBounds = (stroke) => {
+    const getStrokeBounds = (stroke, padding = 5) => {
         if (!stroke || stroke.length === 0) return null;
         
         const first = stroke[0];
-        const padding = 5;
+        const pad = Math.max(0, padding);
         
         if (first.type === 'text') {
             const ctx = drawingContexts.value[0];
@@ -176,26 +176,26 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             ctx.font = `${first.fontSize}px Arial`;
             const metrics = ctx.measureText(first.text);
             return {
-                minX: first.x - padding,
-                minY: first.y - padding,
-                maxX: first.x + metrics.width + padding,
-                maxY: first.y + first.fontSize + padding
+                minX: first.x - pad,
+                minY: first.y - pad,
+                maxX: first.x + metrics.width + pad,
+                maxY: first.y + first.fontSize + pad
             };
         } else if (first.type === 'line' || first.type === 'rectangle' || first.type === 'circle') {
             if (first.type === 'circle') {
                 const radius = Math.sqrt((first.endX - first.startX) ** 2 + (first.endY - first.startY) ** 2);
                 return {
-                    minX: first.startX - radius - padding,
-                    minY: first.startY - radius - padding,
-                    maxX: first.startX + radius + padding,
-                    maxY: first.startY + radius + padding
+                    minX: first.startX - radius - pad,
+                    minY: first.startY - radius - pad,
+                    maxX: first.startX + radius + pad,
+                    maxY: first.startY + radius + pad
                 };
             }
             return {
-                minX: Math.min(first.startX, first.endX) - padding,
-                minY: Math.min(first.startY, first.endY) - padding,
-                maxX: Math.max(first.startX, first.endX) + padding,
-                maxY: Math.max(first.startY, first.endY) + padding
+                minX: Math.min(first.startX, first.endX) - pad,
+                minY: Math.min(first.startY, first.endY) - pad,
+                maxX: Math.max(first.startX, first.endX) + pad,
+                maxY: Math.max(first.startY, first.endY) + pad
             };
         } else {
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -206,10 +206,10 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 maxY = Math.max(maxY, point.y);
             }
             return {
-                minX: minX - padding,
-                minY: minY - padding,
-                maxX: maxX + padding,
-                maxY: maxY + padding
+                minX: minX - pad,
+                minY: minY - pad,
+                maxX: maxX + pad,
+                maxY: maxY + pad
             };
         }
     };
@@ -272,7 +272,8 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             
             // Check if clicking on a resize handle of already selected stroke
             if (selectedStroke.value && selectedStroke.value.pageIndex === canvasIndex) {
-                const bounds = getStrokeBounds(selectedStroke.value.stroke);
+                const handlePadding = 5;
+                const bounds = getStrokeBounds(selectedStroke.value.stroke, handlePadding);
                 const handle = getResizeHandle(x, y, bounds);
                 
                 if (handle) {
@@ -280,7 +281,11 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                     isResizing.value = true;
                     resizeHandle.value = handle;
                     dragStartPos.value = { x, y };
-                    resizeStartBounds.value = { ...bounds };
+                    resizeStartBounds.value = {
+                        padded: { ...bounds },
+                        raw: getStrokeBounds(selectedStroke.value.originalStroke || selectedStroke.value.stroke, 0),
+                        padding: handlePadding
+                    };
                     
                     isMouseDown.value = true;
                     currentCanvasIndex = canvasIndex;
@@ -476,15 +481,18 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 const strokes = strokesPerPage.value[pageNumber];
                 const stroke = strokes[selectedStroke.value.strokeIndex];
                 
-                if (stroke) {
+                if (stroke && resizeStartBounds.value) {
                     const first = stroke[0];
-                    const originalBounds = resizeStartBounds.value;
+                    const startBounds = resizeStartBounds.value.padded;
+                    const startRawBounds = resizeStartBounds.value.raw;
+                    const boundsPadding = resizeStartBounds.value.padding ?? 0;
+                    if (!startBounds || !startRawBounds) return;
                     
                     // Calculate new bounds based on resize handle
-                    let newMinX = originalBounds.minX;
-                    let newMinY = originalBounds.minY;
-                    let newMaxX = originalBounds.maxX;
-                    let newMaxY = originalBounds.maxY;
+                    let newMinX = startBounds.minX;
+                    let newMinY = startBounds.minY;
+                    let newMaxX = startBounds.maxX;
+                    let newMaxY = startBounds.maxY;
                     
                     const handle = resizeHandle.value;
                     if (handle.includes('n')) newMinY += dy;
@@ -492,40 +500,49 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                     if (handle.includes('w')) newMinX += dx;
                     if (handle.includes('e')) newMaxX += dx;
                     
+                    // Convert from padded bounds to raw stroke bounds
+                    const newRawMinX = newMinX + boundsPadding;
+                    const newRawMinY = newMinY + boundsPadding;
+                    const newRawMaxX = newMaxX - boundsPadding;
+                    const newRawMaxY = newMaxY - boundsPadding;
+
                     // Ensure minimum size
-                    if (newMaxX - newMinX < 10) return;
-                    if (newMaxY - newMinY < 10) return;
+                    if (newRawMaxX - newRawMinX < 10) return;
+                    if (newRawMaxY - newRawMinY < 10) return;
+
+                    const baseWidth = Math.max(1, startRawBounds.maxX - startRawBounds.minX);
+                    const baseHeight = Math.max(1, startRawBounds.maxY - startRawBounds.minY);
                     
-                    const scaleXFactor = (newMaxX - newMinX) / (originalBounds.maxX - originalBounds.minX);
-                    const scaleYFactor = (newMaxY - newMinY) / (originalBounds.maxY - originalBounds.minY);
+                    const scaleXFactor = (newRawMaxX - newRawMinX) / baseWidth;
+                    const scaleYFactor = (newRawMaxY - newRawMinY) / baseHeight;
                     
                     // Get original stroke to calculate scaling from
                     const originalStroke = selectedStroke.value.originalStroke;
                     const origFirst = originalStroke[0];
                     
                     if (origFirst.type === 'text') {
-                        first.x = newMinX + 5;
-                        first.y = newMinY + 5;
+                        first.x = newRawMinX;
+                        first.y = newRawMinY;
                         first.fontSize = Math.max(8, Math.round(origFirst.fontSize * Math.min(scaleXFactor, scaleYFactor)));
                     } else if (origFirst.type === 'line' || origFirst.type === 'rectangle' || origFirst.type === 'circle') {
                         const origMinX = Math.min(origFirst.startX, origFirst.endX);
                         const origMaxX = Math.max(origFirst.startX, origFirst.endX);
                         const origMinY = Math.min(origFirst.startY, origFirst.endY);
                         const origMaxY = Math.max(origFirst.startY, origFirst.endY);
-                        
-                        first.startX = newMinX + 5 + (origFirst.startX - origMinX - 5) * scaleXFactor;
-                        first.startY = newMinY + 5 + (origFirst.startY - origMinY - 5) * scaleYFactor;
-                        first.endX = newMinX + 5 + (origFirst.endX - origMinX - 5) * scaleXFactor;
-                        first.endY = newMinY + 5 + (origFirst.endY - origMinY - 5) * scaleYFactor;
+
+                        first.startX = newRawMinX + (origFirst.startX - origMinX) * scaleXFactor;
+                        first.startY = newRawMinY + (origFirst.startY - origMinY) * scaleYFactor;
+                        first.endX = newRawMinX + (origFirst.endX - origMinX) * scaleXFactor;
+                        first.endY = newRawMinY + (origFirst.endY - origMinY) * scaleYFactor;
                         first.x = first.startX;
                         first.y = first.startY;
                     } else {
                         // Pen stroke - scale all points
-                        const origBounds = getStrokeBounds(originalStroke);
+                        const origBounds = startRawBounds;
                         for (let i = 0; i < stroke.length; i++) {
                             const origPoint = originalStroke[i];
-                            stroke[i].x = newMinX + 5 + (origPoint.x - origBounds.minX - 5) * scaleXFactor;
-                            stroke[i].y = newMinY + 5 + (origPoint.y - origBounds.minY - 5) * scaleYFactor;
+                            stroke[i].x = newRawMinX + (origPoint.x - origBounds.minX) * scaleXFactor;
+                            stroke[i].y = newRawMinY + (origPoint.y - origBounds.minY) * scaleYFactor;
                         }
                     }
                     
