@@ -338,6 +338,11 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         
         // Handle text mode
         if (isTextMode.value) {
+            if (textInput.value) {
+                confirmText();
+                return;
+            }
+
             const canvasIndex = getCanvasIndexFromEvent(e);
             if (canvasIndex === -1) return;
             
