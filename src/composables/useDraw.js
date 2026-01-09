@@ -329,13 +329,6 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 // Redraw with highlight
                 redrawAllStrokes(canvasIndex);
                 drawSelectionHighlight(canvasIndex, found.strokeIndex);
-            } else {
-                // Clicked on empty space, clear selection
-                showStrokeMenu.value = false;
-                selectedStroke.value = null;
-                if (currentCanvasIndex >= 0) {
-                    redrawAllStrokes(canvasIndex);
-                }
             }
             
             e.preventDefault();
