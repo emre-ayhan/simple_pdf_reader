@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, nextTick, onMounted, onUnmounted, onBeforeUnmount } from "vue";
+import { ref, computed, nextTick, watch, onMounted, onUnmounted, onBeforeUnmount } from "vue";
 import { Electron } from "../composables/useElectron";
 import { useFile } from "../composables/useFile";
 import { useDrop } from "../composables/useDrop";
@@ -137,6 +137,38 @@ const captureSelectionCallback = (canvasIndex, selectedCanvas) => {
     });
 }
 
+// Ref to measure and clamp the stroke context menu
+const strokeMenuRef = ref(null);
+
+const clampStrokeMenuPosition = async () => {
+    // Ensure the menu has rendered before measuring
+    await nextTick();
+    const el = strokeMenuRef.value;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+
+    // Account for CSS transform: translate(-50%, 10px)
+    const halfW = rect.width / 2;
+    const offsetY = 10; // matches SCSS transform Y
+    const margin = 8;   // keep a small margin from edges
+
+    const minX = margin + halfW;
+    const maxX = viewportWidth - margin - halfW;
+    const minY = margin - offsetY; // ensure top (with offset) >= margin
+    const maxY = viewportHeight - margin - rect.height - offsetY;
+
+    const clampedX = Math.min(Math.max(minX, strokeMenuPosition.value.x), Math.max(minX, maxX));
+    const clampedY = Math.min(Math.max(minY, strokeMenuPosition.value.y), Math.max(minY, maxY));
+
+    if (clampedX !== strokeMenuPosition.value.x || clampedY !== strokeMenuPosition.value.y) {
+        strokeMenuPosition.value = { x: clampedX, y: clampedY };
+    }
+};
+
+// (moved) watchers will be defined after useDraw destructuring
+
 const {
     isDrawing,
     isEraser,
@@ -176,6 +208,33 @@ const {
     deleteSelectedStroke,
     handleContextMenu
 } = useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPage, drawingCanvases, drawingContexts, strokeChangeCallback, captureSelectionCallback);
+
+
+// Clamp when menu opens (now that refs are available)
+watch(showStrokeMenu, (visible) => {
+    if (visible) {
+        clampStrokeMenuPosition();
+    }
+});
+
+// Clamp on position changes (e.g., programmatic updates)
+watch(() => strokeMenuPosition.value, () => {
+    if (showStrokeMenu.value) {
+        clampStrokeMenuPosition();
+    }
+}, { deep: true });
+
+onMounted(() => {
+    const handler = () => {
+        if (showStrokeMenu.value) clampStrokeMenuPosition();
+    };
+    window.addEventListener('resize', handler);
+});
+
+onUnmounted(() => {
+    const handler = () => {};
+    window.removeEventListener('resize', handler);
+});
 
 
 // History management
@@ -698,6 +757,7 @@ onUnmounted(() => {
         </div>
 
         <div v-if="showStrokeMenu && selectedStroke" 
+             ref="strokeMenuRef"
              class="stroke-menu" 
              :style="{ 
                  left: strokeMenuPosition.x + 'px', 
