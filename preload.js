@@ -25,6 +25,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
     saveFile: (filepath, content, encoding) =>
         ipcRenderer.invoke("file:save", filepath, content, encoding),
 
+    // Store API
+    store: {
+        get: (key) => ipcRenderer.invoke("store:get", key),
+        set: (key, value) => ipcRenderer.invoke("store:set", key, value),
+        getAll: () => ipcRenderer.invoke("store:getAll"),
+        delete: (key) => ipcRenderer.invoke("store:delete", key),
+        clear: () => ipcRenderer.invoke("store:clear")
+    },
+
     onFileOpened: (callback) => {
         console.log('[Preload] onFileOpened registered');
         fileOpenedListeners.push(callback);

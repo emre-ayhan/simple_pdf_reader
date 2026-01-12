@@ -1,7 +1,10 @@
 import { ref, nextTick, computed } from 'vue';
 import { uuid } from './useUuid.js';
+import { useStore } from './useStore.js';
 
 export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPage, drawingCanvases, drawingContexts, strokeChangeCallback, captureSelectionCallback) {
+    const { get: storeGet } = useStore();
+    
     // Drawing variables
     const isDrawing = ref(false);
     const isEraser = ref(false);
@@ -10,7 +13,12 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     const drawThickness = ref(2);
     const currentStrokeId = ref(null);
     const currentStroke = ref([]); // Current stroke being drawn
-    const enableTouchDrawing = ref(localStorage.getItem('enableTouchDrawing') === 'true');
+    const enableTouchDrawing = ref(false);
+    
+    // Initialize enableTouchDrawing from store
+    storeGet('enableTouchDrawing', false).then(value => {
+        enableTouchDrawing.value = value;
+    });
 
 
     const colors = [

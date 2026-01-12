@@ -1,6 +1,7 @@
 import { ref, nextTick, computed, watch } from "vue";
 import { PDFDocument, rgb } from "pdf-lib";
 import { Electron } from "./useElectron";
+import { useStore } from "./useStore";
 import { GlobalWorkerOptions, getDocument } from "pdfjs-dist";
 import { uuid } from "./useUuid";
 import { showModal } from "./useModal";
@@ -9,6 +10,7 @@ import { setCurrentTab } from "./useTabs";
 GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.449/build/pdf.worker.min.mjs';
 
 export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallback, fileSavedCallback, showWhiteboardCallback) {
+    const { set: storeSet, get: storeGet } = useStore();
     const fileId = uuid();
 
     var pdfDoc = null;
@@ -68,7 +70,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
 
     watch(pageIndex, (newIndex) => {
         pageNum.value = newIndex + 1;
-        savePageIndexToLocalStorage(filename.value, newIndex);
+        storePageIndex(filename.value, newIndex);
     });
 
     const isFirstPage = computed(() => {
@@ -192,7 +194,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
                 const pageNumber = parseInt(mostVisiblePage.getAttribute('data-page'));
                 if (pageNumber && pageNumber !== activePage.value) {
                     pageIndex.value = activePages.value.indexOf(pageNumber);
-                    savePageIndexToLocalStorage();
+                    storePageIndex();
                 }
             }
         }, options);
@@ -206,13 +208,18 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         }
     };
 
-    const savePageIndexToLocalStorage = () => {
-        localStorage.setItem(filename.value, pageIndex.value);
+    const storePageIndex = () => {
+        storeSet(filename.value, {
+            pageIndex: pageIndex.value
+        });
     }
 
-    const getPageIndexFromLocalStorage = () => {
-        const index = localStorage.getItem(filename.value) || 0;
-        scrollToPage(parseInt(index));
+    const getStoredPageIndex = () => {
+        storeGet(filename.value).then(data => {
+            if (data.pageIndex) {
+                pageIndex.value = data.pageIndex;
+            }
+        })
     }
     
     const scrollToPage = (page_index) => {
@@ -235,7 +242,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
     const handleFileLoadEvent = (type, page_count) => {
         isFileLoaded.value = true;
         pageCount.value = page_count || 1;
-        getPageIndexFromLocalStorage();
+        getStoredPageIndex();
 
         setCurrentTab({
             id: fileId,
@@ -774,7 +781,8 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         setupIntersectionObserver,
         setupLazyLoadObserver,
         scrollToPage,
-        savePageIndexToLocalStorage,
+        storePageIndex,
+        getStoredPageIndex,
         deletedPages,
         deletePage,
     }

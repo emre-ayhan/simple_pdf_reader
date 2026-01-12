@@ -111,6 +111,7 @@
   "dependencies": {
     "bootstrap": "^5.3.8",
     "bootstrap-icons": "^1.13.1",
+    "electron-store": "^11.0.2",
     "electron-updater": "^6.6.2",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^5.4.449",

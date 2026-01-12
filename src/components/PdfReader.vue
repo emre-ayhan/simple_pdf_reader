@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, nextTick, watch, onMounted, onUnmounted, onBeforeUnmount } from "vue";
 import { Electron } from "../composables/useElectron";
+import { useStore } from "../composables/useStore";
 import { useFile } from "../composables/useFile";
 import { useDrop } from "../composables/useDrop";
 import { useDraw } from "../composables/useDraw";
@@ -408,7 +409,8 @@ const selectSelection = () => {
 
 const toggleTouchDrawing = () => {
     enableTouchDrawing.value = !enableTouchDrawing.value;
-    localStorage.setItem('enableTouchDrawing', enableTouchDrawing.value);
+    const { set: storeSet } = useStore();
+    storeSet('enableTouchDrawing', enableTouchDrawing.value);
 };
 
 const toggleZoomMode = () => {

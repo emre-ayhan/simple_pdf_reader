@@ -1,12 +1,27 @@
 import { app, BrowserWindow, ipcMain, dialog } from "electron";
 import pkg from "electron-updater";
 const { autoUpdater } = pkg;
+import Store from "electron-store";
 import fs from "fs";
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
+
+// Initialize electron-store with schema
+const store = new Store({
+    schema: {
+        pageIndex: { type: 'number', default: 0 },
+        enableTouchDrawing: { type: 'boolean', default: false },
+        zoom: { type: 'number', default: 100 },
+        zoomMode: { type: 'string', default: 'fit-width' },
+        lastFilePath: { type: 'string', default: '' },
+        lastFileName: { type: 'string', default: '' },
+        fileStates: { type: 'object', default: {} }
+    },
+    clearInvalidConfig: true
+});
 
 let win;
 let pendingFilePath = null;
@@ -329,4 +344,28 @@ ipcMain.handle("file:save", async (event, filepath, content, encoding = 'utf-8')
             errorCode: error.code
         };
     }
+});
+
+// Store handlers
+ipcMain.handle("store:get", (event, key) => {
+    return store.get(key);
+});
+
+ipcMain.handle("store:set", (event, key, value) => {
+    store.set(key, value);
+    return true;
+});
+
+ipcMain.handle("store:getAll", () => {
+    return store.store;
+});
+
+ipcMain.handle("store:delete", (event, key) => {
+    store.delete(key);
+    return true;
+});
+
+ipcMain.handle("store:clear", () => {
+    store.clear();
+    return true;
 });
