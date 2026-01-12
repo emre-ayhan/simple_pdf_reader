@@ -3,7 +3,7 @@ import { uuid } from './useUuid.js';
 import { useStore } from './useStore.js';
 
 export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPage, drawingCanvases, drawingContexts, strokeChangeCallback, captureSelectionCallback) {
-    const { get: storeGet } = useStore();
+    const { get: storeGet, set: storeSet } = useStore();
     
     // Drawing variables
     const isDrawing = ref(false);
@@ -22,12 +22,63 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
 
 
     const colors = [
-        ['black', 'dimgray', 'gray', 'darkgray', 'silver', 'white'],
-        ['magenta', 'red', 'orangered', 'orange', 'gold', 'yellow'],
-        ['green', 'darkgreen', 'lime', 'teal', 'cyan', 'navy'],
-        ['blue', 'darkblue', 'royalblue', 'purple', 'magenta', 'pink'],
-        ['brown', 'sienna', 'olive', 'maroon', 'coral', 'salmon']
+        'black', 'dimgray', 'gray', 'darkgray', 'silver', 'white',
+        'magenta', 'red', 'orangered', 'orange', 'gold', 'yellow',
+        'green', 'darkgreen', 'lime', 'teal', 'cyan', 'navy',
+        'blue', 'darkblue', 'royalblue', 'purple', 'magenta', 'pink',
+        'brown', 'sienna', 'olive', 'maroon'
     ];
+
+    const initialStrokeStyles = ref([{
+        color: 'blue',
+        thickness: 2
+    }, {
+        color: 'red',
+        thickness: 2
+    }, {
+        color: 'green',
+        thickness: 2
+    }, {
+        color: 'orange',
+        thickness: 2
+    }]);
+
+    const activeStrokeStyle = computed(() => {
+        return initialStrokeStyles.value.find(style => style.color === drawColor.value) || null;
+    });
+
+    storeGet('initialStrokeStyles').then(value => {
+        if (Array.isArray(value) && value.length === 4) {
+            initialStrokeStyles.value = value;
+        }
+    })
+
+    const setInitialStrokeColor = (color) => {
+        const index = initialStrokeStyles.value.findIndex(style => style.color === drawColor.value);
+        
+        if (index === -1) return;
+        initialStrokeStyles.value[index].color = color;
+        drawColor.value = color;
+        // Persist to store
+        storeSet('initialStrokeStyles', initialStrokeStyles.value);
+    }
+
+    const setInitialStrokeThickness = (thickness) => {
+        const index = initialStrokeStyles.value.findIndex(style => style.color === drawColor.value);
+        if (index === -1) return;
+        initialStrokeStyles.value[index].thickness = thickness*1;
+        drawThickness.value = thickness*1;
+        // Persist to store
+        storeSet('initialStrokeStyles', initialStrokeStyles.value);
+    }
+
+    const handleStrokeStyleButtonClick = (index) => {
+        if (index < 0 || index >= initialStrokeStyles.value.length) return;
+        const style = initialStrokeStyles.value[index];
+        drawColor.value = style.color;
+        drawThickness.value = style.thickness;
+    }
+
 
     // Text mode variables
     const isTextMode = ref(false);
@@ -1535,6 +1586,11 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         changeStrokeText,
         deleteSelectedStroke,
         handleContextMenu,
-        resizeCursor
+        resizeCursor,
+        initialStrokeStyles,
+        activeStrokeStyle,
+        setInitialStrokeColor,
+        setInitialStrokeThickness,
+        handleStrokeStyleButtonClick
     }
 }

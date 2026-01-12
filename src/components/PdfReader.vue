@@ -279,7 +279,12 @@ const {
     changeStrokeThickness,
     changeStrokeText,
     deleteSelectedStroke,
-    handleContextMenu
+    handleContextMenu,
+    initialStrokeStyles,
+    activeStrokeStyle,
+    setInitialStrokeColor,
+    setInitialStrokeThickness,
+    handleStrokeStyleButtonClick,
 } = useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPage, drawingCanvases, drawingContexts, strokeChangeCallback, captureSelectionCallback);
 
 
@@ -413,19 +418,43 @@ const toggleTouchDrawing = () => {
     storeSet('enableTouchDrawing', enableTouchDrawing.value);
 };
 
-const toggleZoomMode = () => {
+const toggleZoomMode = (mode) => {
     if (!isFileLoaded.value || showWhiteboard.value) return;
-
-    if (zoomMode.value === 'fit-width') {
-        zoomMode.value = 'fit-height';
+    mode = `${mode}`.toLowerCase().replace(' ', '-');
+    zoomMode.value = mode;
+    
+    if (zoomMode.value === 'fit-height') {
         const pageContainer = document.querySelector(`.page-container[data-page="${pageIndex.value + 1}"]`);
         const percentage = pdfReader.value.clientHeight * 100 / pageContainer.clientHeight;
         zoomPercentage.value = Math.ceil(percentage);
     } else {
-        zoomMode.value = 'fit-width';
         zoomPercentage.value = 100; // Full width
     }
     
+    // Restore scroll position to current page after DOM updates
+    nextTick(() => {
+        scrollToPage();
+    });
+};
+
+const handleZoomLevel = (event) => {
+    let percentage = parseInt(event.target.value);
+
+    if (isNaN(percentage)) {
+        toggleZoomMode(event.target.value);
+        return;
+    }
+
+    if (showWhiteboard.value) {
+        percentage = Math.min(Math.max(20, percentage), 200);
+        whiteboardScale.value = +(percentage / 100).toFixed(2);
+        renderWhiteboardCanvas();
+    } else {
+        percentage = Math.min(Math.max(20, percentage), 300);
+        zoomMode.value = 'fit-height'; // Reset to fit-height on manual zoom
+        zoomPercentage.value = percentage;
+    }
+
     // Restore scroll position to current page after DOM updates
     nextTick(() => {
         scrollToPage();
@@ -580,50 +609,53 @@ onUnmounted(() => {
                 <!-- Toolbar -->
                 <ul class="navbar-nav mx-auto">
                     <!-- Drawing -->
-                    <li class="nav-item btn-group">
-                        <a class="nav-link" href="#" role="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" :class="{ disabled: !isFileLoaded }" :style="{ color: isDrawing || isTextMode ? drawColor : '' }" title="Drawing Settings">
-                            <i class="bi bi-palette-fill"></i>
-                        </a>
-                        <div class="dropdown-menu dropdown-menu-dark rounded-3 p-3">
-                            <div class="mb-3">
-                                <label class="form-label">Color</label>
-                                <template v-for="(colorGroup, groupIndex) in colors">
-                                    <div class="d-flex gap-2 mb-2">
-                                        <div v-for="(color, colorIndex) in colorGroup" :key="`color-${groupIndex}-${colorIndex}`">
-                                            <input type="radio" class="btn-check" name="colors" :id="`color-${groupIndex}-${colorIndex}`" autocomplete="off" v-model="drawColor" :value="color" />
-                                            <label class="btn border rounded-circle p-3" :for="`color-${groupIndex}-${colorIndex}`" :title="color" :style="{ backgroundColor: color }" ></label>
-                                        </div>
+                    <template v-if="hasActiveTool">
+                        <li class="nav-item" v-for="(strokeStyle, index) in initialStrokeStyles">
+                            <a class="nav-link" href="#" @click.prevent="handleStrokeStyleButtonClick(index)" :class="{ active: strokeStyle.color === drawColor, disabled: !isFileLoaded }">
+                                <div class="btn-group gap-1">
+                                    <i class="bi bi-circle-fill" :style="{ color: strokeStyle.color }"></i>
+                                </div>
+                            </a>
+                        </li>
+                        <li class="nav-item btn-group">
+                            <a href="#" role="button" class="nav-link" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                                <i class="bi bi-palette-fill"></i>
+                            </a>
+                            <div class="dropdown-menu dropdown-menu-dark rounded-3 p-3">
+                                <div class="mb-3">
+                                    <div class="form-label">Color</div>
+                                    <div class="row row-cols-5">
+                                        <template v-for="color in colors">
+                                            <div class="col" v-if="!initialStrokeStyles.find(el => el.color === color)">
+                                                <div role="button" class="fs-3" :style="{ color }" @click="setInitialStrokeColor(color)" :title="color">
+                                                    <i class="bi bi-circle-fill"></i>
+                                                </div>
+                                            </div>
+                                        </template>
                                     </div>
-                                </template>
-                                <div class="mb-2">
-                                    <svg width="100%" height="40" viewBox="0 0 200 40" preserveAspectRatio="none">
-                                        <path 
-                                            d="M 0,20 Q 25,5 50,20 T 100,20 T 150,20 T 200,20" 
-                                            fill="none" 
-                                            :stroke="drawColor" 
-                                            :stroke-width="drawThickness" 
-                                            stroke-linecap="round"
-                                        />
-                                    </svg>
+                                    <div class="mb-2">
+                                        <svg width="100%" height="40" viewBox="0 0 200 40" preserveAspectRatio="none">
+                                            <path 
+                                                d="M 0,20 Q 25,5 50,20 T 100,20 T 150,20 T 200,20" 
+                                                fill="none" 
+                                                :stroke="activeStrokeStyle?.color" 
+                                                :stroke-width="activeStrokeStyle?.thickness" 
+                                                stroke-linecap="round"
+                                            />
+                                        </svg>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Thickness</label>
+                                    <div class="d-flex align-items-center">
+                                        <input type="range" class="form-range" min="1" max="10" :value="activeStrokeStyle?.thickness" @input="setInitialStrokeThickness($event.target.value)" />
+                                        <input type="text" class="form-control-plaintext" min="1" max="10" :value="activeStrokeStyle?.thickness" readonly />
+                                    </div>
                                 </div>
                             </div>
-                            <div class="mb-3">
-                                <label class="form-label">Thickness</label>
-                                <div class="d-flex align-items-center">
-                                    <input type="range" class="form-range" min="1" max="10" v-model="drawThickness" />
-                                    <input type="text" class="form-control-plaintext" min="1" max="10" v-model="drawThickness" readonly />
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Font Size</label>
-                                <div class="d-flex align-items-center">
-                                    <input type="range" class="form-range" min="8" max="72" v-model="fontSize" />
-                                    <input type="text" class="form-control-plaintext" min="8" max="72" v-model="fontSize" readonly />
-                                </div>
-                            </div>
-                            <button class="btn btn-sm btn-danger w-100" @click="clearDrawing()">Clear All Drawing</button>
-                        </div>
-                    </li>
+                        </li>
+                        <li class="nav-item vr bg-white mx-2"></li>
+                    </template>
                     <li class="nav-item">
                         <a class="nav-link" href="#" @click.prevent="toggleTouchDrawing" :class="{ active: enableTouchDrawing, disabled: !isFileLoaded }" :title="`${enableTouchDrawing ? 'Disable' : 'Enable'} Touch Drawing`">
                             <i class="bi bi-hand-index-thumb-fill"></i>
@@ -659,11 +691,6 @@ onUnmounted(() => {
                             <i class="bi bi-textarea-t"></i>
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="selectSelection" :class="{ active: isSelectionMode, disabled: !isFileLoaded || showWhiteboard }" title="Select Area to Whiteboard">
-                            <i class="bi bi-scissors"></i>
-                        </a>
-                    </li>
                     <li class="nav-item vr bg-white mx-2"></li>
 
                     <!-- Undo/Redo -->
@@ -677,54 +704,15 @@ onUnmounted(() => {
                             <i class="bi bi-arrow-clockwise"></i>
                         </a>
                     </li>
-                    <li class="nav-item vr bg-white mx-2"></li>
 
-                    <!-- Pagination -->
-                    <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="scrollToPage(0)" :class="{ disabled: !isFileLoaded || showWhiteboard || isFirstPage }" title="First Page">
-                            <i class="bi bi-chevron-double-left"></i>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex - 1)" :class="{ disabled: !isFileLoaded || showWhiteboard || isFirstPage }" title="Previous Page">
-                            <i class="bi bi-chevron-left"></i>
-                        </a>
-                    </li>
-                    <li class="nav-item d-none d-lg-block">
-                        <input type="text" class="form-control-plaintext" :value="pageNum" @input="handlePageNumber" :disabled="!isFileLoaded || showWhiteboard" />
-                    </li>
-                    <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex + 1)" :class="{ disabled: !isFileLoaded || showWhiteboard || isLastPage }" title="Next Page">
-                            <i class="bi bi-chevron-right"></i>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="scrollToPage(activePages.length - 1)" :class="{ disabled: !isFileLoaded || showWhiteboard || isLastPage }" :title="`Last Page (${pageCount - deletedPages.size})`">
-                            <i class="bi bi-chevron-double-right"></i>
-                        </a>
-                    </li>
                     <li class="nav-item vr bg-white mx-2"></li>
-
-                    <!-- Zoom -->
+                    
+                    <!-- Selection Tool -->
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="zoom('out')" :class="{ disabled: !isFileLoaded || isViewLocked || (showWhiteboard ? whiteboardScale <= 0.5 : zoomPercentage <= minZoom) }">
-                            <i class="bi bi-zoom-out"></i>
+                        <a class="nav-link" href="#" @click.prevent="selectSelection" :class="{ active: isSelectionMode, disabled: !isFileLoaded || showWhiteboard }" title="Select Area to Whiteboard">
+                            <i class="bi bi-scissors"></i>
                         </a>
                     </li>
-                    <li class="nav-item d-none d-lg-block">
-                        <input type="text" class="form-control-plaintext" :value="showWhiteboard ? Math.round(whiteboardScale * 100) : zoomPercentage" :disabled="!isFileLoaded || isViewLocked || showWhiteboard" readonly>
-                    </li>
-                    <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="zoom('in')" :class="{ disabled: !isFileLoaded || isViewLocked || (showWhiteboard ? whiteboardScale >= 2 : zoomPercentage >= maxZoom) }">
-                            <i class="bi bi-zoom-in"></i>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="toggleZoomMode()" :class="{ disabled: !isFileLoaded || isViewLocked || showWhiteboard }" :title="zoomMode === 'fit-width' ? 'Fit Height' : 'Fit Width'">
-                            <i :class="`bi bi-arrows-expand${zoomMode === 'fit-height' ? '-vertical' : ''}`"></i>
-                        </a>
-                    </li>
-                    <li class="nav-item vr bg-white mx-2"></li>
 
                     <!-- View Lock -->
                     <li v-if="!showWhiteboard" class="nav-item" :title="isViewLocked ? 'Unlock View' : 'Lock View'">
@@ -771,6 +759,60 @@ onUnmounted(() => {
                         </li>
                     </template>
 
+                </ul>
+            </div>
+        </nav>
+        <nav class="navbar navbar-expand navbar-dark bg-dark fixed-bottom py-0">
+            <div class="container small">
+                <!-- Toolbar -->
+                <ul class="navbar-nav small ms-auto">
+                    <!-- Pagination -->
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" @click.prevent="scrollToPage(0)" :class="{ disabled: !isFileLoaded || showWhiteboard || isFirstPage }" title="First Page">
+                            <i class="bi bi-chevron-double-left"></i>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex - 1)" :class="{ disabled: !isFileLoaded || showWhiteboard || isFirstPage }" title="Previous Page">
+                            <i class="bi bi-chevron-left"></i>
+                        </a>
+                    </li>
+                    <li class="nav-item d-none d-lg-block">
+                        <input type="text" class="form-control-plaintext" :value="pageNum" @input="handlePageNumber" :disabled="!isFileLoaded || showWhiteboard" />
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex + 1)" :class="{ disabled: !isFileLoaded || showWhiteboard || isLastPage }" title="Next Page">
+                            <i class="bi bi-chevron-right"></i>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" @click.prevent="scrollToPage(activePages.length - 1)" :class="{ disabled: !isFileLoaded || showWhiteboard || isLastPage }" :title="`Last Page (${pageCount - deletedPages.size})`">
+                            <i class="bi bi-chevron-double-right"></i>
+                        </a>
+                    </li>
+                    <li class="nav-item vr bg-white mx-2"></li>
+
+                    <!-- Zoom -->
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" @click.prevent="zoom('out')" :class="{ disabled: !isFileLoaded || isViewLocked || (showWhiteboard ? whiteboardScale <= 0.5 : zoomPercentage <= minZoom) }">
+                            <i class="bi bi-zoom-out"></i>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" @click.prevent="zoom('in')" :class="{ disabled: !isFileLoaded || isViewLocked || (showWhiteboard ? whiteboardScale >= 2 : zoomPercentage >= maxZoom) }">
+                            <i class="bi bi-zoom-in"></i>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <select name="zoom-level" id="zoom-level" class="form-control-plaintext" @change="handleZoomLevel" :disabled="!isFileLoaded || isViewLocked">
+                            <template v-for="value in ['Fit Width', 'Fit Height', 50, 75, 125, 150, 200, 250, 300]">
+                                <option :value="value" :selected="!showWhiteboard && zoomPercentage === value">
+                                    {{ value }}
+                                    <template v-if="typeof value === 'number'">%</template>
+                                </option>
+                            </template>
+                        </select>
+                    </li>
                 </ul>
             </div>
         </nav>

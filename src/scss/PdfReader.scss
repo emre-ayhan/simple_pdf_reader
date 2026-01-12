@@ -4,7 +4,10 @@
 }
 
 .navbar {
-    top: 31.5px !important;
+    &.fixed-top {
+        top: 31.5px !important;
+    }
+
     background: $dark-bg-gradient !important;
     border-bottom: 1px solid $border-color;
 
@@ -37,6 +40,19 @@
 
     input {
         padding: 4px 8px !important;
+    }
+
+    .nav-item.btn-group {
+        .dropdown-menu {
+            width: 256px;
+
+            input[type="color"] {
+                border: none !important;
+                padding: 0 !important;
+                cursor: pointer;
+                outline: none !important;
+            }
+        }
     }
 }
 
@@ -275,8 +291,14 @@
     }
 }
 
+select.form-control-plaintext {
+    width: auto !important;
+    option {
+        color: $dark;
+    }
+}
 
- @media (max-width: 992px) {
+@media (max-width: 992px) {
     .navbar {
         background: $dark-bg-gradient-reverse !important;
         top: 0 !important;
