@@ -765,7 +765,7 @@ onUnmounted(() => {
         <nav class="navbar navbar-expand navbar-dark bg-dark fixed-bottom py-0">
             <div class="container small">
                 <!-- Toolbar -->
-                <ul class="navbar-nav small ms-auto">
+                <ul class="navbar-nav small ms-auto align-items-center">
                     <!-- Pagination -->
                     <li class="nav-item">
                         <a href="#" class="nav-link" @click.prevent="scrollToPage(0)" :class="{ disabled: !isFileLoaded || showWhiteboard || isFirstPage }" title="First Page">
