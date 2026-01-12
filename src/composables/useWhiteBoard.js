@@ -31,21 +31,26 @@ export function useWhiteBoard(showWhiteboard, drawingCanvases, drawingContexts, 
             const offsetX = 0;
             const offsetY = 0;
 
-            canvas.width = canvasWidth;
-            canvas.height = canvasHeight;
+            // Use high DPI for better quality
+            const dpr = window.devicePixelRatio || 2;
+            canvas.width = canvasWidth * dpr;
+            canvas.height = canvasHeight * dpr;
             canvas.style.width = `${canvasWidth}px`;
             canvas.style.height = `${canvasHeight}px`;
 
-            drawCanvas.width = canvasWidth;
-            drawCanvas.height = canvasHeight;
+            drawCanvas.width = canvasWidth * dpr;
+            drawCanvas.height = canvasHeight * dpr;
             drawCanvas.style.width = `${canvasWidth}px`;
             drawCanvas.style.height = `${canvasHeight}px`;
 
             const ctx = canvas.getContext('2d');
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.scale(dpr, dpr);
+            ctx.clearRect(0, 0, canvasWidth, canvasHeight);
             ctx.drawImage(img, offsetX, offsetY, imageWidth, imageHeight);
 
-            drawingContexts.value[0] = drawCanvas.getContext('2d');
+            const drawCtx = drawCanvas.getContext('2d');
+            drawCtx.scale(dpr, dpr);
+            drawingContexts.value[0] = drawCtx;
             renderedPages.value.add(1);
 
             if (typeof renderCallback === 'function') {

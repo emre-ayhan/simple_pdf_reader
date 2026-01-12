@@ -122,17 +122,29 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
                     
                     const ctx = canvas.getContext("2d");
                     
-                    canvas.height = viewport.height;
-                    canvas.width = viewport.width;
-                    drawCanvas.height = viewport.height;
-                    drawCanvas.width = viewport.width;
+                    // Use 2x resolution for high-DPI displays
+                    const dpr = window.devicePixelRatio || 2;
+                    canvas.height = viewport.height * dpr;
+                    canvas.width = viewport.width * dpr;
+                    drawCanvas.height = viewport.height * dpr;
+                    drawCanvas.width = viewport.width * dpr;
+                    
+                    // Scale context to match the increased resolution
+                    ctx.scale(dpr, dpr);
+                    
+                    // Setup drawing canvas with proper scaling
+                    const drawCtx = drawCanvas.getContext('2d');
+                    // Clear any previous transforms and apply fresh DPR scaling
+                    drawCtx.setTransform(1, 0, 0, 1, 0, 0);
+                    drawCtx.scale(dpr, dpr);
                     
                     // Initialize drawing context
-                    drawingContexts.value[pageNumber - 1] = drawCanvas.getContext('2d');
+                    drawingContexts.value[pageNumber - 1] = drawCtx;
                     
                     const renderContext = {
                         canvasContext: ctx,
                         viewport,
+                        transform: [dpr, 0, 0, dpr, 0, 0],
                     };
                     
                     await page.render(renderContext).promise;
