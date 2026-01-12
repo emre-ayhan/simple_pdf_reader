@@ -216,7 +216,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
 
     const getStoredPageIndex = () => {
         storeGet(filename.value).then(data => {
-            if (data.pageIndex) {
+            if (data?.pageIndex) {
                 pageIndex.value = data.pageIndex;
             }
         })
