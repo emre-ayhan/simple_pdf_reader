@@ -941,42 +941,44 @@ defineExpose({
                  left: strokeMenuPosition.x + 'px', 
                  top: strokeMenuPosition.y + 'px'
              }">
-            <div class="stroke-menu-content">
-                <div class="stroke-menu-section">
-                    <label class="stroke-menu-label">Color</label>
-                    <div class="stroke-menu-colors d-flex flex-column">
-                        <div class="row row-cols-5">
-                            <template v-for="color in colors">
-                                <div class="col py-1">
-                                    <button
-                                        class="color-btn"
-                                        :style="{ backgroundColor: color }"
-                                        :title="color"
-                                        @click.stop="changeStrokeColor(color)"
-                                    ></button>
-                                </div>
-                            </template>
+            <div class="stroke-menu-content" :class="{ 'image-stroke': selectedStroke?.stroke[0]?.type === 'image' }">
+                <template v-if="selectedStroke?.stroke[0]?.type !== 'image'">
+                    <div class="stroke-menu-section">
+                        <label class="stroke-menu-label">Color</label>
+                        <div class="stroke-menu-colors d-flex flex-column">
+                            <div class="row row-cols-5">
+                                <template v-for="color in colors">
+                                    <div class="col py-1">
+                                        <button
+                                            class="color-btn"
+                                            :style="{ backgroundColor: color }"
+                                            :title="color"
+                                            @click.stop="changeStrokeColor(color)"
+                                        ></button>
+                                    </div>
+                                </template>
+                            </div>
                         </div>
                     </div>
-                </div>
-                <div v-if="selectedStroke?.stroke[0]?.type === 'text'" class="stroke-menu-section">
-                    <label class="stroke-menu-label">Text</label>
-                    <input 
-                        type="text" 
-                        class="form-control form-control-sm" 
-                        :value="selectedStroke?.stroke[0]?.text || ''"
-                        @input="(e) => changeStrokeText(e.target.value)"
-                        @click.stop
-                        placeholder="Enter text"
-                    />
-                </div>
-                <div class="stroke-menu-section" v-else>
-                    <label class="stroke-menu-label">Thickness</label>
-                    <div class="d-flex align-items-center gap-2">
-                        <input type="range" class="form-range" min="1" max="10" @input="(e) => changeStrokeThickness(parseInt(e.target.value))" :value="selectedStroke?.stroke[0]?.thickness || 1" />
-                        <input type="text" class="form-control-plaintext" min="1" max="10" :value="selectedStroke?.stroke[0]?.thickness || 1" readonly />
+                    <div v-if="selectedStroke?.stroke[0]?.type === 'text'" class="stroke-menu-section">
+                        <label class="stroke-menu-label">Text</label>
+                        <input 
+                            type="text" 
+                            class="form-control form-control-sm" 
+                            :value="selectedStroke?.stroke[0]?.text || ''"
+                            @input="(e) => changeStrokeText(e.target.value)"
+                            @click.stop
+                            placeholder="Enter text"
+                        />
                     </div>
-                </div>
+                    <div class="stroke-menu-section" v-else>
+                        <label class="stroke-menu-label">Thickness</label>
+                        <div class="d-flex align-items-center gap-2">
+                            <input type="range" class="form-range" min="1" max="10" @input="(e) => changeStrokeThickness(parseInt(e.target.value))" :value="selectedStroke?.stroke[0]?.thickness || 1" />
+                            <input type="text" class="form-control-plaintext" min="1" max="10" :value="selectedStroke?.stroke[0]?.thickness || 1" readonly />
+                        </div>
+                    </div>
+                </template>
                 <button class="stroke-menu-btn delete-btn" @click.stop="deleteSelectedStroke()">
                     <i class="bi bi-trash-fill"></i> Delete
                 </button>

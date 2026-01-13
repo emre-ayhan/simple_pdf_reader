@@ -5,6 +5,9 @@ import { useStore } from './useStore.js';
 export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPage, drawingCanvases, drawingContexts, strokeChangeCallback, captureSelectionCallback) {
     const { get: storeGet, set: storeSet } = useStore();
     
+    // Image cache to prevent reloading on every redraw
+    const imageCache = new Map();
+    
     // Drawing variables
     const isDrawing = ref(false);
     const isEraser = ref(false);
@@ -1440,26 +1443,35 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         
         drawingContext.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Load all images first, then render everything
+        // Load all images first (use cache), then render everything
         const imagePromises = [];
         const imageMap = new Map();
         
         strokes.forEach((stroke, index) => {
             if (stroke.length > 0 && stroke[0].type === 'image') {
-                const promise = new Promise((resolve) => {
-                    const img = new Image();
-                    img.onload = () => {
-                        imageMap.set(index, img);
-                        resolve();
-                    };
-                    img.onerror = () => resolve(); // Continue even if image fails
-                    img.src = stroke[0].imageData;
-                });
-                imagePromises.push(promise);
+                const imageData = stroke[0].imageData;
+                
+                // Check if image is already cached
+                if (imageCache.has(imageData)) {
+                    imageMap.set(index, imageCache.get(imageData));
+                } else {
+                    // Load and cache the image
+                    const promise = new Promise((resolve) => {
+                        const img = new Image();
+                        img.onload = () => {
+                            imageCache.set(imageData, img);
+                            imageMap.set(index, img);
+                            resolve();
+                        };
+                        img.onerror = () => resolve(); // Continue even if image fails
+                        img.src = imageData;
+                    });
+                    imagePromises.push(promise);
+                }
             }
         });
         
-        // Wait for all images to load, then render
+        // Wait for any new images to load, then render
         Promise.all(imagePromises).then(() => {
             strokes.forEach((stroke, index) => {
                 if (stroke.length === 0) return;
