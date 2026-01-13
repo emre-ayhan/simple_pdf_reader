@@ -12,7 +12,13 @@ export function useWindowEvents(fileId, eventSettings = {}) {
 
             if (!settings) return;
 
-            if (!!settings.ctrl === (event.ctrlKey || event.metaKey)) {
+            const isCtrlPressed = event.ctrlKey || event.metaKey;
+            if (settings.actionAll) {
+                settings.actionAll(event, isCtrlPressed);
+                return;
+            }
+
+            if (!!settings.ctrl === isCtrlPressed) {
                 if (!!settings.ctrl) {
                     event.preventDefault()
                 };

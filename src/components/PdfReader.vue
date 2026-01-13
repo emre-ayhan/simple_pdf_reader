@@ -370,6 +370,47 @@ useWindowEvents(fileId, {
         }
     },
     keydown: {
+        d: {
+            action: (event) => {
+                if (isTextMode.value) return;
+                event.preventDefault();
+                selectDrawingTool('pen');
+            }
+        },
+        e: {
+            action: (event) => {
+                if (isTextMode.value) return;
+                event.preventDefault();
+                selectEraser();
+            }
+        },
+        l: {
+            actionAll: (event, ctrl) => {
+                if (ctrl) {
+                    event.preventDefault();
+                    lockView();
+                    return;
+                }
+
+                if (isTextMode.value) return;
+                event.preventDefault();
+                selectDrawingTool('line');
+            }
+        },
+        r: {
+            action: (event) => {
+                if (isTextMode.value) return;
+                event.preventDefault();
+                selectDrawingTool('rectangle');
+            }
+        },
+        c: {
+            action: (event) => {
+                if (isTextMode.value) return;
+                event.preventDefault();
+                selectDrawingTool('circle');
+            }
+        },
         t: {
             action: (event) => {
                 if (isTextMode.value) return;
@@ -405,12 +446,6 @@ useWindowEvents(fileId, {
             ctrl: true,
             action: () => {
                 captureSelection();
-            }
-        },
-        l: {
-            ctrl: true,
-            action: () => {
-                lockView();
             }
         },
         Delete: {
