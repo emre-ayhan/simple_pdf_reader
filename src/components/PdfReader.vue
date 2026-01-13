@@ -267,7 +267,7 @@ const selectText = () => {
     isTextMode.value = !wasActive;
 };
 
-const selectSelection = () => {
+const captureSelection = () => {
     if (!isFileLoaded.value || showWhiteboard.value) return;
     const wasActive = isSelectionMode.value;
     resetToolState();
@@ -401,6 +401,18 @@ useWindowEvents(fileId, {
                 redo();
             }
         },
+        x: {
+            ctrl: true,
+            action: () => {
+                captureSelection();
+            }
+        },
+        l: {
+            ctrl: true,
+            action: () => {
+                lockView();
+            }
+        },
         Delete: {
             action: (event) => {
                 event.preventDefault();
@@ -421,13 +433,13 @@ useWindowEvents(fileId, {
         ArrowLeft: {
             action: () => {
                 if (isFirstPage.value) return;
-                pageIndex.value--;
+                scrollToPage(pageIndex.value - 1);
             }
         },
         ArrowRight: {
             action: () => {
                 if (isLastPage.value) return;
-                pageIndex.value++;
+                scrollToPage(pageIndex.value + 1);
             }
         },
     }
@@ -586,7 +598,7 @@ defineExpose({
                     
                     <!-- Selection Tool -->
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="selectSelection" :class="{ active: isSelectionMode, disabled: !isFileLoaded || showWhiteboard }" title="Select Area to Whiteboard">
+                        <a class="nav-link" href="#" @click.prevent="captureSelection" :class="{ active: isSelectionMode, disabled: !isFileLoaded || showWhiteboard }" title="Select Area to Whiteboard">
                             <i class="bi bi-scissors"></i>
                         </a>
                     </li>
