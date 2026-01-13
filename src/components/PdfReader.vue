@@ -243,10 +243,20 @@ const lockView = () => {
     isViewLocked.value = !isViewLocked.value;
 };
 
+const resetAllTools = () => {
+    resetToolState();
+    isTextSelectionMode.value = false;
+    window.getSelection()?.removeAllRanges();
+};
+
 const toggleTextSelection = () => {
     if (!isFileLoaded.value) return;
     isTextSelectionMode.value = !isTextSelectionMode.value;
-    resetToolState();
+    if (isTextSelectionMode.value) {
+        resetToolState();
+    } else {
+        window.getSelection()?.removeAllRanges();
+    }
 };
 
 const selectDrawingTool = (mode) => {
@@ -277,8 +287,7 @@ const selectText = () => {
 
 const selectStrokeMode = () => {
     if (!isFileLoaded.value) return;
-    resetToolState();
-    isTextSelectionMode.value = false;
+    resetAllTools();
 };
 
 const captureSelection = () => {
@@ -491,7 +500,7 @@ useWindowEvents(fileId, {
             action: (event) => {
                 if (!hasActiveTool.value) return;
                 event.preventDefault();
-                selectStrokeMode();
+                resetAllTools();
             }
         },
         ArrowLeft: {
