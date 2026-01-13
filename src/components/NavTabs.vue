@@ -44,20 +44,20 @@ onBeforeUnmount(() => {
             </a>
                 <ul class="dropdown-menu dropdown-menu-dark">
                     <li>
-                        <a class="dropdown-item" href="#" @click.prevent="emit('file-open')">
+                        <a class="dropdown-item small" href="#" @click.prevent="emit('file-open')">
                             <i class="bi bi-folder me-1"></i>
                             Open File (Ctrl+O)
                         </a>
                     </li>
                     <li>
-                        <a class="dropdown-item" :class="{ disabled: !fileHasUnsavedChanges(activeTab?.id) || activeTab.emptyState }" href="#" @click.prevent="emit('file-save')">
+                        <a class="dropdown-item small" :class="{ disabled: !fileHasUnsavedChanges(activeTab?.id) || activeTab.emptyState }" href="#" @click.prevent="emit('file-save')">
                             <i class="bi bi-floppy me-1"></i>
                             Save (Ctrl+S)
                         </a>
                     </li>
                     <li><hr class="text-primary my-1"></li>
                     <li>
-                        <a class="dropdown-item text-danger" :class="{ disabled: activeTab.emptyState }" href="#" @click.prevent="emit('file-delete-page')">
+                        <a class="dropdown-item small text-danger" :class="{ disabled: activeTab.emptyState }" href="#" @click.prevent="emit('file-delete-page')">
                             <i class="bi bi-trash3 me-1"></i>
                             Delete Page (Del)
                         </a>
