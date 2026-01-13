@@ -100,7 +100,7 @@ const {
 
 // Drag and Drop Handlers
 const {
-    isDragging: isDraggingFile,
+    isDraggingFile,
     onDrop,
     onDragEnter,
     onDragLeave,
@@ -247,7 +247,6 @@ const {
     enableTouchDrawing,
     drawMode,
     drawColor,
-    drawThickness,
     colors,
     isTextMode,
     textInput,
@@ -256,10 +255,7 @@ const {
     textboxPosition,
     isSelectionMode,
     isPenHovering,
-    isDragMode,
     selectedStroke,
-    isDragging: isDraggingStroke,
-        isResizing,
     showStrokeMenu,
     strokeMenuPosition,
     resizeCursor,
