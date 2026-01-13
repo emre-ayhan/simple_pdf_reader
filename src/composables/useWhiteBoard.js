@@ -32,7 +32,7 @@ export function useWhiteBoard(showWhiteboard, drawingCanvases, drawingContexts, 
             const offsetY = 0;
 
             // Use high DPI for better quality
-            const dpr = window.devicePixelRatio || 2;
+            const dpr = window.devicePixelRatio || 1;
             canvas.width = canvasWidth * dpr;
             canvas.height = canvasHeight * dpr;
             canvas.style.width = `${canvasWidth}px`;

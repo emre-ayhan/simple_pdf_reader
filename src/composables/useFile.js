@@ -109,7 +109,17 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
                     if (!pdfDoc || renderedPages.value.has(pageNumber)) return;
     
                     const page = await pdfDoc.getPage(pageNumber);
-                    const viewport = page.getViewport({ scale: 2 });
+
+                    // Calculate scale based on container width and device pixel ratio for sharp rendering
+                    const pixelRatio = window.devicePixelRatio || 1;
+                    const containerWidth = pdfReader.value?.clientWidth || window.innerWidth;
+                    // Ensure we render for at least 100% zoom to avoid blur when zooming in from a smaller view
+                    const zoomFactor = Math.max(zoomPercentage.value, 100) / 100;
+                    const desiredDisplayWidth = containerWidth * zoomFactor;
+                    const unscaledViewport = page.getViewport({ scale: 1 });
+                    const scale = Math.max((desiredDisplayWidth * pixelRatio) / unscaledViewport.width, 3);
+
+                    const viewport = page.getViewport({ scale });
                     
                     // Get canvas elements
                     const canvas = pdfCanvases.value[pageNumber - 1];

@@ -10,7 +10,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     const isEraser = ref(false);
     const drawMode = ref('pen'); // 'pen', 'line', 'rectangle', 'circle', 'text'
     const drawColor = ref('blue');
-    const drawThickness = ref(2);
+    const drawThickness = ref(4);
     const currentStrokeId = ref(null);
     const currentStroke = ref([]); // Current stroke being drawn
     const enableTouchDrawing = ref(false);
@@ -1494,18 +1494,21 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 const canvasWidth = img.width * scale;
                 const canvasHeight = img.height * scale;
 
-                canvas.width = canvasWidth;
-                canvas.height = canvasHeight;
+                const pixelRatio = window.devicePixelRatio || 1;
+
+                canvas.width = canvasWidth * pixelRatio;
+                canvas.height = canvasHeight * pixelRatio;
                 canvas.style.width = '100%';
                 canvas.style.height = 'auto';
 
-                drawCanvas.width = canvasWidth;
-                drawCanvas.height = canvasHeight;
+                drawCanvas.width = canvasWidth * pixelRatio;
+                drawCanvas.height = canvasHeight * pixelRatio;
                 drawCanvas.style.width = '100%';
                 drawCanvas.style.height = '100%';
 
                 const ctx = canvas.getContext('2d');
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.scale(pixelRatio, pixelRatio);
+                ctx.clearRect(0, 0, canvasWidth, canvasHeight);
                 ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
 
                 drawingContexts.value[0] = drawCanvas.getContext('2d');
