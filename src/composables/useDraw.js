@@ -172,6 +172,14 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         
         const first = stroke[0];
         
+        // Check image strokes
+        if (first.type === 'image') {
+            return x >= first.x - threshold && 
+                   x <= first.x + first.width + threshold && 
+                   y >= first.y - threshold && 
+                   y <= first.y + first.height + threshold;
+        }
+        
         // Check text strokes
         if (first.type === 'text') {
             const ctx = drawingContexts.value[0];
@@ -252,7 +260,14 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         const first = stroke[0];
         const pad = Math.max(0, padding);
         
-        if (first.type === 'text') {
+        if (first.type === 'image') {
+            return {
+                minX: first.x - pad,
+                minY: first.y - pad,
+                maxX: first.x + first.width + pad,
+                maxY: first.y + first.height + pad
+            };
+        } else if (first.type === 'text') {
             const ctx = drawingContexts.value[0];
             if (!ctx) return null;
             ctx.font = `${first.fontSize}px Arial`;
@@ -600,7 +615,12 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                     const originalStroke = selectedStroke.value.originalStroke;
                     const origFirst = originalStroke[0];
                     
-                    if (origFirst.type === 'text') {
+                    if (origFirst.type === 'image') {
+                        first.x = newRawMinX;
+                        first.y = newRawMinY;
+                        first.width = newRawMaxX - newRawMinX;
+                        first.height = newRawMaxY - newRawMinY;
+                    } else if (origFirst.type === 'text') {
                         first.x = newRawMinX;
                         first.y = newRawMinY;
                         first.fontSize = Math.max(8, Math.round(origFirst.fontSize * Math.min(scaleXFactor, scaleYFactor)));
@@ -679,7 +699,10 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                     const first = stroke[0];
                     
                     // Update stroke positions based on type
-                    if (first.type === 'text') {
+                    if (first.type === 'image') {
+                        first.x += dx;
+                        first.y += dy;
+                    } else if (first.type === 'text') {
                         first.x += dx;
                         first.y += dy;
                     } else if (first.type === 'line' || first.type === 'rectangle' || first.type === 'circle') {
@@ -1271,7 +1294,13 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         
         let minX, minY, maxX, maxY, padding = 5;
         
-        if (first.type === 'text') {
+        if (first.type === 'image') {
+            minX = first.x - padding;
+            minY = first.y - padding;
+            maxX = first.x + first.width + padding;
+            maxY = first.y + first.height + padding;
+            ctx.strokeRect(minX, minY, maxX - minX, maxY - minY);
+        } else if (first.type === 'text') {
             ctx.font = `${first.fontSize}px Arial`;
             const metrics = ctx.measureText(first.text);
             minX = first.x - padding;
@@ -1411,42 +1440,73 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         
         drawingContext.clearRect(0, 0, canvas.width, canvas.height);
 
-        strokes.forEach(stroke => {
-            if (stroke.length === 0) return;
-            
-            const first = stroke[0];
-            
-            // Check if it's text
-            if (first.type === 'text') {
-                drawingContext.font = `${first.fontSize}px Arial`;
-                drawingContext.fillStyle = first.color;
-                drawingContext.textBaseline = 'top';
-                drawingContext.fillText(first.text, first.x, first.y);
-                return;
+        // Load all images first, then render everything
+        const imagePromises = [];
+        const imageMap = new Map();
+        
+        strokes.forEach((stroke, index) => {
+            if (stroke.length > 0 && stroke[0].type === 'image') {
+                const promise = new Promise((resolve) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        imageMap.set(index, img);
+                        resolve();
+                    };
+                    img.onerror = () => resolve(); // Continue even if image fails
+                    img.src = stroke[0].imageData;
+                });
+                imagePromises.push(promise);
             }
-            
-            // Check if it's a shape
-            if (first.type === 'line' || first.type === 'rectangle' || first.type === 'circle') {
-                drawingContext.strokeStyle = first.color;
-                drawingContext.lineWidth = first.thickness;
-                drawingContext.lineCap = 'round';
-                drawingContext.lineJoin = 'round';
-                drawShape(drawingContext, first.type, first.startX, first.startY, first.endX, first.endY)
-            } else {
-                // It's a pen stroke
-                drawingContext.beginPath();
-                drawingContext.moveTo(stroke[0].x, stroke[0].y);
+        });
+        
+        // Wait for all images to load, then render
+        Promise.all(imagePromises).then(() => {
+            strokes.forEach((stroke, index) => {
+                if (stroke.length === 0) return;
                 
-                for (let i = 1; i < stroke.length; i++) {
-                    drawingContext.lineTo(stroke[i].x, stroke[i].y);
+                const first = stroke[0];
+                
+                // Check if it's an image
+                if (first.type === 'image') {
+                    const img = imageMap.get(index);
+                    if (img) {
+                        drawingContext.drawImage(img, first.x, first.y, first.width, first.height);
+                    }
+                    return;
                 }
                 
-                drawingContext.strokeStyle = stroke[0].color;
-                drawingContext.lineWidth = stroke[0].thickness;
-                drawingContext.lineCap = 'round';
-                drawingContext.lineJoin = 'round';
-                drawingContext.stroke();
-            }
+                // Check if it's text
+                if (first.type === 'text') {
+                    drawingContext.font = `${first.fontSize}px Arial`;
+                    drawingContext.fillStyle = first.color;
+                    drawingContext.textBaseline = 'top';
+                    drawingContext.fillText(first.text, first.x, first.y);
+                    return;
+                }
+                
+                // Check if it's a shape
+                if (first.type === 'line' || first.type === 'rectangle' || first.type === 'circle') {
+                    drawingContext.strokeStyle = first.color;
+                    drawingContext.lineWidth = first.thickness;
+                    drawingContext.lineCap = 'round';
+                    drawingContext.lineJoin = 'round';
+                    drawShape(drawingContext, first.type, first.startX, first.startY, first.endX, first.endY)
+                } else {
+                    // It's a pen stroke
+                    drawingContext.beginPath();
+                    drawingContext.moveTo(stroke[0].x, stroke[0].y);
+                    
+                    for (let i = 1; i < stroke.length; i++) {
+                        drawingContext.lineTo(stroke[i].x, stroke[i].y);
+                    }
+                    
+                    drawingContext.strokeStyle = stroke[0].color;
+                    drawingContext.lineWidth = stroke[0].thickness;
+                    drawingContext.lineCap = 'round';
+                    drawingContext.lineJoin = 'round';
+                    drawingContext.stroke();
+                }
+            });
         });
     };
 

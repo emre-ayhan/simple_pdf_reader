@@ -10,6 +10,7 @@ import { useWhiteBoard } from "../composables/useWhiteBoard";
 import EmptyState from "./EmptyState.vue";
 import { useWindowEvents } from "../composables/useWindowEvents";
 import { fileDataCache } from "../composables/useTabs";
+import { uuid } from "../composables/useUuid";
 
 // Cursor Style
 const cursorStyle = computed(() => {
@@ -259,6 +260,95 @@ const toggleTextSelection = () => {
     }
 };
 
+const imageInput = ref(null);
+
+const importImage = () => {
+    if (!isFileLoaded.value) return;
+    imageInput.value?.click();
+};
+
+const handleImageImport = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+            // Add image to current page in visible viewport
+            const canvasIndex = pageIndex.value;
+            const canvas = drawingCanvases.value[canvasIndex];
+            if (!canvas) return;
+            
+            // Calculate visible viewport position on the canvas
+            const pageContainer = pagesContainer.value?.querySelector(`.page-container[data-page="${pageIndex.value + 1}"]`);
+            const pdfReaderEl = pdfReader.value;
+            
+            let viewportCenterX = canvas.width / 2;
+            let viewportCenterY = canvas.height / 2;
+            
+            if (pageContainer && pdfReaderEl) {
+                const containerRect = pageContainer.getBoundingClientRect();
+                const readerRect = pdfReaderEl.getBoundingClientRect();
+                
+                // Calculate visible center relative to the page
+                const visibleCenterX = (readerRect.left + readerRect.width / 2) - containerRect.left;
+                const visibleCenterY = (readerRect.top + readerRect.height / 2) - containerRect.top;
+                
+                // Convert to canvas coordinates
+                const scaleX = canvas.width / containerRect.width;
+                const scaleY = canvas.height / containerRect.height;
+                
+                viewportCenterX = visibleCenterX * scaleX;
+                viewportCenterY = visibleCenterY * scaleY;
+            }
+            
+            const maxWidth = canvas.width * 0.3;
+            const maxHeight = canvas.height * 0.3;
+            let width = img.width;
+            let height = img.height;
+            
+            // Scale down if too large
+            if (width > maxWidth || height > maxHeight) {
+                const ratio = Math.min(maxWidth / width, maxHeight / height);
+                width *= ratio;
+                height *= ratio;
+            }
+            
+            // Center the image in the visible viewport
+            const x = Math.max(0, Math.min(canvas.width - width, viewportCenterX - width / 2));
+            const y = Math.max(0, Math.min(canvas.height - height, viewportCenterY - height / 2));
+            
+            const imageStroke = [{
+                type: 'image',
+                x,
+                y,
+                width,
+                height,
+                imageData: e.target.result,
+                originalWidth: width,
+                originalHeight: height
+            }];
+            
+            const strokeId = uuid();
+            const pageNumber = pageIndex.value + 1;
+            if (!strokesPerPage.value[pageNumber]) {
+                strokesPerPage.value[pageNumber] = [];
+            }
+            strokesPerPage.value[pageNumber].push(imageStroke);
+            
+            redrawAllStrokes(canvasIndex);
+            addToHistory({ type: 'add', canvasIndex, strokeId, stroke: imageStroke });
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+    
+    // Reset input
+    event.target.value = '';
+};
+
+
 const selectDrawingTool = (mode) => {
     if (!isFileLoaded.value) return;
     
@@ -329,7 +419,7 @@ const toggleZoomMode = (mode) => {
     
     // Restore scroll position to current page after DOM updates
     nextTick(() => {
-        scrollToPage();``
+        scrollToPage(pageIndex.value);
     });
 };
 
@@ -354,7 +444,7 @@ const handleZoomLevel = (percentage) => {
 
     // Restore scroll position to current page after DOM updates
     nextTick(() => {
-        scrollToPage();
+        scrollToPage(pageIndex.value);
     });
 };
 
@@ -645,6 +735,11 @@ defineExpose({
                             </a>
                         </li>
                         <li class="nav-item">
+                            <a href="#" class="nav-link" @click.prevent="importImage" title="Import Image (I)">
+                                <i class="bi bi-image"></i>
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link" href="#" @click.prevent="selectStrokeMode" :class="{ active: !hasActiveTool && !isTextSelectionMode }" title="Stroke Selection (P)">
                                 <i class="bi bi-cursor-fill"></i>
                             </a>
@@ -812,6 +907,7 @@ defineExpose({
             </div>
         </div>
         <input ref="fileInput" type="file"  accept="application/pdf,image/*" class="d-none" @change="loadFile" />
+        <input ref="imageInput" type="file" accept="image/*" class="d-none" @change="handleImageImport" />
 
         <div v-if="isTextMode && textboxPosition" 
              class="text-input-box" 
