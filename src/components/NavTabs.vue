@@ -40,13 +40,14 @@ onBeforeUnmount(() => {
     <ul class="nav nav-tabs fixed-top" id="appTabs" role="tablist">
         <li class="nav-item dropdown">
             <a class="nav-link nav-link-menu" data-bs-toggle="dropdown" href="#" role="button" aria-expanded="false">
-                File
+                Menu
             </a>
                 <ul class="dropdown-menu dropdown-menu-dark">
+                    <li><h6 class="dropdown-header">File</h6></li>
                     <li>
                         <a class="dropdown-item small" href="#" @click.prevent="emit('file-open')">
                             <i class="bi bi-folder me-1"></i>
-                            Open File (Ctrl+O)
+                            Open (Ctrl+O)
                         </a>
                     </li>
                     <li>
@@ -56,8 +57,9 @@ onBeforeUnmount(() => {
                         </a>
                     </li>
                     <li><hr class="text-primary my-1"></li>
+                    <li><h6 class="dropdown-header">Page</h6></li>
                     <li>
-                        <a class="dropdown-item small text-danger" :class="{ disabled: activeTab.emptyState }" href="#" @click.prevent="emit('file-delete-page')">
+                        <a class="dropdown-item small" :class="{ disabled: activeTab.emptyState, 'text-danger': !activeTab.emptyState }" href="#" @click.prevent="emit('file-delete-page')">
                             <i class="bi bi-trash3 me-1"></i>
                             Delete Page (Del)
                         </a>
