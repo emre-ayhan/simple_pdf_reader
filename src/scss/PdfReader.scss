@@ -219,7 +219,7 @@
     border-radius: $border-radius-lg;
     padding: 12px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-    min-width: 200px;
+    max-width: 256px;
 }
 
 .stroke-menu-section {

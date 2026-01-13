@@ -329,9 +329,8 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             
             const canvas = drawingCanvases.value[canvasIndex];
             const rect = canvas.getBoundingClientRect();
-            const dpr = window.devicePixelRatio || 2;
-            const scaleX = canvas.width / rect.width / dpr;
-            const scaleY = canvas.height / rect.height / dpr;
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
             
             const x = (e.clientX - rect.left) * scaleX;
             const y = (e.clientY - rect.top) * scaleY;
@@ -410,9 +409,8 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             
             const canvas = drawingCanvases.value[canvasIndex];
             const rect = canvas.getBoundingClientRect();
-            const dpr = window.devicePixelRatio || 2;
-            const scaleX = canvas.width / rect.width / dpr;
-            const scaleY = canvas.height / rect.height / dpr;
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
             
             const x = (e.clientX - rect.left) * scaleX;
             const y = (e.clientY - rect.top) * scaleY;
@@ -483,11 +481,8 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         isMouseDown.value = true;
         
         const rect = canvas.getBoundingClientRect();
-        // Since canvas context is scaled by DPR, we need logical coordinates
-        // canvas.width includes DPR scaling, but context.scale() expects logical coords
-        const dpr = window.devicePixelRatio || 2;
-        const scaleX = canvas.width / rect.width / dpr;
-        const scaleY = canvas.height / rect.height / dpr;
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
         
         // Support pointer, touch, and mouse events
         const clientX = e.clientX !== undefined ? e.clientX : (e.touches?.[0]?.clientX || 0);
@@ -536,9 +531,8 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 
                 const canvas = drawingCanvases.value[currentCanvasIndex];
                 const rect = canvas.getBoundingClientRect();
-                const dpr = window.devicePixelRatio || 2;
-                const scaleX = canvas.width / rect.width / dpr;
-                const scaleY = canvas.height / rect.height / dpr;
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
                 
                 const currentX = (e.clientX - rect.left) * scaleX;
                 const currentY = (e.clientY - rect.top) * scaleY;
@@ -650,9 +644,8 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 
                 const canvas = drawingCanvases.value[currentCanvasIndex];
                 const rect = canvas.getBoundingClientRect();
-                const dpr = window.devicePixelRatio || 2;
-                const scaleX = canvas.width / rect.width / dpr;
-                const scaleY = canvas.height / rect.height / dpr;
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
                 
                 const currentX = (e.clientX - rect.left) * scaleX;
                 const currentY = (e.clientY - rect.top) * scaleY;
@@ -704,9 +697,8 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 
                 const canvas = drawingCanvases.value[currentCanvasIndex];
                 const rect = canvas.getBoundingClientRect();
-                const dpr = window.devicePixelRatio || 2;
-                const scaleX = canvas.width / rect.width / dpr;
-                const scaleY = canvas.height / rect.height / dpr;
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
                 
                 const currentX = (e.clientX - rect.left) * scaleX;
                 const currentY = (e.clientY - rect.top) * scaleY;
@@ -741,9 +733,8 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             const ctx = drawingContexts.value[selectionStart.value.canvasIndex];
             if (canvas && ctx) {
                 // Scale coordinates to canvas size
-                const dpr = window.devicePixelRatio || 2;
-                const scaleX = canvas.width / rect.width / dpr;
-                const scaleY = canvas.height / rect.height / dpr;
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
                 
                 redrawAllStrokes(selectionStart.value.canvasIndex);
                 ctx.strokeStyle = '#ff0000';
@@ -784,9 +775,8 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         if (!canvas || !drawingContext) return;
         
         const rect = canvas.getBoundingClientRect();
-        const dpr = window.devicePixelRatio || 2;
-        const scaleX = canvas.width / rect.width / dpr;
-        const scaleY = canvas.height / rect.height / dpr;
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
         
         const clientX = e.clientX !== undefined ? e.clientX : (e.touches?.[0]?.clientX || 0);
         const clientY = e.clientY !== undefined ? e.clientY : (e.touches?.[0]?.clientY || 0);
@@ -859,9 +849,8 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             if (isResizing.value || isDragging.value) {
                 const canvas = drawingCanvases.value[currentCanvasIndex];
                 const rect = canvas.getBoundingClientRect();
-                const dpr = window.devicePixelRatio || 2;
-                const scaleX = canvas.width / rect.width / dpr;
-                const scaleY = canvas.height / rect.height / dpr;
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
                 
                 const currentX = (e.clientX - rect.left) * scaleX;
                 const currentY = (e.clientY - rect.top) * scaleY;
@@ -994,9 +983,8 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             if (canvasIndex !== -1) {
                 const canvas = drawingCanvases.value[canvasIndex];
                 const rect = canvas.getBoundingClientRect();
-                const dpr = window.devicePixelRatio || 2;
-                const scaleX = canvas.width / rect.width / dpr;
-                const scaleY = canvas.height / rect.height / dpr;
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
                 const x = (e.clientX - rect.left) * scaleX;
                 const y = (e.clientY - rect.top) * scaleY;
                 const bounds = getStrokeBounds(selectedStroke.value.stroke, 5);
@@ -1206,9 +1194,8 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         
         const canvas = drawingCanvases.value[canvasIndex];
         const rect = canvas.getBoundingClientRect();
-        const dpr = window.devicePixelRatio || 2;
-        const scaleX = canvas.width / rect.width / dpr;
-        const scaleY = canvas.height / rect.height / dpr;
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
         
         const x = (e.clientX - rect.left) * scaleX;
         const y = (e.clientY - rect.top) * scaleY;
@@ -1405,12 +1392,8 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         const pageNumber = pageIndex + 1;
         const strokes = strokesPerPage.value[pageNumber] || [];
         
-        // Clear the canvas - save/restore maintains the DPR scaling
-        drawingContext.save();
-        drawingContext.setTransform(1, 0, 0, 1, 0, 0);
         drawingContext.clearRect(0, 0, canvas.width, canvas.height);
-        drawingContext.restore();
-        
+
         strokes.forEach(stroke => {
             if (stroke.length === 0) return;
             
@@ -1461,9 +1444,8 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         
         // Get display coordinates
         const rect = drawCanvas.getBoundingClientRect();
-        const dpr = window.devicePixelRatio || 2;
-        const scaleX = pdfCanvas.width / rect.width / dpr;
-        const scaleY = pdfCanvas.height / rect.height / dpr;
+        const scaleX = pdfCanvas.width / rect.width;
+        const scaleY = pdfCanvas.height / rect.height;
         
         // Calculate selection rectangle in canvas coordinates
         let x = Math.min(selectionStart.value.x, selectionEnd.value.x) * scaleX;
@@ -1498,7 +1480,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         captureSelectionCallback(canvasIndex, selectedCanvas);
     };
 
-    const drawImageCanvas = async (src) => {
+     const drawImageCanvas = async (src) => {
         strokesPerPage.value = { 1: strokesPerPage.value[1] || [] };
         await nextTick();
         const canvas = pdfCanvases.value[0];
@@ -1512,26 +1494,21 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 const canvasWidth = img.width * scale;
                 const canvasHeight = img.height * scale;
 
-                // Use high DPI for better quality
-                const dpr = window.devicePixelRatio || 2;
-                canvas.width = canvasWidth * dpr;
-                canvas.height = canvasHeight * dpr;
+                canvas.width = canvasWidth;
+                canvas.height = canvasHeight;
                 canvas.style.width = '100%';
                 canvas.style.height = 'auto';
 
-                drawCanvas.width = canvasWidth * dpr;
-                drawCanvas.height = canvasHeight * dpr;
+                drawCanvas.width = canvasWidth;
+                drawCanvas.height = canvasHeight;
                 drawCanvas.style.width = '100%';
                 drawCanvas.style.height = '100%';
 
                 const ctx = canvas.getContext('2d');
-                ctx.scale(dpr, dpr);
-                ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
                 ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
 
-                const drawCtx = drawCanvas.getContext('2d');
-                drawCtx.scale(dpr, dpr);
-                drawingContexts.value[0] = drawCtx;
+                drawingContexts.value[0] = drawCanvas.getContext('2d');
                 redrawAllStrokes(0);
                 renderedPages.value.add(1);
             };
