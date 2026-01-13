@@ -43,7 +43,6 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
 
     // Zoom State Variables
     const zoomPercentage = ref(100); // 25 to 100
-    const zoomMode = ref('fit-width'); // 'fit-width' or 'fit-height'
 
     // Whiteboard State Variables
     const showWhiteboard = ref(false);
@@ -758,7 +757,6 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         isLastPage,
         zoomPercentage,
         showWhiteboard,
-        zoomMode,
         fileRecentlySaved,
         resetPdfDoc,
         hasSavedPdfDoc,

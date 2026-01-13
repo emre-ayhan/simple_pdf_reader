@@ -78,7 +78,6 @@ const {
     isFirstPage,
     isLastPage,
     zoomPercentage,
-    zoomMode,
     showWhiteboard,
     fileRecentlySaved,
     resetPdfDoc,
@@ -418,14 +417,25 @@ const toggleTouchDrawing = () => {
     storeSet('enableTouchDrawing', enableTouchDrawing.value);
 };
 
+
+// Zoom Management
+const minZoom = 25;
+const maxZoom = 300;
+const zoomLevels = computed(() => {
+    const levels = [];
+    for (let z = minZoom; z <= maxZoom; z += 25) {
+        levels.push(z);
+    }
+    return levels;
+});
+
 const toggleZoomMode = (mode) => {
     if (!isFileLoaded.value || showWhiteboard.value) return;
-    mode = `${mode}`.toLowerCase().replace(' ', '-');
-    zoomMode.value = mode;
     
-    if (zoomMode.value === 'fit-height') {
+    if (mode === 'fit-height') {
         const pageContainer = document.querySelector(`.page-container[data-page="${pageIndex.value + 1}"]`);
-        const percentage = pdfReader.value.clientHeight * 100 / pageContainer.clientHeight;
+        console.log(pdfReader.value.clientHeight, pageContainer.clientHeight);
+        const percentage = pdfReader.value.clientHeight * zoomPercentage.value / pageContainer.clientHeight;
         zoomPercentage.value = Math.ceil(percentage);
     } else {
         zoomPercentage.value = 100; // Full width
@@ -433,27 +443,28 @@ const toggleZoomMode = (mode) => {
     
     // Restore scroll position to current page after DOM updates
     nextTick(() => {
-        scrollToPage();
+        scrollToPage();``
     });
 };
 
-const handleZoomLevel = (event) => {
-    let percentage = parseInt(event.target.value);
+const handleZoomLevel = (percentage) => {
+    if (!isFileLoaded.value) return;
 
     if (isNaN(percentage)) {
         toggleZoomMode(event.target.value);
         return;
     }
 
+    if (!zoomLevels.value.includes(percentage)) return;
+
+    percentage = Math.min(Math.max(minZoom, percentage), maxZoom);
+
     if (showWhiteboard.value) {
-        percentage = Math.min(Math.max(20, percentage), 200);
         whiteboardScale.value = +(percentage / 100).toFixed(2);
         renderWhiteboardCanvas();
-    } else {
-        percentage = Math.min(Math.max(20, percentage), 300);
-        zoomMode.value = 'fit-height'; // Reset to fit-height on manual zoom
-        zoomPercentage.value = percentage;
     }
+
+    zoomPercentage.value = percentage;
 
     // Restore scroll position to current page after DOM updates
     nextTick(() => {
@@ -461,27 +472,14 @@ const handleZoomLevel = (event) => {
     });
 };
 
-const maxZoom = 300;
-const minZoom = 20;
+const onZoomLevelChange = (event) => {
+    let percentage = parseInt(event.target.value);
+    handleZoomLevel(percentage);
+}
 
-const zoom = (mode) => {
+const zoom = (direction) => {
     if (!isFileLoaded.value) return;
-    if (showWhiteboard.value) {
-        whiteboardScale.value =  mode === 'in' 
-            ? Math.min(2, +(whiteboardScale.value + 0.1).toFixed(2))
-            : Math.max(0.1, +(whiteboardScale.value - 0.1).toFixed(2));
-        renderWhiteboardCanvas();
-    } else {
-        zoomMode.value = 'fit-height'; // Reset to fit-height on manual zoom
-        zoomPercentage.value = mode === 'in' 
-            ? Math.min(zoomPercentage.value + 10, maxZoom)
-            : Math.max(zoomPercentage.value - 10, minZoom);
-    }
-
-    // Restore scroll position to current page after DOM updates
-    nextTick(() => {
-        scrollToPage();
-    });
+    handleZoomLevel(zoomPercentage.value + (direction * 25));
 }
 
 const hasActiveTool = computed(() => {
@@ -609,12 +607,10 @@ onUnmounted(() => {
                 <!-- Toolbar -->
                 <ul class="navbar-nav mx-auto">
                     <!-- Drawing -->
-                    <template v-if="hasActiveTool">
+                    <template v-if="hasActiveTool && !isEraser">
                         <li class="nav-item" v-for="(strokeStyle, index) in initialStrokeStyles">
                             <a class="nav-link" href="#" @click.prevent="handleStrokeStyleButtonClick(index)" :class="{ active: strokeStyle.color === drawColor, disabled: !isFileLoaded }">
-                                <div class="btn-group gap-1">
-                                    <i class="bi bi-circle-fill" :style="{ color: strokeStyle.color }"></i>
-                                </div>
+                                <i class="bi bi-circle-fill" :style="{ color: strokeStyle.color }"></i>
                             </a>
                         </li>
                         <li class="nav-item btn-group">
@@ -738,6 +734,18 @@ onUnmounted(() => {
                                 <i class="bi bi-x-lg"></i>
                             </a>
                         </li>
+
+                        <!-- Zoom -->
+                        <li class="nav-item">
+                            <a href="#" class="nav-link" @click.prevent="zoom(-1)" :class="{ disabled: isViewLocked || zoomPercentage <= minZoom }">
+                                <i class="bi bi-zoom-out"></i>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="#" class="nav-link" @click.prevent="zoom(1)" :class="{ disabled: isViewLocked || zoomPercentage >= maxZoom }">
+                                <i class="bi bi-zoom-in"></i>
+                            </a>
+                        </li>
                     </template>
                     <template v-else>
                         <!-- Remove Page -->
@@ -762,31 +770,31 @@ onUnmounted(() => {
                 </ul>
             </div>
         </nav>
-        <nav class="navbar navbar-expand navbar-dark bg-dark fixed-bottom py-0">
+        <nav class="navbar navbar-expand navbar-dark bg-dark fixed-bottom py-0" v-if="isFileLoaded && !showWhiteboard">
             <div class="container small">
                 <!-- Toolbar -->
                 <ul class="navbar-nav small ms-auto align-items-center">
                     <!-- Pagination -->
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="scrollToPage(0)" :class="{ disabled: !isFileLoaded || showWhiteboard || isFirstPage }" title="First Page">
+                        <a href="#" class="nav-link" @click.prevent="scrollToPage(0)" :class="{ disabled: showWhiteboard || isFirstPage }" title="First Page">
                             <i class="bi bi-chevron-double-left"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex - 1)" :class="{ disabled: !isFileLoaded || showWhiteboard || isFirstPage }" title="Previous Page">
+                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex - 1)" :class="{ disabled: showWhiteboard || isFirstPage }" title="Previous Page">
                             <i class="bi bi-chevron-left"></i>
                         </a>
                     </li>
                     <li class="nav-item d-none d-lg-block">
-                        <input type="text" class="form-control-plaintext" :value="pageNum" @input="handlePageNumber" :disabled="!isFileLoaded || showWhiteboard" />
+                        <input type="text" class="form-control-plaintext" :value="pageNum" @input="handlePageNumber" :disabled="showWhiteboard" />
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex + 1)" :class="{ disabled: !isFileLoaded || showWhiteboard || isLastPage }" title="Next Page">
+                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex + 1)" :class="{ disabled: showWhiteboard || isLastPage }" title="Next Page">
                             <i class="bi bi-chevron-right"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="scrollToPage(activePages.length - 1)" :class="{ disabled: !isFileLoaded || showWhiteboard || isLastPage }" :title="`Last Page (${pageCount - deletedPages.size})`">
+                        <a href="#" class="nav-link" @click.prevent="scrollToPage(activePages.length - 1)" :class="{ disabled: showWhiteboard || isLastPage }" :title="`Last Page (${pageCount - deletedPages.size})`">
                             <i class="bi bi-chevron-double-right"></i>
                         </a>
                     </li>
@@ -794,21 +802,22 @@ onUnmounted(() => {
 
                     <!-- Zoom -->
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="zoom('out')" :class="{ disabled: !isFileLoaded || isViewLocked || (showWhiteboard ? whiteboardScale <= 0.5 : zoomPercentage <= minZoom) }">
+                        <a href="#" class="nav-link" @click.prevent="zoom(-1)" :class="{ disabled: isViewLocked || zoomPercentage <= minZoom }">
                             <i class="bi bi-zoom-out"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="zoom('in')" :class="{ disabled: !isFileLoaded || isViewLocked || (showWhiteboard ? whiteboardScale >= 2 : zoomPercentage >= maxZoom) }">
+                        <a href="#" class="nav-link" @click.prevent="zoom(1)" :class="{ disabled: isViewLocked || zoomPercentage >= maxZoom }">
                             <i class="bi bi-zoom-in"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <select name="zoom-level" id="zoom-level" class="form-control-plaintext" @change="handleZoomLevel" :disabled="!isFileLoaded || isViewLocked">
-                            <template v-for="value in ['Fit Width', 'Fit Height', 50, 75, 125, 150, 200, 250, 300]">
-                                <option :value="value" :selected="!showWhiteboard && zoomPercentage === value">
-                                    {{ value }}
-                                    <template v-if="typeof value === 'number'">%</template>
+                        <select name="zoom-level" id="zoom-level" class="form-control-plaintext" @change="onZoomLevelChange" :disabled="isViewLocked">
+                            <option value="fit-height">Fit Height</option>
+                            <option value="fit-width">Fit Width</option>
+                            <template v-for="value in zoomLevels">
+                                <option :value="value" :selected="zoomPercentage === value">
+                                    {{ value }} %
                                 </option>
                             </template>
                         </select>
