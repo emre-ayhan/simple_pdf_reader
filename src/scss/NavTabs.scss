@@ -3,6 +3,8 @@
     border-bottom: 1px solid $border-color;
     border: 0 !important;
     margin: 0 !important;
+    padding: .5rem !important;
+    padding-bottom: 0 !important;
     font-size: small !important;
     z-index: 1035;
     -webkit-app-region: drag;
@@ -11,10 +13,6 @@
         border: 0 !important;
         margin: 0 !important;
         font-size: small !important;
-
-        &:first-child {
-            margin-left: .5rem !important;
-        }
     }
 
     .nav-link {
@@ -41,8 +39,7 @@
         }
 
         &.nav-link-menu {
-            margin-left: .1rem !important;
-            margin-right: .1rem !important;
+            margin-right: .2rem !important;
             background-color: $primary;
             color: $dark !important;
             font-weight: 600;

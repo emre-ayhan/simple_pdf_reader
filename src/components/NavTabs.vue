@@ -37,7 +37,7 @@ onBeforeUnmount(() => {
 });
 </script>
 <template>
-    <ul class="nav nav-tabs fixed-top pt-1" id="appTabs" role="tablist">
+    <ul class="nav nav-tabs fixed-top" id="appTabs" role="tablist">
         <li class="nav-item dropdown">
             <a class="nav-link nav-link-menu" data-bs-toggle="dropdown" href="#" role="button" aria-expanded="false">
                 File
@@ -82,21 +82,19 @@ onBeforeUnmount(() => {
                 <i class="bi bi-plus-lg"></i>
             </button>
         </li>
-        <li class="ms-auto me-1" v-if="Electron">
-            <div class="btn-group btn-group-sm">
-                <template v-for="btn in electronButtons">
-                    <button :class="`btn btn-electron ${btn.action}`" type="button" role="tab" aria-selected="false" @click="handleElectronButtonClick(btn.action)" :title="btn.title">
-                        <i :class="btn.icon"></i>
-                    </button>
-                </template>
-            </div>
-        </li>
     </ul>
     <div class="tab-content" id="appTabContent">
         <template v-for="(tab, index) in tabs">
             <div class="tab-pane" :class="{ 'active show': index === activeTabIndex }" tabindex="0" v-if="!tab.closed">
                 <slot></slot>
             </div>
+        </template>
+    </div>
+    <div class="btn-group btn-group-sm position-absolute end-0 top-0" v-if="Electron">
+        <template v-for="btn in electronButtons">
+            <button :class="`btn btn-electron ${btn.action}`" type="button" role="tab" aria-selected="false" @click="handleElectronButtonClick(btn.action)" :title="btn.title">
+                <i :class="btn.icon"></i>
+            </button>
         </template>
     </div>
 </template>
