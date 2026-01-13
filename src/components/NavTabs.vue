@@ -1,7 +1,9 @@
 <script setup>
 import { onBeforeUnmount, onMounted } from 'vue';
 import { Electron } from '../composables/useElectron';
-import { openNewTab, closeTab, activeTabIndex, tabs, tabHistory, openTabs, markAsActive, isLastTabOnEmptyState, fileHasUnsavedChanges, handleElectronButtonClick, fileDataCache } from '../composables/useTabs';
+import { openNewTab, closeTab, activeTabIndex, activeTab, tabs, tabHistory, openTabs, markAsActive, isLastTabOnEmptyState, fileHasUnsavedChanges, handleElectronButtonClick, fileDataCache } from '../composables/useTabs';
+
+const emit = defineEmits(['file-open', 'file-save', 'file-delete-page']);
 
 const electronButtons = [
     { action: 'fullscreen', icon: 'bi-arrows-fullscreen', title: 'Fullscreen' },
@@ -36,6 +38,32 @@ onBeforeUnmount(() => {
 </script>
 <template>
     <ul class="nav nav-tabs fixed-top pt-1" id="appTabs" role="tablist">
+        <li class="nav-item dropdown">
+            <a class="nav-link nav-link-menu" data-bs-toggle="dropdown" href="#" role="button" aria-expanded="false">
+                File
+            </a>
+                <ul class="dropdown-menu dropdown-menu-dark">
+                    <li>
+                        <a class="dropdown-item" href="#" @click.prevent="emit('file-open')">
+                            <i class="bi bi-folder me-1"></i>
+                            Open File (Ctrl+O)
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item" :class="{ disabled: !fileHasUnsavedChanges(activeTab?.id) || activeTab.emptyState }" href="#" @click.prevent="emit('file-save')">
+                            <i class="bi bi-floppy me-1"></i>
+                            Save (Ctrl+S)
+                        </a>
+                    </li>
+                    <li><hr class="text-primary my-1"></li>
+                    <li>
+                        <a class="dropdown-item text-danger" :class="{ disabled: activeTab.emptyState }" href="#" @click.prevent="emit('file-delete-page')">
+                            <i class="bi bi-trash3 me-1"></i>
+                            Delete Page (Del)
+                        </a>
+                    </li>
+                </ul>
+        </li>
         <template v-for="(tab, index) in tabs" :key="tab">
             <li class="nav-item" role="presentation" v-if="!tab.closed">
                 <button class="nav-link" :class="{ active: index === activeTabIndex }" type="button" role="tab" @click="onTabClick(tab, index)">

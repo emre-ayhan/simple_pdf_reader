@@ -599,6 +599,14 @@ onUnmounted(() => {
         lazyLoadObserver.value.disconnect();
     }
 });
+
+defineExpose({
+    handleFileOpen,
+    handleSaveFile,
+    deletePage: () => {
+        deletePage(pageIndex.value, addToHistory);
+    },
+})
 </script>
 <template>
     <div class="container-fluid bg-dark" @contextmenu.prevent @dragenter.prevent="onDragEnter" @dragleave.prevent="onDragLeave" @dragover.prevent @drop.prevent="onDrop">
@@ -653,11 +661,6 @@ onUnmounted(() => {
                         <li class="nav-item vr bg-white mx-2"></li>
                     </template>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="toggleTouchDrawing" :class="{ active: enableTouchDrawing, disabled: !isFileLoaded }" :title="`${enableTouchDrawing ? 'Disable' : 'Enable'} Touch Drawing`">
-                            <i class="bi bi-hand-index-thumb-fill"></i>
-                        </a>
-                    </li>
-                    <li class="nav-item">
                         <a class="nav-link" href="#" @click.prevent="selectDrawingTool('pen')" :class="{ active: isDrawing && drawMode === 'pen', disabled: !isFileLoaded }" title="Draw">
                             <i class="bi bi-pencil-fill"></i>
                         </a>
@@ -685,6 +688,16 @@ onUnmounted(() => {
                     <li class="nav-item">
                         <a href="#" class="nav-link" @click.prevent="selectText" :class="{ active: isTextMode, disabled: !isFileLoaded }" title="Add Text (T)">
                             <i class="bi bi-textarea-t"></i>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" @click.prevent="resetToolState" :class="{ active: !hasActiveTool, disabled: !isFileLoaded }" title="Selection Mode">
+                            <i class="bi bi-cursor-fill"></i>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" @click.prevent="toggleTouchDrawing" :class="{ active: enableTouchDrawing, disabled: !isFileLoaded }" :title="`${enableTouchDrawing ? 'Disable' : 'Enable'} Touch Drawing`">
+                            <i class="bi bi-hand-index-thumb-fill"></i>
                         </a>
                     </li>
                     <li class="nav-item vr bg-white mx-2"></li>
@@ -747,29 +760,11 @@ onUnmounted(() => {
                             </a>
                         </li>
                     </template>
-                    <template v-else>
-                        <!-- Remove Page -->
-                        <li class="nav-item" title="Delete Current Page (Delete)">
-                            <a href="#" class="nav-link" @click.prevent="deletePage(pageIndex, addToHistory)" :class="{ disabled: !isFileLoaded }">
-                                <i class="bi bi-trash-fill"></i>
-                            </a>
-                        </li>
-                        <!-- File Controls -->
-                        <li class="nav-item" title="Save File (Ctrl+S)">
-                            <a href="#" class="nav-link" @click.prevent="handleSaveFile" :class="{ disabled: !isFileLoaded || !hasUnsavedChanges }">
-                                <i :class="`bi bi-floppy${fileRecentlySaved ? '-fill' : ''}`"></i>
-                            </a>
-                        </li>
-                        <li class="nav-item" title="Open File (Ctrl+O)">
-                            <a href="#" class="nav-link" @click.prevent="handleFileOpen">
-                                <i class="bi bi-folder-fill"></i>
-                            </a>
-                        </li>
-                    </template>
-
                 </ul>
             </div>
         </nav>
+
+        <!-- Footer -->
         <nav class="navbar navbar-expand navbar-dark bg-dark fixed-bottom py-0" v-if="isFileLoaded && !showWhiteboard">
             <div class="container small">
                 <!-- Toolbar -->

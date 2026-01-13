@@ -14,6 +14,10 @@ const tabHistory = ref([0]);
 const tabs = ref([getEmptyStateTab()]);
 const activeTabIndex = ref(0);
 
+const activeTab = computed(() => {
+    return tabs.value[activeTabIndex.value];
+});
+
 const openTabs = computed(() => {
     return tabs.value.filter(tab => !tab.closed);
 });
@@ -100,6 +104,7 @@ export {
     closeTab,
     tabs,
     activeTabIndex,
+    activeTab,
     openEmptyStateTab,
     tabHistory,
     openTabs,
