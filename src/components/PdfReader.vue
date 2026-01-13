@@ -62,6 +62,7 @@ const handlePageNumber = (event) => {
 const {
     fileId,
     pdfCanvases,
+    textLayerDivs,
     strokesPerPage,
     drawingCanvases,
     drawingContexts,
@@ -235,10 +236,17 @@ const {
 
 // Toolbar Actions
 const isViewLocked = ref(false);
+const isTextSelectionMode = ref(false);
 
 const lockView = () => {
     if (!isFileLoaded.value) return;
     isViewLocked.value = !isViewLocked.value;
+};
+
+const toggleTextSelection = () => {
+    if (!isFileLoaded.value) return;
+    isTextSelectionMode.value = !isTextSelectionMode.value;
+    resetToolState();
 };
 
 const selectDrawingTool = (mode) => {
@@ -265,6 +273,12 @@ const selectText = () => {
     const wasActive = isTextMode.value;
     resetToolState();
     isTextMode.value = !wasActive;
+};
+
+const selectPointerMode = () => {
+    if (!isFileLoaded.value) return;
+    resetToolState();
+    isTextSelectionMode.value = false;
 };
 
 const captureSelection = () => {
@@ -524,7 +538,7 @@ defineExpose({
 })
 </script>
 <template>
-    <div class="container-fluid bg-dark" @contextmenu.prevent @dragenter.prevent="onDragEnter" @dragleave.prevent="onDragLeave" @dragover.prevent @drop.prevent="onDrop">
+    <div class="container-fluid bg-dark" @dragenter.prevent="onDragEnter" @dragleave.prevent="onDragLeave" @dragover.prevent @drop.prevent="onDrop">
         <template v-if="isFileLoaded">
             <nav class="navbar navbar-expand navbar-dark bg-dark fixed-top py-1">
                 <div class="container">
@@ -607,8 +621,13 @@ defineExpose({
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="#" @click.prevent="resetToolState" :class="{ active: !hasActiveTool }" title="Selection Mode">
+                            <a class="nav-link" href="#" @click.prevent="selectPointerMode" :class="{ active: !hasActiveTool && !isTextSelectionMode }" title="Selection Mode">
                                 <i class="bi bi-cursor-fill"></i>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" @click.prevent="toggleTextSelection" :class="{ active: isTextSelectionMode }" title="Text Selection">
+                                <i class="bi bi-cursor-text"></i>
                             </a>
                         </li>
                         <li class="nav-item">
@@ -745,6 +764,7 @@ defineExpose({
                     <div  class="page-container" :data-page="page" v-show="!deletedPages.has(page)">
                         <div class="canvas-container" :class="{ 'canvas-loading': !renderedPages.has(page) }">
                             <canvas class="pdf-canvas" :ref="el => { if (el) pdfCanvases[page - 1] = el }"></canvas>
+                            <div class="text-layer" :class="{ 'text-selectable': isTextSelectionMode }" :ref="el => { if (el) textLayerDivs[page - 1] = el }"></div>
                             <canvas 
                                 :ref="el => { if (el) drawingCanvases[page - 1] = el }"
                                 class="drawing-canvas"
@@ -758,6 +778,7 @@ defineExpose({
                                     cursor: cursorStyle,
                                     pointerEvents: 'auto',
                                     touchAction: (isViewLocked || isPenHovering || (enableTouchDrawing && hasActiveTool)) ? 'none' : 'pan-y pan-x',
+                                    zIndex: hasActiveTool ? 3 : 1
                                 }"
                                 :data-color="drawColor"
                             ></canvas>

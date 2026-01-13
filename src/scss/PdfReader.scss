@@ -165,6 +165,57 @@
     touch-action: none; /* allow touch pointer events to be delivered for drawing */
 }
 
+.text-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    overflow: hidden;
+    opacity: 1;
+    line-height: 1;
+    text-size-adjust: none;
+    forced-color-adjust: none;
+    transform-origin: 0 0;
+    caret-color: CanvasText;
+    pointer-events: none;
+    z-index: 2;
+    
+    &.text-selectable {
+        > span {
+            pointer-events: auto;
+        }
+    }
+    
+    > span {
+        color: transparent;
+        position: absolute;
+        white-space: pre;
+        cursor: text;
+        transform-origin: 0% 0%;
+        pointer-events: none;
+        user-select: text;
+        line-height: 1;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        height: 1em;
+        display: inline-block;
+        overflow: visible;
+        vertical-align: top;
+    }
+    
+    ::selection {
+        background: rgba(0, 123, 255, 0.4);
+        color: transparent;
+    }
+    
+    ::-moz-selection {
+        background: rgba(0, 123, 255, 0.4);
+        color: transparent;
+    }
+}
+
+
 .drag-overlay {
     position: fixed;
     top: 0;

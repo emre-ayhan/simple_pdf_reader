@@ -27,6 +27,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
     const renderedPages = ref(new Set());
     const pdfReader = ref(null);
     const pdfCanvases = ref([]); // Reference to PDF canvases for selection capture
+    const textLayerDivs = ref([]); // Reference to text layer divs for text selection
     const isFileLoaded = ref(false);
     const originalPdfData = ref(null);
 
@@ -147,6 +148,102 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
                     };
                     
                     await page.render(renderContext).promise;
+                    
+                    // Render text layer for text selection
+                    const textLayerDiv = textLayerDivs.value[pageNumber - 1];
+                    if (textLayerDiv) {
+                        // Clear any existing text content
+                        textLayerDiv.innerHTML = '';
+                        
+                        // Scale text layer to match the CSS display size of the canvas
+                        const cssWidth = canvas.offsetWidth;
+                        const cssHeight = canvas.offsetHeight;
+                        const scaleX = cssWidth / canvas.width;
+                        const scaleY = cssHeight / canvas.height;
+                        
+                        textLayerDiv.style.width = `${canvas.width}px`;
+                        textLayerDiv.style.height = `${canvas.height}px`;
+                        textLayerDiv.style.transform = `scale(${scaleX}, ${scaleY})`;
+                        
+                        const textContent = await page.getTextContent();
+                        
+                        // Render text items
+                        for (const item of textContent.items) {
+                            if (!item.str) continue;
+                            
+                            const span = document.createElement('span');
+                            span.textContent = item.str;
+                            
+                            // Get the transformed position
+                            const tx = viewport.transform;
+                            const m = item.transform;
+                            
+                            // Apply viewport transformation to get display coordinates
+                            const x = tx[0] * m[4] + tx[2] * m[5] + tx[4];
+                            const y = tx[1] * m[4] + tx[3] * m[5] + tx[5];
+                            
+                            // Calculate font height
+                            const fontHeight = Math.hypot(
+                                tx[0] * m[2] + tx[2] * m[3],
+                                tx[1] * m[2] + tx[3] * m[3]
+                            );
+                            
+                            // Calculate font width for scaling
+                            const fontWidth = Math.hypot(
+                                tx[0] * m[0] + tx[2] * m[1],
+                                tx[1] * m[0] + tx[3] * m[1]
+                            );
+                            
+                            // Calculate text width from item width and viewport scale
+                            const textWidth = item.width * viewport.scale;
+                            
+                            const fontAscent = fontHeight;
+                            
+                            // Set span styles
+                            span.style.left = `${x}px`;
+                            span.style.top = `${y - fontAscent}px`;
+                            span.style.fontSize = `${fontHeight}px`;
+                            span.style.fontFamily = item.fontName || 'sans-serif';
+                            
+                            // Calculate rotation angle
+                            const angle = Math.atan2(
+                                tx[1] * m[0] + tx[3] * m[1],
+                                tx[0] * m[0] + tx[2] * m[1]
+                            );
+                            
+                            // Apply transformations
+                            let transform = `rotate(${angle}rad)`;
+                            if (fontWidth > 0 && fontHeight > 0) {
+                                const scaleX = fontWidth / fontHeight;
+                                if (Math.abs(scaleX - 1) > 0.001) {
+                                    transform += ` scaleX(${scaleX})`;
+                                }
+                            }
+                            span.style.transform = transform;
+                            
+                            // Create a temporary element to measure natural text width
+                            const measureSpan = document.createElement('span');
+                            measureSpan.style.font = span.style.font || `${fontHeight}px ${item.fontName || 'sans-serif'}`;
+                            measureSpan.style.position = 'absolute';
+                            measureSpan.style.visibility = 'hidden';
+                            measureSpan.style.whiteSpace = 'pre';
+                            measureSpan.textContent = item.str;
+                            textLayerDiv.appendChild(measureSpan);
+                            const naturalWidth = measureSpan.offsetWidth;
+                            textLayerDiv.removeChild(measureSpan);
+                            
+                            // Calculate letter-spacing to make text fill the exact width
+                            if (textWidth > 0 && naturalWidth > 0 && item.str.length > 1) {
+                                const targetWidth = textWidth;
+                                const extraSpace = targetWidth - naturalWidth;
+                                const letterSpacing = extraSpace / (item.str.length - 1);
+                                span.style.letterSpacing = `${letterSpacing}px`;
+                            }
+                            
+                            textLayerDiv.appendChild(span);
+                        }
+                    }
+                    
                     renderedPages.value.add(pageNumber);
                     // Repaint saved annotations after PDF render
                     lazyLoadCallback(pageNumber - 1);
@@ -738,6 +835,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         fileId,
         pagesContainer,
         pdfCanvases,
+        textLayerDivs,
         strokesPerPage,
         drawingCanvases,
         drawingContexts,
