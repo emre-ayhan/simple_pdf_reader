@@ -275,7 +275,7 @@ const selectText = () => {
     isTextMode.value = !wasActive;
 };
 
-const selectPointerMode = () => {
+const selectStrokeMode = () => {
     if (!isFileLoaded.value) return;
     resetToolState();
     isTextSelectionMode.value = false;
@@ -418,7 +418,7 @@ useWindowEvents(fileId, {
                 selectDrawingTool('rectangle');
             }
         },
-        c: {
+        o: {
             action: (event) => {
                 if (isTextMode.value) return;
                 event.preventDefault();
@@ -438,10 +438,24 @@ useWindowEvents(fileId, {
                 handleFileOpen();
             }
         },
+        p: {
+            action: (event) => {
+                if (isTextMode.value) return;
+                event.preventDefault();
+                selectStrokeMode();
+            }
+        },
         s: {
-            ctrl: true,
-            action: () => {
-                handleSaveFile();
+            actionAll: (event, ctrl) => {
+                if (ctrl) {
+                    event.preventDefault();
+                    handleSaveFile();
+                    return;
+                }
+
+                if (isTextMode.value) return;
+                event.preventDefault();
+                toggleTextSelection();
             }
         },
         z: {
@@ -474,9 +488,10 @@ useWindowEvents(fileId, {
             }
         },
         Escape: {
-            action: () => {
+            action: (event) => {
                 if (!hasActiveTool.value) return;
-                resetToolState();
+                event.preventDefault();
+                selectStrokeMode();
             }
         },
         ArrowLeft: {
@@ -591,27 +606,27 @@ defineExpose({
                             <li class="nav-item vr bg-white mx-2"></li>
                         </template>
                         <li class="nav-item">
-                            <a class="nav-link" href="#" @click.prevent="selectDrawingTool('pen')" :class="{ active: isDrawing && drawMode === 'pen' }" title="Draw">
+                            <a class="nav-link" href="#" @click.prevent="selectDrawingTool('pen')" :class="{ active: isDrawing && drawMode === 'pen' }" title="Draw (D)">
                                 <i class="bi bi-pencil-fill"></i>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="#" @click.prevent="selectEraser" :class="{ active: isEraser }" title="Eraser">
+                            <a class="nav-link" href="#" @click.prevent="selectEraser" :class="{ active: isEraser }" title="Eraser (E)">
                                 <i class="bi bi-eraser-fill"></i>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="#" @click.prevent="selectDrawingTool('line')" :class="{ active: isDrawing && drawMode === 'line' }" title="Line">
+                            <a class="nav-link" href="#" @click.prevent="selectDrawingTool('line')" :class="{ active: isDrawing && drawMode === 'line' }" title="Line (L)">
                                 <i class="bi bi-slash-lg"></i>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="#" @click.prevent="selectDrawingTool('rectangle')" :class="{ active: isDrawing && drawMode === 'rectangle' }" title="Rectangle">
+                            <a class="nav-link" href="#" @click.prevent="selectDrawingTool('rectangle')" :class="{ active: isDrawing && drawMode === 'rectangle' }" title="Rectangle (R)">
                                 <i class="bi bi-square"></i>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="#" @click.prevent="selectDrawingTool('circle')" :class="{ active: isDrawing && drawMode === 'circle' }" title="Circle">
+                            <a class="nav-link" href="#" @click.prevent="selectDrawingTool('circle')" :class="{ active: isDrawing && drawMode === 'circle' }" title="Circle (O)">
                                 <i class="bi bi-circle"></i>
                             </a>
                         </li>
@@ -621,12 +636,12 @@ defineExpose({
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="#" @click.prevent="selectPointerMode" :class="{ active: !hasActiveTool && !isTextSelectionMode }" title="Selection Mode">
+                            <a class="nav-link" href="#" @click.prevent="selectStrokeMode" :class="{ active: !hasActiveTool && !isTextSelectionMode }" title="Stroke Selection (P)">
                                 <i class="bi bi-cursor-fill"></i>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="#" @click.prevent="toggleTextSelection" :class="{ active: isTextSelectionMode }" title="Text Selection">
+                            <a class="nav-link" href="#" @click.prevent="toggleTextSelection" :class="{ active: isTextSelectionMode }" title="Text Selection (S)">
                                 <i class="bi bi-cursor-text"></i>
                             </a>
                         </li>
