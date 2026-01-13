@@ -151,6 +151,7 @@ const {
     isSelectionMode,
     isPenHovering,
     selectedStroke,
+    strokeMenu,
     showStrokeMenu,
     strokeMenuPosition,
     resizeCursor,
