@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, nextTick, watch, onMounted, onUnmounted, onBeforeUnmount } from "vue";
+import { ref, computed, nextTick, onMounted, onUnmounted, onBeforeUnmount } from "vue";
 import { Electron } from "../composables/useElectron";
 import { useStore } from "../composables/useStore";
 import { useFile } from "../composables/useFile";
@@ -79,7 +79,6 @@ const {
     isLastPage,
     zoomPercentage,
     showWhiteboard,
-    fileRecentlySaved,
     resetPdfDoc,
     hasSavedPdfDoc,
     clearSavedState,
@@ -137,110 +136,6 @@ const captureSelectionCallback = (canvasIndex, selectedCanvas) => {
     });
 }
 
-// Ref to measure and clamp the stroke context menu
-const strokeMenuRef = ref(null);
-
-const clampStrokeMenuPosition = async () => {
-    // Ensure the menu has rendered before measuring
-    await nextTick();
-    const el = strokeMenuRef.value;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
-    const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-
-    // Account for CSS transform: translate(-50%, 10px)
-    const halfW = rect.width / 2;
-    const offsetY = 10; // matches SCSS transform Y
-    const margin = 8;   // keep a small margin from edges
-
-    // Prefer placing menu to the right of the stroke if it fits, else left
-    let preferredX = strokeMenuPosition.value.x;
-    let preferredY = strokeMenuPosition.value.y;
-
-    if (selectedStroke?.value) {
-        const canvasIdx = selectedStroke.value.pageIndex;
-        const canvas = drawingCanvases.value[canvasIdx];
-        if (canvas) {
-            const cRect = canvas.getBoundingClientRect();
-            const scaleXToClient = cRect.width / canvas.width;
-            const scaleYToClient = cRect.height / canvas.height;
-
-            const stroke = selectedStroke.value.stroke;
-            const first = stroke[0];
-            let minX, minY, maxX, maxY;
-
-            if (first.type === 'text') {
-                const ctx = drawingContexts.value[canvasIdx];
-                if (ctx) {
-                    ctx.font = `${first.fontSize}px Arial`;
-                    const metrics = ctx.measureText(first.text || '');
-                    minX = first.x; minY = first.y;
-                    maxX = first.x + metrics.width; maxY = first.y + first.fontSize;
-                }
-            } else if (first.type === 'line' || first.type === 'rectangle' || first.type === 'circle') {
-                if (first.type === 'circle') {
-                    const r = Math.sqrt((first.endX - first.startX) ** 2 + (first.endY - first.startY) ** 2);
-                    minX = first.startX - r; maxX = first.startX + r;
-                    minY = first.startY - r; maxY = first.startY + r;
-                } else {
-                    minX = Math.min(first.startX, first.endX);
-                    maxX = Math.max(first.startX, first.endX);
-                    minY = Math.min(first.startY, first.endY);
-                    maxY = Math.max(first.startY, first.endY);
-                }
-            } else {
-                // pen stroke
-                minX = Infinity; minY = Infinity; maxX = -Infinity; maxY = -Infinity;
-                for (const p of stroke) {
-                    if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y;
-                    if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y;
-                }
-            }
-
-            if (minX !== undefined) {
-                const clientMinX = cRect.left + minX * scaleXToClient;
-                const clientMaxX = cRect.left + maxX * scaleXToClient;
-                const clientMinY = cRect.top + minY * scaleYToClient;
-                const clientMaxY = cRect.top + maxY * scaleYToClient;
-
-                const offset = 10;
-                const menuWidth = rect.width;
-                const menuHeight = rect.height;
-
-                // Compute center positions due to translate(-50%, 10px)
-                const rightCenterX = clientMaxX + offset + menuWidth / 2;
-                const leftCenterX = clientMinX - offset - menuWidth / 2;
-                const aboveY = clientMinY; // top aligned with stroke
-
-                // If placing to the right fits fully, use it; else try left
-                if (rightCenterX + menuWidth / 2 <= viewportWidth - margin) {
-                    preferredX = rightCenterX;
-                } else if (leftCenterX - menuWidth / 2 >= margin) {
-                    preferredX = leftCenterX;
-                }
-
-                // Prefer vertical near the top of the stroke
-                preferredY = aboveY;
-            }
-        }
-    }
-
-    const minX = margin + halfW;
-    const maxX = viewportWidth - margin - halfW;
-    const minY = margin - offsetY; // ensure top (with offset) >= margin
-    const maxY = viewportHeight - margin - rect.height - offsetY;
-
-    const clampedX = Math.min(Math.max(minX, preferredX), Math.max(minX, maxX));
-    const clampedY = Math.min(Math.max(minY, preferredY), Math.max(minY, maxY));
-
-    if (clampedX !== strokeMenuPosition.value.x || clampedY !== strokeMenuPosition.value.y) {
-        strokeMenuPosition.value = { x: clampedX, y: clampedY };
-    }
-};
-
-// (moved) watchers will be defined after useDraw destructuring
-
 const {
     isDrawing,
     isEraser,
@@ -267,7 +162,6 @@ const {
     cancelText,
     resetToolState,
     handleTextboxBlur,
-    clearDrawing,
     redrawAllStrokes,
     drawImageCanvas,
     changeStrokeColor,
@@ -280,35 +174,8 @@ const {
     setInitialStrokeColor,
     setInitialStrokeThickness,
     handleStrokeStyleButtonClick,
+    clampStrokeMenuPosition,
 } = useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPage, drawingCanvases, drawingContexts, strokeChangeCallback, captureSelectionCallback);
-
-
-// Clamp when menu opens (now that refs are available)
-watch(showStrokeMenu, (visible) => {
-    if (visible) {
-        clampStrokeMenuPosition();
-    }
-});
-
-// Clamp on position changes (e.g., programmatic updates)
-watch(() => strokeMenuPosition.value, () => {
-    if (showStrokeMenu.value) {
-        clampStrokeMenuPosition();
-    }
-}, { deep: true });
-
-onMounted(() => {
-    const handler = () => {
-        if (showStrokeMenu.value) clampStrokeMenuPosition();
-    };
-    window.addEventListener('resize', handler);
-});
-
-onUnmounted(() => {
-    const handler = () => {};
-    window.removeEventListener('resize', handler);
-});
-
 
 // History management
 const { 
@@ -320,7 +187,6 @@ const {
     temporaryState,
     canUndo,
     canRedo,
-    hasUnsavedChanges,
     resetHistory, 
     saveCurrentHistoryStep,
 } = useHistory(fileId, strokesPerPage, drawingCanvases, drawingContexts, deletedPages, redrawAllStrokes);
@@ -489,6 +355,11 @@ useWindowEvents(fileId, {
     resize: {
         action() {
             if (!isFileLoaded.value) return;
+
+            if (showStrokeMenu.value) { 
+                clampStrokeMenuPosition();
+            };
+
             clearTimeout(resizeTimeout);
             resizeTimeout = setTimeout(() => {
                 nextTick(() => {
@@ -873,7 +744,7 @@ defineExpose({
         </div>
 
         <div v-if="showStrokeMenu && selectedStroke" 
-             ref="strokeMenuRef"
+             ref="strokeMenu"
              class="stroke-menu" 
              :style="{ 
                  left: strokeMenuPosition.x + 'px', 
