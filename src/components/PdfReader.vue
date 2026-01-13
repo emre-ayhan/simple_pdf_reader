@@ -478,7 +478,7 @@ defineExpose({
 </script>
 <template>
     <div class="container-fluid bg-dark" @contextmenu.prevent @dragenter.prevent="onDragEnter" @dragleave.prevent="onDragLeave" @dragover.prevent @drop.prevent="onDrop">
-        <nav class="navbar navbar-expand navbar-dark bg-dark fixed-top py-0">
+        <nav class="navbar navbar-expand navbar-dark bg-dark fixed-top py-1">
             <div class="container">
                 <!-- Toolbar -->
                 <ul class="navbar-nav mx-auto">
