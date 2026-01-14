@@ -184,7 +184,7 @@ const {
 } = useWhiteBoard(showWhiteboard, drawingCanvases, drawingContexts, pdfCanvases, pdfReader, renderedPages);
 
 // Open a blank whiteboard page
-const openWhiteboard = async () => {
+const openWhiteboard = () => {
     if (isFileLoaded.value) {
         openNewTab();
         return;
@@ -233,35 +233,13 @@ const openWhiteboard = async () => {
             const pendingData = whiteboardImportDataCache.value;
             if (pendingData) {
                 try {
-                    const canvasIndex = pageIndex.value;
-                    const canvas = drawingCanvases.value[canvasIndex];
-                    if (!canvas) return;
-
-                    // Compute visible viewport center relative to the page
-                    const pageContainer = pagesContainer.value?.querySelector(`.page-container[data-page="${pageIndex.value + 1}"]`);
-                    const readerEl = pdfReader.value;
-
-                    let centerX = canvas.width / 2;
-                    let centerY = canvas.height / 2;
-
-                    if (pageContainer && readerEl) {
-                        const containerRect = pageContainer.getBoundingClientRect();
-                        const readerRect = readerEl.getBoundingClientRect();
-                        const visibleCenterX = (readerRect.left + readerRect.width / 2) - containerRect.left;
-                        const visibleCenterY = (readerRect.top + readerRect.height / 2) - containerRect.top;
-                        const scaleX = canvas.width / containerRect.width;
-                        const scaleY = canvas.height / containerRect.height;
-                        centerX = visibleCenterX * scaleX;
-                        centerY = visibleCenterY * scaleY;
-                    }
-
                     // Load the image and create the stroke
                     createImage(pendingData, redrawAllStrokes, strokeChangeCallback);
-                        whiteboardImportDataCache.value = null;
                 } catch (e) {
                     console.error('Failed to import selection into whiteboard:', e);
-                    whiteboardImportDataCache.value = null;
                 }
+
+                whiteboardImportDataCache.value = null;
             }
         });
     });
