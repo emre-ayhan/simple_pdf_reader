@@ -221,6 +221,11 @@ const closeWhiteboardCallback = () => {
     resetHistory(true); // Reset temporary history
     renderAllPagesAndSetupObservers();
     clearSavedState();
+    
+    // Scroll to the restored page index after DOM updates
+    nextTick(() => {
+        scrollToPage(pageIndex.value);
+    });
 };
 
 const {

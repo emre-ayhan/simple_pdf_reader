@@ -13,43 +13,53 @@ export function useWhiteBoard(showWhiteboard, drawingCanvases, drawingContexts, 
 
         const img = new Image();
         img.onload = () => {
-            // Fit capture within viewport while preserving aspect ratio; allow user-scale without exceeding 1x source
+            // Use device pixel ratio for sharp rendering (same as PDF rendering)
+            const pixelRatio = window.devicePixelRatio || 1;
+            
+            // The captured image already includes high-resolution pixel data
+            // img.width and img.height are the actual pixel dimensions from the captured canvas
+            // Divide by pixelRatio to get the original display size
+            const originalDisplayWidth = img.width / pixelRatio;
+            const originalDisplayHeight = img.height / pixelRatio;
+            
+            // Calculate display dimensions based on viewport
             const availableWidth = (pdfReader.value?.clientWidth || window.innerWidth) - 40;
             const availableHeight = (pdfReader.value?.clientHeight || window.innerHeight) - 40;
             const safeWidth = Math.max(1, availableWidth);
             const safeHeight = Math.max(1, availableHeight);
-            const fitScale = Math.max(0.01, Math.min(1, Math.min(safeWidth / img.width, safeHeight / img.height)));
+            
+            // Calculate fit scale based on original display dimensions
+            const fitScale = Math.max(0.01, Math.min(1, Math.min(safeWidth / originalDisplayWidth, safeHeight / originalDisplayHeight)));
             // Allow zoom-in beyond the fitted size up to 4x while keeping aspect ratio
             const targetScale = Math.max(0.01, Math.min(fitScale * whiteboardScale.value, 4));
-            const imageWidth = img.width * targetScale;
-            const imageHeight = img.height * targetScale;
+            
+            // Display size (CSS size) with user's zoom applied
+            const displayWidth = originalDisplayWidth * targetScale;
+            const displayHeight = originalDisplayHeight * targetScale;
 
             // Expand canvas to at least the viewport so tools work across the whole whiteboard
-            // Keep the captured selection anchored to top-left (no centering offsets)
-            const canvasWidth = Math.max(imageWidth, safeWidth);
-            const canvasHeight = Math.max(imageHeight, safeHeight);
-            const offsetX = 0;
-            const offsetY = 0;
+            const canvasDisplayWidth = Math.max(displayWidth, safeWidth);
+            const canvasDisplayHeight = Math.max(displayHeight, safeHeight);
+            
+            // Canvas size should be display size * pixelRatio for sharp rendering
+            canvas.width = canvasDisplayWidth * pixelRatio;
+            canvas.height = canvasDisplayHeight * pixelRatio;
+            canvas.style.width = `${canvasDisplayWidth}px`;
+            canvas.style.height = `${canvasDisplayHeight}px`;
 
-            // Use high DPI for better quality
-            const dpr = window.devicePixelRatio || 1;
-            canvas.width = canvasWidth * dpr;
-            canvas.height = canvasHeight * dpr;
-            canvas.style.width = `${canvasWidth}px`;
-            canvas.style.height = `${canvasHeight}px`;
-
-            drawCanvas.width = canvasWidth * dpr;
-            drawCanvas.height = canvasHeight * dpr;
-            drawCanvas.style.width = `${canvasWidth}px`;
-            drawCanvas.style.height = `${canvasHeight}px`;
+            drawCanvas.width = canvasDisplayWidth * pixelRatio;
+            drawCanvas.height = canvasDisplayHeight * pixelRatio;
+            drawCanvas.style.width = `${canvasDisplayWidth}px`;
+            drawCanvas.style.height = `${canvasDisplayHeight}px`;
 
             const ctx = canvas.getContext('2d');
-            ctx.scale(dpr, dpr);
-            ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-            ctx.drawImage(img, offsetX, offsetY, imageWidth, imageHeight);
+            ctx.scale(pixelRatio, pixelRatio);
+            ctx.clearRect(0, 0, canvasDisplayWidth, canvasDisplayHeight);
+            // Draw the captured image at display size (the image already has high-res pixel data)
+            ctx.drawImage(img, 0, 0, displayWidth, displayHeight);
 
             const drawCtx = drawCanvas.getContext('2d');
-            drawCtx.scale(dpr, dpr);
+            drawCtx.scale(pixelRatio, pixelRatio);
             drawingContexts.value[0] = drawCtx;
             renderedPages.value.add(1);
 
@@ -77,6 +87,7 @@ export function useWhiteBoard(showWhiteboard, drawingCanvases, drawingContexts, 
         const drawCanvas = drawingCanvases.value[0];
         
         const tempCanvas = document.createElement('canvas');
+        // Use the actual canvas dimensions (which include pixel ratio scaling)
         tempCanvas.width = pdfCanvas.width;
         tempCanvas.height = pdfCanvas.height;
         const tempCtx = tempCanvas.getContext('2d');
@@ -85,9 +96,9 @@ export function useWhiteBoard(showWhiteboard, drawingCanvases, drawingContexts, 
         tempCtx.fillStyle = 'white';
         tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
         
-        // Draw background image
+        // Draw background image (no scaling needed - canvas dimensions match)
         tempCtx.drawImage(pdfCanvas, 0, 0);
-        // Draw annotations
+        // Draw annotations (no scaling needed - canvas dimensions match)
         tempCtx.drawImage(drawCanvas, 0, 0);
         
         return tempCanvas;
