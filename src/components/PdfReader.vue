@@ -9,7 +9,8 @@ import { useHistory } from "../composables/useHistory";
 import { useWhiteBoard } from "../composables/useWhiteBoard";
 import EmptyState from "./EmptyState.vue";
 import { useWindowEvents } from "../composables/useWindowEvents";
-import { fileDataCache, setCurrentTab, openNewTab, whiteboardDataCache } from "../composables/useTabs";
+import { fileDataCache, setCurrentTab, openNewTab, whiteboardDataCache, whiteboardImportDataCache } from "../composables/useTabs";
+import { uuid } from "../composables/useUuid";
 
 // Cursor Style
 const cursorStyle = computed(() => {
@@ -67,7 +68,6 @@ const {
     pagesContainer,
     fileInput,
     renderedPages,
-    imagePage,
     pageCount,
     pageIndex,
     pageNum,
@@ -76,13 +76,7 @@ const {
     isLastPage,
     zoomPercentage,
     showWhiteboard,
-    resetPdfDoc,
-    hasSavedPdfDoc,
-    clearSavedState,
-    updateSavedState,
-    restoreSavedState,
     renderAllPages,
-    renderAllPagesAndSetupObservers,
     loadFile,
     processFileOpenResult,
     handleFileOpen,
@@ -109,9 +103,12 @@ const strokeChangeCallback = (action) => {
 };
 
 const captureSelectionCallback = (canvasIndex, selectedCanvas) => {
-    // Store as image and show as new page
+    // Ensure strokes are finalized before capture
     redrawAllStrokes(canvasIndex);
-    whiteboardDataCache.value = selectedCanvas.toDataURL();
+
+    // Open a blank whiteboard and schedule the selection as an image import
+    whiteboardDataCache.value = 'new-whiteboard';
+    whiteboardImportDataCache.value = selectedCanvas.toDataURL();
     openNewTab();
 }
 
@@ -212,7 +209,6 @@ const openWhiteboard = async () => {
         whiteboardImage.value = whiteboardDataCache.value;
     }
 
-
     // Update the tab with whiteboard data
     const whiteboardId = `Whiteboard_${Date.now()}`;
 
@@ -232,6 +228,80 @@ const openWhiteboard = async () => {
     nextTick(() => {
         renderAllPages().then(() => {
             renderWhiteboardCanvas();
+
+            // If we have a pending import (e.g., from selection), add it as an image stroke
+            const pendingData = whiteboardImportDataCache.value;
+            if (pendingData) {
+                try {
+                    const canvasIndex = pageIndex.value;
+                    const canvas = drawingCanvases.value[canvasIndex];
+                    if (!canvas) return;
+
+                    // Compute visible viewport center relative to the page
+                    const pageContainer = pagesContainer.value?.querySelector(`.page-container[data-page="${pageIndex.value + 1}"]`);
+                    const readerEl = pdfReader.value;
+
+                    let centerX = canvas.width / 2;
+                    let centerY = canvas.height / 2;
+
+                    if (pageContainer && readerEl) {
+                        const containerRect = pageContainer.getBoundingClientRect();
+                        const readerRect = readerEl.getBoundingClientRect();
+                        const visibleCenterX = (readerRect.left + readerRect.width / 2) - containerRect.left;
+                        const visibleCenterY = (readerRect.top + readerRect.height / 2) - containerRect.top;
+                        const scaleX = canvas.width / containerRect.width;
+                        const scaleY = canvas.height / containerRect.height;
+                        centerX = visibleCenterX * scaleX;
+                        centerY = visibleCenterY * scaleY;
+                    }
+
+                    // Load the image to get intrinsic size and scale to fit ~30% of canvas
+                    const img = new Image();
+                    img.onload = () => {
+                        const maxW = canvas.width * 0.3;
+                        const maxH = canvas.height * 0.3;
+                        let w = img.width;
+                        let h = img.height;
+                        if (w > maxW || h > maxH) {
+                            const ratio = Math.min(maxW / w, maxH / h);
+                            w = w * ratio;
+                            h = h * ratio;
+                        }
+
+                        const x = Math.max(0, Math.min(canvas.width - w, centerX - w / 2));
+                        const y = Math.max(0, Math.min(canvas.height - h, centerY - h / 2));
+
+                        const id = uuid();
+                        const imageStroke = [{
+                            id,
+                            type: 'image',
+                            x,
+                            y,
+                            width: w,
+                            height: h,
+                            imageData: pendingData,
+                            originalWidth: w,
+                            originalHeight: h
+                        }];
+
+                        const pageNumber = pageIndex.value + 1;
+                        if (!strokesPerPage.value[pageNumber]) {
+                            strokesPerPage.value[pageNumber] = [];
+                        }
+                        strokesPerPage.value[pageNumber].push(imageStroke);
+
+                        // Record in history and redraw
+                        strokeChangeCallback({ id, type: 'add', page: pageNumber, stroke: imageStroke });
+                        redrawAllStrokes(canvasIndex);
+
+                        whiteboardImportDataCache.value = null;
+                    };
+                    img.src = pendingData;
+                } catch (e) {
+                    console.error('Failed to import selection into whiteboard:', e);
+                    whiteboardImportDataCache.value = null;
+                }
+            }
         });
     });
 };
@@ -720,18 +790,6 @@ defineExpose({
                             <li class="nav-item" title="Download Whiteboard">
                                 <a href="#" class="nav-link" @click.prevent="downloadWhiteboard()">
                                     <i class="bi bi-download"></i>
-                                </a>
-                            </li>
-    
-                            <!-- Zoom -->
-                            <li class="nav-item">
-                                <a href="#" class="nav-link" @click.prevent="zoom(-1)" :class="{ disabled: isViewLocked || zoomPercentage <= minZoom }">
-                                    <i class="bi bi-zoom-out"></i>
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a href="#" class="nav-link" @click.prevent="zoom(1)" :class="{ disabled: isViewLocked || zoomPercentage >= maxZoom }">
-                                    <i class="bi bi-zoom-in"></i>
                                 </a>
                             </li>
                         </template>
