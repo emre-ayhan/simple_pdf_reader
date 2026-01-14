@@ -593,10 +593,43 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                     let newMaxY = startBounds.maxY;
                     
                     const handle = resizeHandle.value;
-                    if (handle.includes('n')) newMinY += dy;
-                    if (handle.includes('s')) newMaxY += dy;
-                    if (handle.includes('w')) newMinX += dx;
-                    if (handle.includes('e')) newMaxX += dx;
+                    const isCornerResize = ['nw', 'ne', 'sw', 'se'].includes(handle);
+                    
+                    if (isCornerResize) {
+                        // For corner resizes, maintain aspect ratio
+                        const baseWidth = Math.max(1, startBounds.maxX - startBounds.minX);
+                        const baseHeight = Math.max(1, startBounds.maxY - startBounds.minY);
+                        const baseAspectRatio = baseWidth / baseHeight;
+                        
+                        // Determine which corner and apply scaling accordingly
+                        if (handle === 'se') {
+                            // Bottom-right: use max of dx/dy with aspect ratio
+                            const scale = Math.max(dx / baseWidth, dy / baseHeight);
+                            newMaxX = startBounds.maxX + (scale * baseWidth);
+                            newMaxY = startBounds.maxY + (scale * baseHeight);
+                        } else if (handle === 'sw') {
+                            // Bottom-left: width decreases, height increases
+                            const scale = Math.max(-dx / baseWidth, dy / baseHeight);
+                            newMinX = startBounds.minX + (scale * baseWidth);
+                            newMaxY = startBounds.maxY + (scale * baseHeight);
+                        } else if (handle === 'nw') {
+                            // Top-left: both decrease
+                            const scale = Math.max(-dx / baseWidth, -dy / baseHeight);
+                            newMinX = startBounds.minX + (scale * baseWidth);
+                            newMinY = startBounds.minY + (scale * baseHeight);
+                        } else if (handle === 'ne') {
+                            // Top-right: width increases, height decreases
+                            const scale = Math.max(dx / baseWidth, -dy / baseHeight);
+                            newMaxX = startBounds.maxX + (scale * baseWidth);
+                            newMinY = startBounds.minY + (scale * baseHeight);
+                        }
+                    } else {
+                        // For edge resizes, allow independent scaling
+                        if (handle.includes('n')) newMinY += dy;
+                        if (handle.includes('s')) newMaxY += dy;
+                        if (handle.includes('w')) newMinX += dx;
+                        if (handle.includes('e')) newMaxX += dx;
+                    }
                     
                     // Convert from padded bounds to raw stroke bounds
                     const newRawMinX = newMinX + boundsPadding;
