@@ -176,9 +176,9 @@ startSession();
 const {
     whiteboardScale,
     whiteboardImage,
+    copyWhiteboardToClipboard,
     whiteboardRecentlyCopied,
     renderWhiteboardCanvas,
-    copyWhiteboardToClipboard,
     downloadWhiteboard,
 } = useWhiteBoard(showWhiteboard, drawingCanvases, drawingContexts, pdfCanvases, pdfReader, renderedPages);
 
