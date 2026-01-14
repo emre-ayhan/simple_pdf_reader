@@ -9,7 +9,7 @@ import { useHistory } from "../composables/useHistory";
 import { useWhiteBoard } from "../composables/useWhiteBoard";
 import EmptyState from "./EmptyState.vue";
 import { useWindowEvents } from "../composables/useWindowEvents";
-import { fileDataCache, setCurrentTab, openNewTab, whiteboardDataCache, whiteboardImportDataCache } from "../composables/useTabs";
+import { fileDataCache, setCurrentTab, openNewTab, whiteboardDataCache } from "../composables/useTabs";
 
 // Cursor Style
 const cursorStyle = computed(() => {
@@ -107,8 +107,7 @@ const captureSelectionCallback = (canvasIndex, selectedCanvas) => {
     redrawAllStrokes(canvasIndex);
 
     // Open a blank whiteboard and schedule the selection as an image import
-    whiteboardDataCache.value = 'new-whiteboard';
-    whiteboardImportDataCache.value = selectedCanvas.toDataURL();
+    whiteboardDataCache.value = selectedCanvas.toDataURL();
     openNewTab();
 }
 
@@ -191,23 +190,19 @@ const openWhiteboard = () => {
     }
 
     // Create a blank white canvas image
-    if (whiteboardDataCache.value === 'new-whiteboard') {
-        const blankCanvas = document.createElement('canvas');
-        const pixelRatio = window.devicePixelRatio || 1;
-        const displayWidth = (pdfReader.value?.clientWidth || window.innerWidth) - 40;
-        const displayHeight = (pdfReader.value?.clientHeight || window.innerHeight) - 40;
-        
-        blankCanvas.width = displayWidth * pixelRatio;
-        blankCanvas.height = displayHeight * pixelRatio;
-        
-        const ctx = blankCanvas.getContext('2d');
-        ctx.fillStyle = 'white';
-        ctx.fillRect(0, 0, blankCanvas.width, blankCanvas.height);
-        
-        whiteboardImage.value = blankCanvas.toDataURL();
-    } else {
-        whiteboardImage.value = whiteboardDataCache.value;
-    }
+    const blankCanvas = document.createElement('canvas');
+    const pixelRatio = window.devicePixelRatio || 1;
+    const displayWidth = (pdfReader.value?.clientWidth || window.innerWidth) - 40;
+    const displayHeight = (pdfReader.value?.clientHeight || window.innerHeight) - 40;
+
+    blankCanvas.width = displayWidth * pixelRatio;
+    blankCanvas.height = displayHeight * pixelRatio;
+    
+    const ctx = blankCanvas.getContext('2d');
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, blankCanvas.width, blankCanvas.height);
+
+    whiteboardImage.value = blankCanvas.toDataURL();
 
     // Update the tab with whiteboard data
     const whiteboardId = `Whiteboard_${Date.now()}`;
@@ -221,16 +216,15 @@ const openWhiteboard = () => {
     // Switch to whiteboard mode
     showWhiteboard.value = true;
     whiteboardScale.value = 1;
-    whiteboardDataCache.value = null;
     isFileLoaded.value = true;
-    
+
     // Render whiteboard page
     nextTick(() => {
         renderAllPages().then(() => {
             renderWhiteboardCanvas();
 
             // If we have a pending import (e.g., from selection), add it as an image stroke
-            const pendingData = whiteboardImportDataCache.value;
+            const pendingData = whiteboardDataCache.value;
             if (pendingData) {
                 try {
                     // Load the image and create the stroke
@@ -239,7 +233,7 @@ const openWhiteboard = () => {
                     console.error('Failed to import selection into whiteboard:', e);
                 }
 
-                whiteboardImportDataCache.value = null;
+                whiteboardDataCache.value = null;
             }
         });
     });

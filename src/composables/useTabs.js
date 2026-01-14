@@ -11,8 +11,6 @@ const getEmptyStateTab = () => ({
 
 const fileDataCache = ref(null);
 const whiteboardDataCache = ref(null);
-// Holds a data URL to import as an image onto a newly opened whiteboard
-const whiteboardImportDataCache = ref(null);
 const tabHistory = ref([0]);
 const tabs = ref([getEmptyStateTab()]);
 const activeTabIndex = ref(0);
@@ -117,5 +115,4 @@ export {
     markAsActive,
     fileDataCache,
     whiteboardDataCache,
-    whiteboardImportDataCache
 };
