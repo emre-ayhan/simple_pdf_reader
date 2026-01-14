@@ -244,14 +244,11 @@ const openWhiteboard = async () => {
     } else {
         whiteboardImage.value = whiteboardDataCache.value;
     }
-    
-    whiteboardScale.value = 1;
-    whiteboardDataCache.value = null;
-    
-    isFileLoaded.value = true;
-    
+
+
     // Update the tab with whiteboard data
     const whiteboardId = `Whiteboard_${Date.now()}`;
+
     setCurrentTab({
         id: whiteboardId,
         filename: whiteboardId,
@@ -260,17 +257,14 @@ const openWhiteboard = async () => {
     
     // Switch to whiteboard mode
     showWhiteboard.value = true;
-    temporaryState.value = true;
-    resetPdfDoc(); // Temporarily clear PDF doc
-    pageCount.value = 1;
-    strokesPerPage.value = { 1: [] };
-    renderedPages.value.clear();
-    drawingContexts.value = [];
+    whiteboardScale.value = 1;
+    whiteboardDataCache.value = null;
+    isFileLoaded.value = true;
     
     // Render whiteboard page
     nextTick(() => {
         renderAllPages().then(() => {
-            handleZoomLevel(100);
+            renderWhiteboardCanvas();
         });
     });
 };
