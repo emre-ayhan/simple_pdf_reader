@@ -38,6 +38,7 @@ onBeforeUnmount(() => {
 </script>
 <template>
     <ul class="nav nav-tabs fixed-top" id="appTabs" role="tablist">
+        <!-- Nav Menu -->
         <li class="nav-item dropdown">
             <a class="nav-link nav-link-menu" data-bs-toggle="dropdown" href="#" role="button" aria-expanded="false">
                 Menu
