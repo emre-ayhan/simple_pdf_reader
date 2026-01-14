@@ -1620,18 +1620,17 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
 
                 canvas.width = canvasWidth * pixelRatio;
                 canvas.height = canvasHeight * pixelRatio;
-                canvas.style.width = '100%';
-                canvas.style.height = 'auto';
+                canvas.style.width = `${canvasWidth}px`;
+                canvas.style.height = `${canvasHeight}px`;
 
                 drawCanvas.width = canvasWidth * pixelRatio;
                 drawCanvas.height = canvasHeight * pixelRatio;
-                drawCanvas.style.width = '100%';
-                drawCanvas.style.height = '100%';
+                drawCanvas.style.width = `${canvasWidth}px`;
+                drawCanvas.style.height = `${canvasHeight}px`;
 
                 const ctx = canvas.getContext('2d');
-                ctx.scale(pixelRatio, pixelRatio);
-                ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-                ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
+                ctx.clearRect(0, 0, canvasWidth * pixelRatio, canvasHeight * pixelRatio);
+                ctx.drawImage(img, 0, 0, canvasWidth * pixelRatio, canvasHeight * pixelRatio);
 
                 drawingContexts.value[0] = drawCanvas.getContext('2d');
                 redrawAllStrokes(0);

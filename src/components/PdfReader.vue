@@ -9,7 +9,7 @@ import { useHistory } from "../composables/useHistory";
 import { useWhiteBoard } from "../composables/useWhiteBoard";
 import EmptyState from "./EmptyState.vue";
 import { useWindowEvents } from "../composables/useWindowEvents";
-import { fileDataCache } from "../composables/useTabs";
+import { fileDataCache, setCurrentTab, openNewTab, whiteboardDataCache } from "../composables/useTabs";
 
 // Cursor Style
 const cursorStyle = computed(() => {
@@ -110,30 +110,9 @@ const strokeChangeCallback = (action) => {
 
 const captureSelectionCallback = (canvasIndex, selectedCanvas) => {
     // Store as image and show as new page
-    whiteboardImage.value = selectedCanvas.toDataURL();
-    whiteboardScale.value = 1;
-
-    // Save current PDF state and zoom settings
-    updateSavedState();
-
-    // Switch to whiteboard mode
-    showWhiteboard.value = true;
-    temporaryState.value = true;
-    resetPdfDoc(); // Temporarily clear PDF doc
-    pageCount.value = 1;
-    strokesPerPage.value = { 1: [] };
-    renderedPages.value.clear();
-    drawingContexts.value = [];
-    
-    // Clear selection rectangle from original canvas
     redrawAllStrokes(canvasIndex);
-    
-    // Render whiteboard page
-    nextTick(() => {
-        renderAllPages().then(() => {
-            handleZoomLevel(100);
-        });
-    });
+    whiteboardDataCache.value = selectedCanvas.toDataURL();
+    openNewTab();
 }
 
 const {
@@ -236,10 +215,69 @@ const {
     whiteboardImage,
     whiteboardRecentlyCopied,
     renderWhiteboardCanvas,
-    closeWhiteboard,
     copyWhiteboardToClipboard,
     downloadWhiteboard,
 } = useWhiteBoard(showWhiteboard, drawingCanvases, drawingContexts, pdfCanvases, pdfReader, renderedPages, whiteboardRenderCallback, closeWhiteboardCallback);
+
+// Open a blank whiteboard page
+const openWhiteboard = async () => {
+    // Save current PDF state if any
+    if (isFileLoaded.value) {
+        openNewTab();
+        whiteboardDataCache.value = 'new-whiteboard';
+        return;
+    }
+
+    if (!whiteboardDataCache.value) return;
+
+    // Create a blank white canvas image
+    if (whiteboardDataCache.value === 'new-whiteboard') {
+        const blankCanvas = document.createElement('canvas');
+        const pixelRatio = window.devicePixelRatio || 1;
+        const displayWidth = (pdfReader.value?.clientWidth || window.innerWidth) - 40;
+        const displayHeight = (pdfReader.value?.clientHeight || window.innerHeight) - 40;
+        
+        blankCanvas.width = displayWidth * pixelRatio;
+        blankCanvas.height = displayHeight * pixelRatio;
+        
+        const ctx = blankCanvas.getContext('2d');
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, blankCanvas.width, blankCanvas.height);
+        
+        whiteboardImage.value = blankCanvas.toDataURL();
+    } else {
+        whiteboardImage.value = whiteboardDataCache.value;
+    }
+    
+    whiteboardScale.value = 1;
+    whiteboardDataCache.value = null;
+    
+    isFileLoaded.value = true;
+    
+    // Update the tab with whiteboard data
+    const whiteboardId = `Whiteboard_${Date.now()}`;
+    setCurrentTab({
+        id: whiteboardId,
+        filename: whiteboardId,
+        type: 'whiteboard',
+    });
+    
+    // Switch to whiteboard mode
+    showWhiteboard.value = true;
+    temporaryState.value = true;
+    resetPdfDoc(); // Temporarily clear PDF doc
+    pageCount.value = 1;
+    strokesPerPage.value = { 1: [] };
+    renderedPages.value.clear();
+    drawingContexts.value = [];
+    
+    // Render whiteboard page
+    nextTick(() => {
+        renderAllPages().then(() => {
+            handleZoomLevel(100);
+        });
+    });
+};
 
 // Toolbar Actions
 const isViewLocked = ref(false);
@@ -360,19 +398,16 @@ const handleZoomLevel = (percentage) => {
 
     percentage = Math.min(Math.max(minZoom, percentage), maxZoom);
 
-    let index = pageIndex.value;
-
     if (showWhiteboard.value) {
-        whiteboardScale.value = +(percentage / 100).toFixed(2);
+        // whiteboardScale.value = +(percentage / 100).toFixed(2);
         renderWhiteboardCanvas();
-        index = 0;
     }
 
     zoomPercentage.value = percentage;
 
     // Restore scroll position to current page after DOM updates
     nextTick(() => {
-        scrollToPage(index);
+        scrollToPage(pageIndex.value);
     });
 };
 
@@ -540,6 +575,11 @@ useWindowEvents(fileId, {
 let unsubscribeFileOpen = null;
 
 onMounted(() => {
+    if (whiteboardDataCache.value) {
+        openWhiteboard();
+        return;
+    }
+
     if (fileDataCache.value) {
         processFileOpenResult(fileDataCache.value);
         fileDataCache.value = null;
@@ -577,6 +617,7 @@ defineExpose({
     deletePage: () => {
         deletePage(pageIndex.value, addToHistory);
     },
+    openWhiteboard,
 })
 </script>
 <template>
@@ -722,11 +763,6 @@ defineExpose({
                             <li class="nav-item" title="Download Whiteboard">
                                 <a href="#" class="nav-link" @click.prevent="downloadWhiteboard()">
                                     <i class="bi bi-download"></i>
-                                </a>
-                            </li>
-                            <li class="nav-item" title="Close Whiteboard">
-                                <a href="#" class="nav-link" @click.prevent="closeWhiteboard()">
-                                    <i class="bi bi-x-lg"></i>
                                 </a>
                             </li>
     

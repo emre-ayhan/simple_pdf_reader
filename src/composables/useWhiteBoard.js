@@ -41,7 +41,7 @@ export function useWhiteBoard(showWhiteboard, drawingCanvases, drawingContexts, 
             const canvasDisplayWidth = Math.max(displayWidth, safeWidth);
             const canvasDisplayHeight = Math.max(displayHeight, safeHeight);
             
-            // Canvas size should be display size * pixelRatio for sharp rendering
+            // Canvas size should be display size * pixelRatio for sharp rendering (like PDF pages)
             canvas.width = canvasDisplayWidth * pixelRatio;
             canvas.height = canvasDisplayHeight * pixelRatio;
             canvas.style.width = `${canvasDisplayWidth}px`;
@@ -53,13 +53,11 @@ export function useWhiteBoard(showWhiteboard, drawingCanvases, drawingContexts, 
             drawCanvas.style.height = `${canvasDisplayHeight}px`;
 
             const ctx = canvas.getContext('2d');
-            ctx.scale(pixelRatio, pixelRatio);
-            ctx.clearRect(0, 0, canvasDisplayWidth, canvasDisplayHeight);
+            ctx.clearRect(0, 0, canvasDisplayWidth * pixelRatio, canvasDisplayHeight * pixelRatio);
             // Draw the captured image at display size (the image already has high-res pixel data)
             ctx.drawImage(img, 0, 0, displayWidth, displayHeight);
 
             const drawCtx = drawCanvas.getContext('2d');
-            drawCtx.scale(pixelRatio, pixelRatio);
             drawingContexts.value[0] = drawCtx;
             renderedPages.value.add(1);
 
@@ -69,15 +67,6 @@ export function useWhiteBoard(showWhiteboard, drawingCanvases, drawingContexts, 
         };
 
         img.src = whiteboardImage.value;
-    };
-
-    const closeWhiteboard = () => {
-        showWhiteboard.value = false;
-        whiteboardScale.value = 1;
-        
-        if (typeof closeCallback === 'function') {
-            closeCallback();
-        }
     };
 
     const getWhiteboardCanvas = () => {
@@ -144,7 +133,6 @@ export function useWhiteBoard(showWhiteboard, drawingCanvases, drawingContexts, 
         whiteboardRecentlyCopied,
         renderedPages,
         renderWhiteboardCanvas,
-        closeWhiteboard,
         copyWhiteboardToClipboard,
         downloadWhiteboard
     };

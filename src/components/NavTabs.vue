@@ -3,7 +3,7 @@ import { onBeforeUnmount, onMounted } from 'vue';
 import { Electron } from '../composables/useElectron';
 import { openNewTab, closeTab, activeTabIndex, activeTab, tabs, tabHistory, openTabs, markAsActive, isLastTabOnEmptyState, fileHasUnsavedChanges, handleElectronButtonClick, fileDataCache } from '../composables/useTabs';
 
-const emit = defineEmits(['file-open', 'file-save', 'file-delete-page']);
+const emit = defineEmits(['file-open', 'file-save', 'file-delete-page', 'open-whiteboard']);
 
 const electronButtons = [
     { action: 'fullscreen', icon: 'bi-arrows-fullscreen', title: 'Fullscreen' },
@@ -55,6 +55,13 @@ onBeforeUnmount(() => {
                         <a class="dropdown-item small" :class="{ disabled: !fileHasUnsavedChanges(activeTab?.id) || activeTab.emptyState }" href="#" @click.prevent="emit('file-save')">
                             <i class="bi bi-floppy me-1"></i>
                             Save (Ctrl+S)
+                        </a>
+                    </li>
+                    <li><hr class="text-primary my-1"></li>
+                    <li>
+                        <a class="dropdown-item small" href="#" @click.prevent="emit('open-whiteboard')">
+                            <i class="bi bi-pencil-square me-1"></i>
+                            New Whiteboard
                         </a>
                     </li>
                     <li><hr class="text-primary my-1"></li>
