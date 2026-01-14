@@ -221,14 +221,10 @@ const {
 
 // Open a blank whiteboard page
 const openWhiteboard = async () => {
-    // Save current PDF state if any
     if (isFileLoaded.value) {
         openNewTab();
-        whiteboardDataCache.value = 'new-whiteboard';
         return;
     }
-
-    if (!whiteboardDataCache.value) return;
 
     // Create a blank white canvas image
     if (whiteboardDataCache.value === 'new-whiteboard') {
@@ -399,7 +395,7 @@ const handleZoomLevel = (percentage) => {
     percentage = Math.min(Math.max(minZoom, percentage), maxZoom);
 
     if (showWhiteboard.value) {
-        // whiteboardScale.value = +(percentage / 100).toFixed(2);
+        whiteboardScale.value = +(percentage / 100).toFixed(2);
         renderWhiteboardCanvas();
     }
 

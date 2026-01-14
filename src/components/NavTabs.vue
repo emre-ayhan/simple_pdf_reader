@@ -1,9 +1,14 @@
 <script setup>
 import { onBeforeUnmount, onMounted } from 'vue';
 import { Electron } from '../composables/useElectron';
-import { openNewTab, closeTab, activeTabIndex, activeTab, tabs, tabHistory, openTabs, markAsActive, isLastTabOnEmptyState, fileHasUnsavedChanges, handleElectronButtonClick, fileDataCache } from '../composables/useTabs';
+import { openNewTab, closeTab, activeTabIndex, activeTab, tabs, tabHistory, openTabs, markAsActive, isLastTabOnEmptyState, fileHasUnsavedChanges, handleElectronButtonClick, fileDataCache, whiteboardDataCache } from '../composables/useTabs';
 
-const emit = defineEmits(['file-open', 'file-save', 'file-delete-page', 'open-whiteboard']);
+const emit = defineEmits(['file-open', 'file-save', 'file-delete-page', 'new-whiteboard']);
+
+const openWhiteboard = () => {
+    whiteboardDataCache.value = 'new-whiteboard';
+    emit('new-whiteboard');
+};
 
 const electronButtons = [
     { action: 'fullscreen', icon: 'bi-arrows-fullscreen', title: 'Fullscreen' },
@@ -59,7 +64,7 @@ onBeforeUnmount(() => {
                     </li>
                     <li><hr class="text-primary my-1"></li>
                     <li>
-                        <a class="dropdown-item small" href="#" @click.prevent="emit('open-whiteboard')">
+                        <a class="dropdown-item small" href="#" @click.prevent="openWhiteboard">
                             <i class="bi bi-pencil-square me-1"></i>
                             New Whiteboard
                         </a>

@@ -3,7 +3,6 @@ import NavTabs from './components/NavTabs.vue';
 import PdfReader from './components/PdfReader.vue';
 import PageModal from './components/PageModal.vue';
 import { ref } from 'vue';
-import { openNewTab, activeTabIndex } from './composables/useTabs';
 
 const reader = ref(null);
 
@@ -22,10 +21,9 @@ const deletePage = () => {
     reader.value.deletePage();
 };
 
-const openWhiteboard = () => {
+const newWhiteboard = () => {
     if (!(reader.value)) return;
-    openNewTab();
-    reader.value.openWhiteboard(activeTabIndex.value);
+    reader.value.openWhiteboard();
 };
 </script>
 <template>
@@ -33,7 +31,7 @@ const openWhiteboard = () => {
         @file-open="openFile" 
         @file-save="saveFile" 
         @file-delete-page="deletePage"
-        @open-whiteboard="openWhiteboard"
+        @new-whiteboard="newWhiteboard"
     >
         <PdfReader ref="reader" />
     </nav-tabs>
