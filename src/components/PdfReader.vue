@@ -27,10 +27,6 @@ const cursorStyle = computed(() => {
 });
 
 // File Management
-const showWhiteboardCallback = () => {
-    renderWhiteboardCanvas();
-}
-
 const loadFileCallback = () => {
     resetHistory();
     whiteboardImage.value = null;
@@ -97,7 +93,7 @@ const {
     scrollToPage,
     deletedPages,
     deletePage,
-} = useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallback, fileSavedCallback, showWhiteboardCallback);
+} = useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallback, fileSavedCallback);
 
 // Drag and Drop Handlers
 const {
@@ -134,7 +130,9 @@ const captureSelectionCallback = (canvasIndex, selectedCanvas) => {
     
     // Render whiteboard page
     nextTick(() => {
-        renderAllPages();
+        renderAllPages().then(() => {
+            handleZoomLevel(100);
+        });
     });
 }
 
@@ -435,16 +433,19 @@ const handleZoomLevel = (percentage) => {
 
     percentage = Math.min(Math.max(minZoom, percentage), maxZoom);
 
+    let index = pageIndex.value;
+
     if (showWhiteboard.value) {
         whiteboardScale.value = +(percentage / 100).toFixed(2);
         renderWhiteboardCanvas();
+        index = 0;
     }
 
     zoomPercentage.value = percentage;
 
     // Restore scroll position to current page after DOM updates
     nextTick(() => {
-        scrollToPage(pageIndex.value);
+        scrollToPage(index);
     });
 };
 

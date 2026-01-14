@@ -9,7 +9,7 @@ import { setCurrentTab } from "./useTabs";
 
 GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.449/build/pdf.worker.min.mjs';
 
-export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallback, fileSavedCallback, showWhiteboardCallback) {
+export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallback, fileSavedCallback) {
     const { set: storeSet, get: storeGet } = useStore();
     const fileId = uuid();
 
@@ -105,6 +105,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             entries.forEach(async entry => {
                 if (entry.isIntersecting) {
                     const pageNumber = parseInt(entry.target.getAttribute('data-page'));
+                    const pageIndex = pageNumber - 1;
                     
                     if (!pdfDoc || renderedPages.value.has(pageNumber)) return;
     
@@ -122,8 +123,8 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
                     const viewport = page.getViewport({ scale });
                     
                     // Get canvas elements
-                    const canvas = pdfCanvases.value[pageNumber - 1];
-                    const drawCanvas = drawingCanvases.value[pageNumber - 1];
+                    const canvas = pdfCanvases.value[pageIndex];
+                    const drawCanvas = drawingCanvases.value[pageIndex];
                     
                     if (!canvas || !drawCanvas) return;
                     // Reset inline styles that might have been set in whiteboard mode
@@ -140,7 +141,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
                     drawCanvas.width = viewport.width;
                     
                     // Initialize drawing context
-                    drawingContexts.value[pageNumber - 1] = drawCanvas.getContext('2d');
+                    drawingContexts.value[pageIndex] = drawCanvas.getContext('2d');
                     
                     const renderContext = {
                         canvasContext: ctx,
@@ -150,7 +151,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
                     await page.render(renderContext).promise;
                     
                     // Render text layer for text selection
-                    const textLayerDiv = textLayerDivs.value[pageNumber - 1];
+                    const textLayerDiv = textLayerDivs.value[pageIndex];
                     if (textLayerDiv) {
                         // Clear any existing text content
                         textLayerDiv.innerHTML = '';
@@ -246,7 +247,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
                     
                     renderedPages.value.add(pageNumber);
                     // Repaint saved annotations after PDF render
-                    lazyLoadCallback(pageNumber - 1);
+                    lazyLoadCallback(pageIndex);
                 }
             });
         }, options);
@@ -316,9 +317,9 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         })
     }
     
-    const scrollToPage = (page_index) => {
-        if (!isNaN(page_index)) {
-            pageIndex.value = page_index;
+    const scrollToPage = (targetPageIndex) => {
+        if (!isNaN(targetPageIndex)) {
+            pageIndex.value = targetPageIndex;
         }
 
         const page = activePage.value;
@@ -381,15 +382,15 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         if (showWhiteboard.value) {
             // Whiteboard mode: render single page with background image
             pageCount.value = 1;
+            pageIndex.value = 0;
             strokesPerPage.value = { 1: strokesPerPage.value[1] || [] };
-            await nextTick();
-            showWhiteboardCallback();
             return;
         }
 
         if (imagePage.value) {
             pageCount.value = 1;
             await renderImageFileCallback(imagePage.value);
+            pageIndex.value = 0;
             return;
         }
         
@@ -441,7 +442,6 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
                 if (imagePage.value) return;
                 setupIntersectionObserver();
                 setupLazyLoadObserver();
-                scrollToPage();
             });
         });
     };
