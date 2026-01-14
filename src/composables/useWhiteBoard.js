@@ -1,6 +1,6 @@
 import { ref } from 'vue';
 
-export function useWhiteBoard(showWhiteboard, drawingCanvases, drawingContexts, pdfCanvases, pdfReader, renderedPages, renderCallback, closeCallback) {
+export function useWhiteBoard(showWhiteboard, drawingCanvases, drawingContexts, pdfCanvases, pdfReader, renderedPages) {
 
     const whiteboardScale = ref(1);
     const whiteboardImage = ref(null);
@@ -60,10 +60,6 @@ export function useWhiteBoard(showWhiteboard, drawingCanvases, drawingContexts, 
             const drawCtx = drawCanvas.getContext('2d');
             drawingContexts.value[0] = drawCtx;
             renderedPages.value.add(1);
-
-            if (typeof renderCallback === 'function') {
-                renderCallback();
-            }
         };
 
         img.src = whiteboardImage.value;

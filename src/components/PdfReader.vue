@@ -164,7 +164,6 @@ const {
     addToHistory,
     undo,
     redo,
-    temporaryState,
     canUndo,
     canRedo,
     resetHistory, 
@@ -178,38 +177,6 @@ startSession();
 
 
 // Whiteboard Management
-const whiteboardRenderCallback = () => {
-    redrawAllStrokes(0);
-};
-
-const closeWhiteboardCallback = () => {
-    whiteboardImage.value = null;
-    renderedPages.value.clear();
-    drawingContexts.value = [];
-
-    if (!hasSavedPdfDoc() && !imagePage.value) {
-        // No PDF or image to return to
-        resetPdfDoc();
-        imagePage.value = null;
-        isFileLoaded.value = false;
-        pageCount.value = 0;
-        pageIndex.value = 0;
-        strokesPerPage.value = {};
-        return;
-    }
-
-    isFileLoaded.value = true;
-    restoreSavedState();
-    resetHistory(true); // Reset temporary history
-    renderAllPagesAndSetupObservers();
-    clearSavedState();
-    
-    // Scroll to the restored page index after DOM updates
-    nextTick(() => {
-        scrollToPage(pageIndex.value);
-    });
-};
-
 const {
     whiteboardScale,
     whiteboardImage,
@@ -217,7 +184,7 @@ const {
     renderWhiteboardCanvas,
     copyWhiteboardToClipboard,
     downloadWhiteboard,
-} = useWhiteBoard(showWhiteboard, drawingCanvases, drawingContexts, pdfCanvases, pdfReader, renderedPages, whiteboardRenderCallback, closeWhiteboardCallback);
+} = useWhiteBoard(showWhiteboard, drawingCanvases, drawingContexts, pdfCanvases, pdfReader, renderedPages);
 
 // Open a blank whiteboard page
 const openWhiteboard = async () => {
