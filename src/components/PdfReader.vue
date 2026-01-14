@@ -10,7 +10,6 @@ import { useWhiteBoard } from "../composables/useWhiteBoard";
 import EmptyState from "./EmptyState.vue";
 import { useWindowEvents } from "../composables/useWindowEvents";
 import { fileDataCache, setCurrentTab, openNewTab, whiteboardDataCache, whiteboardImportDataCache } from "../composables/useTabs";
-import { uuid } from "../composables/useUuid";
 
 // Cursor Style
 const cursorStyle = computed(() => {
@@ -86,6 +85,7 @@ const {
     scrollToPage,
     deletedPages,
     deletePage,
+    createImage,
     createImageImportHandler,
 } = useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallback, fileSavedCallback);
 
@@ -255,48 +255,9 @@ const openWhiteboard = async () => {
                         centerY = visibleCenterY * scaleY;
                     }
 
-                    // Load the image to get intrinsic size and scale to fit ~30% of canvas
-                    const img = new Image();
-                    img.onload = () => {
-                        const maxW = canvas.width * 0.3;
-                        const maxH = canvas.height * 0.3;
-                        let w = img.width;
-                        let h = img.height;
-                        if (w > maxW || h > maxH) {
-                            const ratio = Math.min(maxW / w, maxH / h);
-                            w = w * ratio;
-                            h = h * ratio;
-                        }
-
-                        const x = Math.max(0, Math.min(canvas.width - w, centerX - w / 2));
-                        const y = Math.max(0, Math.min(canvas.height - h, centerY - h / 2));
-
-                        const id = uuid();
-                        const imageStroke = [{
-                            id,
-                            type: 'image',
-                            x,
-                            y,
-                            width: w,
-                            height: h,
-                            imageData: pendingData,
-                            originalWidth: w,
-                            originalHeight: h
-                        }];
-
-                        const pageNumber = pageIndex.value + 1;
-                        if (!strokesPerPage.value[pageNumber]) {
-                            strokesPerPage.value[pageNumber] = [];
-                        }
-                        strokesPerPage.value[pageNumber].push(imageStroke);
-
-                        // Record in history and redraw
-                        strokeChangeCallback({ id, type: 'add', page: pageNumber, stroke: imageStroke });
-                        redrawAllStrokes(canvasIndex);
-
+                    // Load the image and create the stroke
+                    createImage(pendingData, redrawAllStrokes, strokeChangeCallback);
                         whiteboardImportDataCache.value = null;
-                    };
-                    img.src = pendingData;
                 } catch (e) {
                     console.error('Failed to import selection into whiteboard:', e);
                     whiteboardImportDataCache.value = null;

@@ -831,6 +831,78 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         callback({ type: 'delete-page', page });
     };
 
+    const createImage = (src, redrawAllStrokesCallback, addToHistoryCallback) => {
+        const img = new Image();
+        img.onload = () => {
+            // Add image to current page in visible viewport
+            const canvasIndex = pageIndex.value;
+            const canvas = drawingCanvases.value[canvasIndex];
+            if (!canvas) return;
+            
+            // Calculate visible viewport position on the canvas
+            const pageContainer = pagesContainer.value?.querySelector(`.page-container[data-page="${pageIndex.value + 1}"]`);
+            const pdfReaderEl = pdfReader.value;
+            
+            let viewportCenterX = canvas.width / 2;
+            let viewportCenterY = canvas.height / 2;
+            
+            if (pageContainer && pdfReaderEl) {
+                const containerRect = pageContainer.getBoundingClientRect();
+                const readerRect = pdfReaderEl.getBoundingClientRect();
+                
+                // Calculate visible center relative to the page
+                const visibleCenterX = (readerRect.left + readerRect.width / 2) - containerRect.left;
+                const visibleCenterY = (readerRect.top + readerRect.height / 2) - containerRect.top;
+                
+                // Convert to canvas coordinates
+                const scaleX = canvas.width / containerRect.width;
+                const scaleY = canvas.height / containerRect.height;
+                
+                viewportCenterX = visibleCenterX * scaleX;
+                viewportCenterY = visibleCenterY * scaleY;
+            }
+            
+            const maxWidth = canvas.width * 0.5;
+            const maxHeight = canvas.height * 0.5;
+            let width = img.width;
+            let height = img.height;
+            
+            // Scale down if too large
+            if (width > maxWidth || height > maxHeight) {
+                const ratio = Math.min(maxWidth / width, maxHeight / height);
+                width *= ratio;
+                height *= ratio;
+            }
+            
+            // Center the image in the visible viewport
+            const x = Math.max(0, Math.min(canvas.width - width, viewportCenterX - width / 2));
+            const y = Math.max(0, Math.min(canvas.height - height, viewportCenterY - height / 2));
+            
+            const imageStroke = [{
+                type: 'image',
+                x,
+                y,
+                width,
+                height,
+                imageData: src,
+                originalWidth: width,
+                originalHeight: height
+            }];
+            
+            const strokeId = uuid();
+            const pageNumber = pageIndex.value + 1;
+            if (!strokesPerPage.value[pageNumber]) {
+                strokesPerPage.value[pageNumber] = [];
+            }
+            strokesPerPage.value[pageNumber].push(imageStroke);
+            
+            redrawAllStrokesCallback(canvasIndex);
+            addToHistoryCallback({ type: 'add', canvasIndex, strokeId, stroke: imageStroke });
+        };
+
+        img.src = src;
+    }
+
     const createImageImportHandler = (redrawAllStrokesCallback, addToHistoryCallback) => {
         return async (event) => {
             const file = event.target.files?.[0];
@@ -838,74 +910,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             
             const reader = new FileReader();
             reader.onload = (e) => {
-                const img = new Image();
-                img.onload = () => {
-                    // Add image to current page in visible viewport
-                    const canvasIndex = pageIndex.value;
-                    const canvas = drawingCanvases.value[canvasIndex];
-                    if (!canvas) return;
-                    
-                    // Calculate visible viewport position on the canvas
-                    const pageContainer = pagesContainer.value?.querySelector(`.page-container[data-page="${pageIndex.value + 1}"]`);
-                    const pdfReaderEl = pdfReader.value;
-                    
-                    let viewportCenterX = canvas.width / 2;
-                    let viewportCenterY = canvas.height / 2;
-                    
-                    if (pageContainer && pdfReaderEl) {
-                        const containerRect = pageContainer.getBoundingClientRect();
-                        const readerRect = pdfReaderEl.getBoundingClientRect();
-                        
-                        // Calculate visible center relative to the page
-                        const visibleCenterX = (readerRect.left + readerRect.width / 2) - containerRect.left;
-                        const visibleCenterY = (readerRect.top + readerRect.height / 2) - containerRect.top;
-                        
-                        // Convert to canvas coordinates
-                        const scaleX = canvas.width / containerRect.width;
-                        const scaleY = canvas.height / containerRect.height;
-                        
-                        viewportCenterX = visibleCenterX * scaleX;
-                        viewportCenterY = visibleCenterY * scaleY;
-                    }
-                    
-                    const maxWidth = canvas.width * 0.3;
-                    const maxHeight = canvas.height * 0.3;
-                    let width = img.width;
-                    let height = img.height;
-                    
-                    // Scale down if too large
-                    if (width > maxWidth || height > maxHeight) {
-                        const ratio = Math.min(maxWidth / width, maxHeight / height);
-                        width *= ratio;
-                        height *= ratio;
-                    }
-                    
-                    // Center the image in the visible viewport
-                    const x = Math.max(0, Math.min(canvas.width - width, viewportCenterX - width / 2));
-                    const y = Math.max(0, Math.min(canvas.height - height, viewportCenterY - height / 2));
-                    
-                    const imageStroke = [{
-                        type: 'image',
-                        x,
-                        y,
-                        width,
-                        height,
-                        imageData: e.target.result,
-                        originalWidth: width,
-                        originalHeight: height
-                    }];
-                    
-                    const strokeId = uuid();
-                    const pageNumber = pageIndex.value + 1;
-                    if (!strokesPerPage.value[pageNumber]) {
-                        strokesPerPage.value[pageNumber] = [];
-                    }
-                    strokesPerPage.value[pageNumber].push(imageStroke);
-                    
-                    redrawAllStrokesCallback(canvasIndex);
-                    addToHistoryCallback({ type: 'add', canvasIndex, strokeId, stroke: imageStroke });
-                };
-                img.src = e.target.result;
+                createImage(e.target.result, redrawAllStrokesCallback, addToHistoryCallback);
             };
             reader.readAsDataURL(file);
             
@@ -963,5 +968,6 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         deletedPages,
         deletePage,
         createImageImportHandler,
+        createImage
     }
 }
