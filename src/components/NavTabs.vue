@@ -3,7 +3,14 @@ import { onBeforeUnmount, onMounted } from 'vue';
 import { Electron } from '../composables/useElectron';
 import { openNewTab, closeTab, activeTabIndex, activeTab, tabs, tabHistory, openTabs, markAsActive, isLastTabOnEmptyState, fileHasUnsavedChanges, handleElectronButtonClick, fileDataCache, whiteboardDataCache } from '../composables/useTabs';
 
-const emit = defineEmits(['file-open', 'file-save', 'file-delete-page', 'new-whiteboard']);
+const emit = defineEmits([
+    'file-open',
+    'file-save',
+    'new-whiteboard',
+    'page-first',
+    'page-last',
+    'page-delete'
+]);
 
 const openWhiteboard = () => {
     whiteboardDataCache.value = 'new-whiteboard';
@@ -72,7 +79,19 @@ onBeforeUnmount(() => {
                     <li><hr class="text-primary my-1"></li>
                     <li><h6 class="dropdown-header">Page</h6></li>
                     <li>
-                        <a class="dropdown-item small" :class="{ disabled: activeTab.emptyState, 'text-danger': !activeTab.emptyState }" href="#" @click.prevent="emit('file-delete-page')">
+                        <a class="dropdown-item small" :class="{ disabled: activeTab.emptyState }" href="#" @click.prevent="emit('page-first')">
+                            <i class="bi bi-skip-start-fill me-1"></i>
+                            First Page (Home)
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item small" :class="{ disabled: activeTab.emptyState }" href="#" @click.prevent="emit('page-last')">
+                            <i class="bi bi-skip-end-fill me-1"></i>
+                            Last Page (End)
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item small" :class="{ disabled: activeTab.emptyState, 'text-danger': !activeTab.emptyState }" href="#" @click.prevent="emit('page-delete')">
                             <i class="bi bi-trash3 me-1"></i>
                             Delete Page (Del)
                         </a>

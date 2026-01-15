@@ -578,6 +578,12 @@ defineExpose({
         deletePage(pageIndex.value, addToHistory);
     },
     openWhiteboard,
+    scrollToFirstPage: () => {
+        scrollToPage(0)
+    },
+    scrollToLastPage: () => {
+        scrollToPage(pageCount.value - 1)
+    }
 })
 </script>
 <template>
@@ -696,6 +702,51 @@ defineExpose({
                                 <i class="bi bi-arrow-clockwise"></i>
                             </a>
                         </li>
+
+                        <template v-if="!showWhiteboard">
+                            <!-- Pagination -->
+                            <li class="nav-item vr bg-white mx-2"></li>
+                            <li class="nav-item d-none d-lg-block">
+                                <div class="input-group">
+                                    <input type="text" class="form-control-plaintext" :value="pageNum" @input="handlePageNumber" :disabled="showWhiteboard" />
+                                    <div class="input-group-text bg-transparent border-0 text-secondary p-0 pe-1">/ {{ pageCount }}</div>
+                                </div>
+                            </li>
+                            <li class="nav-item">
+                                <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex - 1)" :class="{ disabled: showWhiteboard || isFirstPage }" title="Previous Page">
+                                    <i class="bi bi-chevron-up"></i>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex + 1)" :class="{ disabled: showWhiteboard || isLastPage }" title="Next Page">
+                                    <i class="bi bi-chevron-down"></i>
+                                </a>
+                            </li>
+                            
+                            <!-- Zoom -->
+                            <li class="nav-item vr bg-white mx-2"></li>
+                            <li class="nav-item">
+                                <a href="#" class="nav-link" @click.prevent="zoom(-1)" :class="{ disabled: isViewLocked || zoomPercentage <= minZoom }">
+                                    <i class="bi bi-zoom-out"></i>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="#" class="nav-link" @click.prevent="zoom(1)" :class="{ disabled: isViewLocked || zoomPercentage >= maxZoom }">
+                                    <i class="bi bi-zoom-in"></i>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <select name="zoom-level" id="zoom-level" class="form-control-plaintext" @change="onZoomLevelChange" :disabled="isViewLocked">
+                                    <option value="fit-height">Fit Height</option>
+                                    <option value="fit-width">Fit Width</option>
+                                    <template v-for="value in zoomLevels">
+                                        <option :value="value" :selected="zoomPercentage === value">
+                                            {{ value }} %
+                                        </option>
+                                    </template>
+                                </select>
+                            </li>
+                        </template>
     
                         <li class="nav-item vr bg-white mx-2"></li>
                         
@@ -726,63 +777,6 @@ defineExpose({
                                 </a>
                             </li>
                         </template>
-                    </ul>
-                </div>
-            </nav>
-    
-            <!-- Footer -->
-            <nav class="navbar navbar-expand navbar-dark bg-dark fixed-bottom py-0" v-if="!showWhiteboard">
-                <div class="container small">
-                    <!-- Toolbar -->
-                    <ul class="navbar-nav small ms-auto align-items-center">
-                        <!-- Pagination -->
-                        <li class="nav-item">
-                            <a href="#" class="nav-link" @click.prevent="scrollToPage(0)" :class="{ disabled: showWhiteboard || isFirstPage }" title="First Page">
-                                <i class="bi bi-chevron-double-left"></i>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex - 1)" :class="{ disabled: showWhiteboard || isFirstPage }" title="Previous Page">
-                                <i class="bi bi-chevron-left"></i>
-                            </a>
-                        </li>
-                        <li class="nav-item d-none d-lg-block">
-                            <input type="text" class="form-control-plaintext" :value="pageNum" @input="handlePageNumber" :disabled="showWhiteboard" />
-                        </li>
-                        <li class="nav-item">
-                            <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex + 1)" :class="{ disabled: showWhiteboard || isLastPage }" title="Next Page">
-                                <i class="bi bi-chevron-right"></i>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="#" class="nav-link" @click.prevent="scrollToPage(activePages.length - 1)" :class="{ disabled: showWhiteboard || isLastPage }" :title="`Last Page (${pageCount - deletedPages.size})`">
-                                <i class="bi bi-chevron-double-right"></i>
-                            </a>
-                        </li>
-                        <li class="nav-item vr bg-white mx-2"></li>
-    
-                        <!-- Zoom -->
-                        <li class="nav-item">
-                            <a href="#" class="nav-link" @click.prevent="zoom(-1)" :class="{ disabled: isViewLocked || zoomPercentage <= minZoom }">
-                                <i class="bi bi-zoom-out"></i>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="#" class="nav-link" @click.prevent="zoom(1)" :class="{ disabled: isViewLocked || zoomPercentage >= maxZoom }">
-                                <i class="bi bi-zoom-in"></i>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <select name="zoom-level" id="zoom-level" class="form-control-plaintext" @change="onZoomLevelChange" :disabled="isViewLocked">
-                                <option value="fit-height">Fit Height</option>
-                                <option value="fit-width">Fit Width</option>
-                                <template v-for="value in zoomLevels">
-                                    <option :value="value" :selected="zoomPercentage === value">
-                                        {{ value }} %
-                                    </option>
-                                </template>
-                            </select>
-                        </li>
                     </ul>
                 </div>
             </nav>
