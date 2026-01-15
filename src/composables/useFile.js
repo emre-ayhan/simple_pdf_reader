@@ -839,6 +839,141 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         callback({ type: 'delete-page', page });
     };
 
+    const createBlankPage = async (callback) => {
+        // Create a new single blank page PDF
+        const pdfLibDoc = await PDFDocument.create();
+        
+        // Use standard letter size
+        const width = 612; // 8.5 inches * 72 points/inch
+        const height = 792; // 11 inches * 72 points/inch
+        
+        const blankPage = pdfLibDoc.addPage([width, height]);
+        
+        // Draw a white background
+        blankPage.drawRectangle({
+            x: 0,
+            y: 0,
+            width,
+            height,
+            color: rgb(1, 1, 1),
+        });
+        
+        // Save and load the new PDF
+        const pdfBytes = await pdfLibDoc.save();
+        originalPdfData.value = new Uint8Array(pdfBytes);
+        
+        // Load the new PDF
+        getDocument({ data: pdfBytes }).promise.then(async (pdfDoc_) => {
+            filename.value = 'Blank_Document.pdf';
+            filepath.value = null;
+            loadFileCallback();
+            strokesPerPage.value = { 1: [] };
+            renderedPages.value.clear();
+            drawingContexts.value = [];
+            showWhiteboard.value = false;
+            clearSavedState();
+            pdfDoc = pdfDoc_;
+            imagePage.value = null;
+            handleFileLoadEvent('pdf', pdfDoc.numPages);
+            
+            await nextTick();
+            await renderAllPages();
+            setupIntersectionObserver();
+            setupLazyLoadObserver();
+            
+            if (typeof callback === 'function') {
+                callback({ type: 'create-blank-page', pageNumber: 1 });
+            }
+        }).catch(async error => {
+            console.error('Error creating blank PDF:', error);
+            await showModal('Error creating blank page: ' + error.message);
+        });
+    };
+
+    const insertBlankPage = async () => {
+        if (!pdfDoc) return;
+        
+        // Get the current page number where we want to insert after
+        const currentPageNum = activePage.value;
+        
+        // Increment page count
+        const newPageNumber = pageCount.value + 1;
+        pageCount.value = newPageNumber;
+        
+        // Shift all strokes from pages after the current page
+        const newStrokesPerPage = {};
+        for (let i = 1; i <= currentPageNum; i++) {
+            newStrokesPerPage[i] = strokesPerPage.value[i] || [];
+        }
+        // Insert blank page with no strokes
+        newStrokesPerPage[currentPageNum + 1] = [];
+        // Shift remaining pages
+        for (let i = currentPageNum + 1; i < newPageNumber; i++) {
+            newStrokesPerPage[i + 1] = strokesPerPage.value[i] || [];
+        }
+        strokesPerPage.value = newStrokesPerPage;
+        
+        // Load the original PDF and add a blank page
+        let arrayBuffer;
+        if (originalPdfData.value) {
+            arrayBuffer = originalPdfData.value.buffer.slice(
+                originalPdfData.value.byteOffset, 
+                originalPdfData.value.byteOffset + originalPdfData.value.byteLength
+            );
+        } else if (fileInput.value?.files[0]) {
+            const file = fileInput.value.files[0];
+            arrayBuffer = await file.arrayBuffer();
+        } else {
+            console.error('No PDF data available');
+            return;
+        }
+        
+        const pdfLibDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
+        
+        // Get dimensions from current page or use default
+        const currentPage = pdfLibDoc.getPage(currentPageNum - 1);
+        const { width, height } = currentPage.getSize();
+        
+        // Create a blank page with same dimensions
+        const blankPage = pdfLibDoc.insertPage(currentPageNum, [width, height]);
+        
+        // Draw a white background
+        blankPage.drawRectangle({
+            x: 0,
+            y: 0,
+            width,
+            height,
+            color: rgb(1, 1, 1),
+        });
+        
+        // Save the modified PDF back
+        const pdfBytes = await pdfLibDoc.save();
+        originalPdfData.value = new Uint8Array(pdfBytes);
+        
+        // Reload the PDF
+        getDocument({ data: pdfBytes }).promise.then(async (pdfDoc_) => {
+            pdfDoc = pdfDoc_;
+            renderedPages.value.clear();
+            drawingContexts.value = [];
+            
+            await nextTick();
+            await renderAllPages();
+            setupIntersectionObserver();
+            setupLazyLoadObserver();
+            
+            // Scroll to the newly inserted page
+            await nextTick();
+            scrollToPage(currentPageNum);
+            
+            if (typeof callback === 'function') {
+                callback({ type: 'insert-blank-page', pageNumber: currentPageNum + 1 });
+            }
+        }).catch(async error => {
+            console.error('Error reloading PDF after blank page insertion:', error);
+            await showModal('Error inserting blank page: ' + error.message);
+        });
+    };
+
     const createImage = (src, redrawAllStrokesCallback, addToHistoryCallback) => {
         const img = new Image();
         img.onload = () => {
@@ -977,6 +1112,8 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         getStoredPageIndex,
         deletedPages,
         deletePage,
+        createBlankPage,
+        insertBlankPage,
         createImageImportHandler,
         createImage
     }

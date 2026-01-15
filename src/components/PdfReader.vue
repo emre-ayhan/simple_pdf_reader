@@ -87,6 +87,8 @@ const {
     scrollToLastPage,
     deletedPages,
     deletePage,
+    insertBlankPage,
+    createBlankPage,
     createImage,
     createImageImportHandler,
 } = useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallback, fileSavedCallback);
@@ -192,19 +194,21 @@ const openWhiteboard = () => {
     }
 
     // Create a blank white canvas image
-    const blankCanvas = document.createElement('canvas');
-    const pixelRatio = window.devicePixelRatio || 1;
-    const displayWidth = (pdfReader.value?.clientWidth || window.innerWidth) - 40;
-    const displayHeight = (pdfReader.value?.clientHeight || window.innerHeight) - 40;
+    // const blankCanvas = document.createElement('canvas');
+    // const pixelRatio = window.devicePixelRatio || 1;
+    // const displayWidth = (pdfReader.value?.clientWidth || window.innerWidth) - 40;
+    // const displayHeight = (pdfReader.value?.clientHeight || window.innerHeight) - 40;
 
-    blankCanvas.width = displayWidth * pixelRatio;
-    blankCanvas.height = displayHeight * pixelRatio;
+    // blankCanvas.width = displayWidth * pixelRatio;
+    // blankCanvas.height = displayHeight * pixelRatio;
     
-    const ctx = blankCanvas.getContext('2d');
-    ctx.fillStyle = 'white';
-    ctx.fillRect(0, 0, blankCanvas.width, blankCanvas.height);
+    // const ctx = blankCanvas.getContext('2d');
+    // ctx.fillStyle = 'white';
+    // ctx.fillRect(0, 0, blankCanvas.width, blankCanvas.height);
 
-    whiteboardImage.value = blankCanvas.toDataURL();
+    // whiteboardImage.value = blankCanvas.toDataURL();
+
+    createBlankPage();
 
     // Update the tab with whiteboard data
     const whiteboardId = `Whiteboard_${Date.now()}`;
@@ -214,10 +218,7 @@ const openWhiteboard = () => {
         filename: whiteboardId,
         type: 'whiteboard',
     });
-    
-    // Switch to whiteboard mode
-    showWhiteboard.value = true;
-    whiteboardScale.value = 1;
+
     isFileLoaded.value = true;
 
     // Render whiteboard page
@@ -303,6 +304,11 @@ const selectText = () => {
 const selectStrokeMode = () => {
     if (!isFileLoaded.value) return;
     resetAllTools();
+};
+
+const handleInsertBlankPage = () => {
+    if (!isFileLoaded.value) return;
+    insertBlankPage(addToHistory);
 };
 
 const captureSelection = () => {
@@ -593,6 +599,7 @@ defineExpose({
     deletePage: () => {
         deletePage(pageIndex.value, addToHistory);
     },
+    insertBlankPage: handleInsertBlankPage,
     openWhiteboard,
     scrollToFirstPage,
     scrollToLastPage,

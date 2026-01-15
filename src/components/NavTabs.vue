@@ -7,6 +7,7 @@ const emit = defineEmits([
     'file-open',
     'file-save',
     'new-whiteboard',
+    'page-blank',
     'page-first',
     'page-last',
     'page-delete'
@@ -78,6 +79,12 @@ onBeforeUnmount(() => {
                     </li>
                     <li><hr class="text-primary my-1"></li>
                     <li><h6 class="dropdown-header">Page</h6></li>
+                    <li>
+                        <a class="dropdown-item small" :class="{ disabled: activeTab.emptyState }" href="#" @click.prevent="emit('page-blank')">
+                            <i class="bi bi-file-earmark me-1"></i>
+                            Insert Blank Page
+                        </a>
+                    </li>
                     <li>
                         <a class="dropdown-item small" :class="{ disabled: activeTab.emptyState }" href="#" @click.prevent="emit('page-first')">
                             <i class="bi bi-chevron-double-up me-1"></i>

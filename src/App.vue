@@ -33,9 +33,15 @@ const scrollToLastPage = () => {
     if (!(reader.value)) return;
     reader.value.scrollToLastPage();
 };
+
 const deletePage = () => {
     if (!(reader.value)) return;
     reader.value.deletePage();
+};
+
+const insertBlankPage = () => {
+    if (!(reader.value)) return;
+    reader.value.insertBlankPage();
 };
 </script>
 <template>
@@ -45,6 +51,7 @@ const deletePage = () => {
         @page-first="scrollToFirstPage"
         @page-last="scrollToLastPage"
         @page-delete="deletePage"
+        @page-blank="insertBlankPage"
         @new-whiteboard="newWhiteboard"
     >
         <PdfReader ref="reader" />
