@@ -402,6 +402,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             }
             
             const found = findStrokeAtPoint(x, y, canvasIndex);
+
             if (found) {
                 selectedStroke.value = {
                     ...found,
@@ -440,6 +441,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             }
 
             const canvasIndex = getCanvasIndexFromEvent(e);
+
             if (canvasIndex === -1) return;
             
             const canvas = drawingCanvases.value[canvasIndex];
@@ -1326,7 +1328,6 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         ctx.save();
         ctx.strokeStyle = '#0066ff';
         ctx.lineWidth = 2;
-        ctx.setLineDash([5, 5]);
         
         let minX, minY, maxX, maxY, padding = 5;
         
