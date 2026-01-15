@@ -333,6 +333,14 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         }
     };
 
+    const scrollToFirstPage = () => {
+        scrollToPage(0);
+    };
+
+    const scrollToLastPage = () => {
+        scrollToPage(activePages.value.length - 1);
+    };
+
     // File Loaded Event Emitter
     const handleFileLoadEvent = (type, page_count) => {
         isFileLoaded.value = true;
@@ -963,6 +971,8 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         setupIntersectionObserver,
         setupLazyLoadObserver,
         scrollToPage,
+        scrollToFirstPage,
+        scrollToLastPage,
         storePageIndex,
         getStoredPageIndex,
         deletedPages,

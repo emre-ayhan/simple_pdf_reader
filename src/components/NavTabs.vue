@@ -80,13 +80,13 @@ onBeforeUnmount(() => {
                     <li><h6 class="dropdown-header">Page</h6></li>
                     <li>
                         <a class="dropdown-item small" :class="{ disabled: activeTab.emptyState }" href="#" @click.prevent="emit('page-first')">
-                            <i class="bi bi-skip-start-fill me-1"></i>
+                            <i class="bi bi-chevron-double-up me-1"></i>
                             First Page (Home)
                         </a>
                     </li>
                     <li>
                         <a class="dropdown-item small" :class="{ disabled: activeTab.emptyState }" href="#" @click.prevent="emit('page-last')">
-                            <i class="bi bi-skip-end-fill me-1"></i>
+                            <i class="bi bi-chevron-double-down me-1"></i>
                             Last Page (End)
                         </a>
                     </li>

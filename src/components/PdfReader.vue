@@ -83,6 +83,8 @@ const {
     intersectionObserver,
     lazyLoadObserver,
     scrollToPage,
+    scrollToFirstPage,
+    scrollToLastPage,
     deletedPages,
     deletePage,
     createImage,
@@ -509,6 +511,20 @@ useWindowEvents(fileId, {
                 deletePage(pageIndex.value, addToHistory);
             }
         },
+        Home: {
+            action: (event) => {
+                if (isFirstPage.value) return;
+                event.preventDefault();
+                scrollToFirstPage();
+            }
+        },
+        End: {
+            action: (event) => {
+                if (isLastPage.value) return;
+                event.preventDefault();
+                scrollToLastPage();
+            }
+        },
         Escape: {
             action: (event) => {
                 if (!hasActiveTool.value) return;
@@ -578,12 +594,8 @@ defineExpose({
         deletePage(pageIndex.value, addToHistory);
     },
     openWhiteboard,
-    scrollToFirstPage: () => {
-        scrollToPage(0)
-    },
-    scrollToLastPage: () => {
-        scrollToPage(pageCount.value - 1)
-    }
+    scrollToFirstPage,
+    scrollToLastPage,
 })
 </script>
 <template>
