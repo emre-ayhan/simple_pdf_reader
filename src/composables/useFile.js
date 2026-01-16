@@ -814,7 +814,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         
         // Load the new PDF
         getDocument({ data: pdfBytes }).promise.then(async (pdfDoc_) => {
-            filename.value = 'Blank_Document.pdf';
+            filename.value = `Document_${Date.now()}.pdf`;
             filepath.value = null;
             loadFileCallback();
             strokesPerPage.value = { 1: [] };
@@ -836,18 +836,9 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             pageIndex.value = 0;
             
             // Poll for canvas to be ready
-            const waitForCanvas = () => {
-                const canvas = drawingCanvases.value[0];
-                if (canvas && canvas.width > 0) {
-                    if (typeof callback === 'function') {
-                        callback({ type: 'create-blank-page', pageNumber: 1 });
-                    }
-                } else {
-                    setTimeout(waitForCanvas, 50);
-                }
-            };
-            
-            waitForCanvas();
+            if (typeof callback === 'function') {
+                callback();
+            }
         }).catch(async error => {
             console.error('Error creating blank PDF:', error);
             await showModal('Error creating blank page: ' + error.message);
