@@ -18,15 +18,6 @@ const props = defineProps({
     }
 });
 
-const toolbar = ref(null);
-const toolbarHeight = ref(40);
-
-const setToolbarHeight = () => {
-    if (toolbar.value) {
-        toolbarHeight.value = (toolbar.value.offsetHeight || 0) + 40;
-    }
-};
-
 // Cursor Style
 const cursorStyle = computed(() => {
     if (resizeCursor.value) return resizeCursor.value;
@@ -343,7 +334,6 @@ useWindowEvents(fileId, {
             clearTimeout(resizeTimeout);
             resizeTimeout = setTimeout(() => {
                 nextTick(() => {
-                    setToolbarHeight();
                     scrollToPage(pageIndex.value);
                 })
             });
@@ -553,7 +543,7 @@ defineExpose({
 <template>
     <div class="container-fluid bg-dark" @dragenter.prevent="onDragEnter" @dragleave.prevent="onDragLeave" @dragover.prevent @drop.prevent="onDrop">
         <template v-if="isFileLoaded">
-            <nav :class="`navbar navbar-expand navbar-dark bg-dark fixed-top py-1 fixed-${toolbarPosition}`">
+            <nav :class="`navbar navbar-expand navbar-dark bg-dark py-1 fixed-${toolbarPosition}`">
                 <!-- Toolbar -->
                 <ul ref="toolbar" class="navbar-nav mx-auto flex-wrap justify-content-center">
                     <!-- Drawing -->
