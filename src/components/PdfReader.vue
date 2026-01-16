@@ -18,6 +18,15 @@ const props = defineProps({
     }
 });
 
+const toolbar = ref(null);
+const toolbarHeight = ref(40);
+
+const setToolbarHeight = () => {
+    if (toolbar.value) {
+        toolbarHeight.value = (toolbar.value.offsetHeight || 0) + 40;
+    }
+};
+
 // Cursor Style
 const cursorStyle = computed(() => {
     if (resizeCursor.value) return resizeCursor.value;
@@ -334,6 +343,7 @@ useWindowEvents(fileId, {
             clearTimeout(resizeTimeout);
             resizeTimeout = setTimeout(() => {
                 nextTick(() => {
+                    setToolbarHeight();
                     scrollToPage(pageIndex.value);
                 })
             });
@@ -544,9 +554,9 @@ defineExpose({
     <div class="container-fluid bg-dark" @dragenter.prevent="onDragEnter" @dragleave.prevent="onDragLeave" @dragover.prevent @drop.prevent="onDrop">
         <template v-if="isFileLoaded">
             <nav :class="`navbar navbar-expand navbar-dark bg-dark fixed-top py-1 fixed-${toolbarPosition}`">
-                <div class="container-fluid">
+                <div ref="toolbarContainer" class="container-fluid">
                     <!-- Toolbar -->
-                    <ul class="navbar-nav mx-auto flex-wrap justify-content-center">
+                    <ul ref="toolbar" class="navbar-nav mx-auto flex-wrap justify-content-center">
                         <!-- Drawing -->
                         <template v-if="isDrawing || isTextMode">
                             <li class="nav-item" v-for="(strokeStyle, index) in initialStrokeStyles">
@@ -670,7 +680,7 @@ defineExpose({
                             </a>
                         </li>
                         <li class="nav-item">
-                            <div class="input-group">
+                            <div class="input-group flex-nowrap">
                                 <input type="text" class="form-control-plaintext" :value="pageNum" @input="handlePageNumberInput" />
                                 <div class="input-group-text bg-transparent border-0 text-secondary p-0 pe-1">/ {{ pageCount }}</div>
                             </div>
@@ -719,7 +729,7 @@ defineExpose({
                 </div>
             </nav>
         </template>
-        <div class="pdf-reader" ref="pdfReader" :class="{ 'overflow-hidden': isViewLocked }">
+        <div class="pdf-reader" ref="pdfReader" :class="{ 'overflow-hidden': isViewLocked }" :style="`margin-top: ${toolbarHeight}px; height: calc(100vh - ${toolbarHeight}px);`">
             <EmptyState v-if="!isFileLoaded" @open-file="handleFileOpen" />
 
             <div v-else class="pages-container" ref="pagesContainer" :style="{ width: `${zoomPercentage}%` }">

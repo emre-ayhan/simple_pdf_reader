@@ -8,15 +8,6 @@
         top: 31.5px !important;
     }
 
-    .navbar-nav {
-        max-height: 34px !important;
-
-        &:hover {
-            max-height: none !important;
-        }
-    }
-
-
     background: $dark-bg-gradient !important;
     border-bottom: 1px solid $border-color;
 
@@ -66,11 +57,9 @@
 }
 
 .pdf-reader {
-    margin-top: $navbar-height;
     background-color: $text-muted;
     overflow: auto;
     touch-action: pan-y pan-x;
-    height: calc(100vh - $navbar-height);
 
     &.overflow-hidden {
         touch-action: none;
