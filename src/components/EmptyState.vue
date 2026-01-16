@@ -31,12 +31,12 @@ const openFile = () => emit('open-file');
             <div class="empty-grid row row-cols-1 row-cols-xl-3 g-3">
               <div class="col">
                 <div class="empty-section">
-                  <div class="empty-section-title">Whiteboard & Image Support</div>
+                  <div class="empty-section-title">Capture Image Support</div>
                   <ul>
                     <li>Open images as pages with full drawing, zoom, and persistence.</li>
-                    <li>Capture any PDF area into a whiteboard for focused markup and exports.</li>
-                    <li>Zoom whiteboards in and out while keeping aspect ratio tidy.</li>
-                    <li>Exit whiteboard safely and return to your exact page and zoom.</li>
+                    <li>Capture any PDF area into a new blank page for focused markup and exports.</li>
+                    <li>Zoom pages in and out while keeping aspect ratio tidy.</li>
+                    <li>Exit page safely and return to your exact page and zoom.</li>
                   </ul>
                 </div>
               </div>

@@ -18,9 +18,9 @@ const saveFile = () => {
 };
 
 
-const newWhiteboard = () => {
+const newBlankPage = () => {
     if (!(reader.value)) return;
-    reader.value.openWhiteboard();
+    reader.value.createNewBlankPage();
 };
 
 // Page Operations
@@ -46,13 +46,13 @@ const insertBlankPage = () => {
 </script>
 <template>
     <nav-tabs 
+        @file-new="newBlankPage"
         @file-open="openFile"
         @file-save="saveFile"
         @page-first="scrollToFirstPage"
         @page-last="scrollToLastPage"
         @page-delete="deletePage"
         @page-blank="insertBlankPage"
-        @new-whiteboard="newWhiteboard"
     >
         <PdfReader ref="reader" />
     </nav-tabs>

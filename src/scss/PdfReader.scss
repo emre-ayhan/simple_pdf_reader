@@ -77,19 +77,6 @@
     justify-content: start;
     gap: 20px;
     padding: 20px 0;
-
-    &.whiteboard-mode {
-        padding: 0 !important;
-        width: 100% !important;
-        height: 100% !important;
-
-        .page-container,
-        .canvas-container,
-        canvas {
-            width: 100% !important;
-            height: 100% !important;
-        }
-    }
 }
 
 .page-container {

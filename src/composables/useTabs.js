@@ -10,7 +10,6 @@ const getEmptyStateTab = () => ({
 });
 
 const fileDataCache = ref(null);
-const whiteboardDataCache = ref(null);
 const tabHistory = ref([0]);
 const tabs = ref([getEmptyStateTab()]);
 const activeTabIndex = ref(0);
@@ -114,5 +113,4 @@ export {
     handleElectronButtonClick,
     markAsActive,
     fileDataCache,
-    whiteboardDataCache,
 };

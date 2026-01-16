@@ -1,21 +1,24 @@
 <script setup>
 import { onBeforeUnmount, onMounted } from 'vue';
 import { Electron } from '../composables/useElectron';
-import { openNewTab, closeTab, activeTabIndex, activeTab, tabs, tabHistory, openTabs, markAsActive, isLastTabOnEmptyState, fileHasUnsavedChanges, handleElectronButtonClick, fileDataCache, whiteboardDataCache } from '../composables/useTabs';
+import { openNewTab, closeTab, activeTabIndex, activeTab, tabs, tabHistory, openTabs, markAsActive, isLastTabOnEmptyState, fileHasUnsavedChanges, handleElectronButtonClick, fileDataCache } from '../composables/useTabs';
 
 const emit = defineEmits([
+    'file-new',
     'file-open',
     'file-save',
-    'new-whiteboard',
     'page-blank',
     'page-first',
     'page-last',
     'page-delete'
 ]);
 
-const openWhiteboard = () => {
-    whiteboardDataCache.value = 'new-whiteboard';
-    emit('new-whiteboard');
+const openNewBlankPage = () => {
+    fileDataCache.value = {
+        type: 'blank',
+        data: null
+    };
+    emit('file-new');
 };
 
 const electronButtons = [
@@ -39,7 +42,10 @@ onMounted(() => {
             if (!fileData) return;
             if (isLastTabOnEmptyState.value) return;
             openNewTab();
-            fileDataCache.value = fileData;
+            fileDataCache.value = {
+                type: 'file',
+                data: fileData
+            };
         });
     }
 });
@@ -59,6 +65,12 @@ onBeforeUnmount(() => {
                 <ul class="dropdown-menu dropdown-menu-dark">
                     <li><h6 class="dropdown-header">File</h6></li>
                     <li>
+                        <a class="dropdown-item small" href="#" @click.prevent="openNewBlankPage">
+                            <i class="bi bi-pencil-square me-1"></i>
+                            New Blank Page (Ctrl+Shift+N)
+                        </a>
+                    </li>
+                    <li>
                         <a class="dropdown-item small" href="#" @click.prevent="emit('file-open')">
                             <i class="bi bi-folder me-1"></i>
                             Open (Ctrl+O)
@@ -71,12 +83,6 @@ onBeforeUnmount(() => {
                         </a>
                     </li>
                     <li><hr class="text-primary my-1"></li>
-                    <li>
-                        <a class="dropdown-item small" href="#" @click.prevent="openWhiteboard">
-                            <i class="bi bi-pencil-square me-1"></i>
-                            New Whiteboard
-                        </a>
-                    </li>
                     <li><hr class="text-primary my-1"></li>
                     <li><h6 class="dropdown-header">Page</h6></li>
                     <li>

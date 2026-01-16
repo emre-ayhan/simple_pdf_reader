@@ -6,10 +6,9 @@ import { useFile } from "../composables/useFile";
 import { useDrop } from "../composables/useDrop";
 import { useDraw } from "../composables/useDraw";
 import { useHistory } from "../composables/useHistory";
-import { useWhiteBoard } from "../composables/useWhiteBoard";
-import EmptyState from "./EmptyState.vue";
+import { fileDataCache, openNewTab } from "../composables/useTabs";
 import { useWindowEvents } from "../composables/useWindowEvents";
-import { fileDataCache, setCurrentTab, openNewTab, whiteboardDataCache } from "../composables/useTabs";
+import EmptyState from "./EmptyState.vue";
 
 // Cursor Style
 const cursorStyle = computed(() => {
@@ -28,8 +27,6 @@ const cursorStyle = computed(() => {
 // File Management
 const loadFileCallback = () => {
     resetHistory();
-    whiteboardImage.value = null;
-    whiteboardScale.value = 1;
 }
 
 const renderImageFileCallback = (image) => {
@@ -44,16 +41,9 @@ const fileSavedCallback = () => {
     saveCurrentHistoryStep();
 }
 
-const handlePageNumber = (event) => {
-    const page = parseInt(event.target.value);
-    if (isNaN(page) || page < 1 || page > pageCount.value - deletedPages.size) {
-        // Invalid page number
-        event.target.value = pageNum.value;
-        return;
-    }
-
-    scrollToPage(page - 1);
-}
+const createNewBlankPage = (imageData) => {
+    openNewBlankPage(redrawAllStrokes, addToHistory, imageData);
+};
 
 const {
     fileId,
@@ -70,12 +60,9 @@ const {
     pageCount,
     pageIndex,
     pageNum,
-    activePages,
     isFirstPage,
     isLastPage,
     zoomPercentage,
-    showWhiteboard,
-    renderAllPages,
     loadFile,
     processFileOpenResult,
     handleFileOpen,
@@ -88,9 +75,9 @@ const {
     deletedPages,
     deletePage,
     insertBlankPage,
-    createBlankPage,
-    createImage,
+    openNewBlankPage,
     createImageImportHandler,
+    handlePageNumberInput,
 } = useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallback, fileSavedCallback);
 
 // Drag and Drop Handlers
@@ -110,8 +97,12 @@ const captureSelectionCallback = (canvasIndex, selectedCanvas) => {
     // Ensure strokes are finalized before capture
     redrawAllStrokes(canvasIndex);
 
-    // Open a blank whiteboard and schedule the selection as an image import
-    whiteboardDataCache.value = selectedCanvas.toDataURL();
+    // Store the captured image data and open a new tab
+    fileDataCache.value = {
+        type: 'blank',
+        data: selectedCanvas.toDataURL('image/png')
+    };
+
     openNewTab();
 }
 
@@ -175,72 +166,6 @@ const handleImageImport = createImageImportHandler(redrawAllStrokes, addToHistor
 
 startSession();
 
-
-// Whiteboard Management
-const {
-    whiteboardScale,
-    whiteboardImage,
-    copyWhiteboardToClipboard,
-    whiteboardRecentlyCopied,
-    renderWhiteboardCanvas,
-    downloadWhiteboard,
-} = useWhiteBoard(showWhiteboard, drawingCanvases, drawingContexts, pdfCanvases, pdfReader, renderedPages);
-
-// Open a blank whiteboard page
-const openWhiteboard = () => {
-    if (isFileLoaded.value) {
-        openNewTab();
-        return;
-    }
-
-    // Create a blank white canvas image
-    // const blankCanvas = document.createElement('canvas');
-    // const pixelRatio = window.devicePixelRatio || 1;
-    // const displayWidth = (pdfReader.value?.clientWidth || window.innerWidth) - 40;
-    // const displayHeight = (pdfReader.value?.clientHeight || window.innerHeight) - 40;
-
-    // blankCanvas.width = displayWidth * pixelRatio;
-    // blankCanvas.height = displayHeight * pixelRatio;
-    
-    // const ctx = blankCanvas.getContext('2d');
-    // ctx.fillStyle = 'white';
-    // ctx.fillRect(0, 0, blankCanvas.width, blankCanvas.height);
-
-    // whiteboardImage.value = blankCanvas.toDataURL();
-
-    createBlankPage();
-
-    // Update the tab with whiteboard data
-    const whiteboardId = `Whiteboard_${Date.now()}`;
-
-    setCurrentTab({
-        id: whiteboardId,
-        filename: whiteboardId,
-        type: 'whiteboard',
-    });
-
-    isFileLoaded.value = true;
-
-    // Render whiteboard page
-    nextTick(() => {
-        renderAllPages().then(() => {
-            renderWhiteboardCanvas();
-
-            // If we have a pending import (e.g., from selection), add it as an image stroke
-            const pendingData = whiteboardDataCache.value;
-            if (pendingData) {
-                try {
-                    // Load the image and create the stroke
-                    createImage(pendingData, redrawAllStrokes, strokeChangeCallback);
-                } catch (e) {
-                    console.error('Failed to import selection into whiteboard:', e);
-                }
-
-                whiteboardDataCache.value = null;
-            }
-        });
-    });
-};
 
 // Toolbar Actions
 const isViewLocked = ref(false);
@@ -312,7 +237,7 @@ const handleInsertBlankPage = () => {
 };
 
 const captureSelection = () => {
-    if (!isFileLoaded.value || showWhiteboard.value) return;
+    if (!isFileLoaded.value) return;
     const wasActive = isSelectionMode.value;
     resetToolState();
     isSelectionMode.value = !wasActive;
@@ -337,7 +262,7 @@ const zoomLevels = computed(() => {
 });
 
 const toggleZoomMode = (mode) => {
-    if (!isFileLoaded.value || showWhiteboard.value) return;
+    if (!isFileLoaded.value) return;
     
     if (mode === 'fit-height') {
         const pageContainer = document.querySelector(`.page-container[data-page="${pageIndex.value + 1}"]`);
@@ -364,14 +289,7 @@ const handleZoomLevel = (percentage) => {
 
     if (!zoomLevels.value.includes(percentage)) return;
 
-    percentage = Math.min(Math.max(minZoom, percentage), maxZoom);
-
-    if (showWhiteboard.value) {
-        whiteboardScale.value = +(percentage / 100).toFixed(2);
-        renderWhiteboardCanvas();
-    }
-
-    zoomPercentage.value = percentage;
+    zoomPercentage.value = Math.min(Math.max(minZoom, percentage), maxZoom);
 
     // Restore scroll position to current page after DOM updates
     nextTick(() => {
@@ -449,10 +367,24 @@ useWindowEvents(fileId, {
             }
         },
         o: {
-            action: (event) => {
+            actionAll: (event, ctrl) => {
+                if (ctrl) {
+                    event.preventDefault();
+                    handleFileOpen();
+                    return;
+                }
+
                 if (isTextMode.value) return;
                 event.preventDefault();
                 selectDrawingTool('circle');
+            }
+        },
+        n: {
+            actionAll: (event, ctrl) => {
+                if (ctrl && event.shiftKey) {
+                    event.preventDefault();
+                    createNewBlankPage();
+                }
             }
         },
         t: {
@@ -460,12 +392,6 @@ useWindowEvents(fileId, {
                 if (isTextMode.value) return;
                 event.preventDefault();
                 selectText();
-            }
-        },
-        o: {
-            ctrl: true,
-            action: () => {
-                handleFileOpen();
             }
         },
         p: {
@@ -557,21 +483,22 @@ useWindowEvents(fileId, {
 let unsubscribeFileOpen = null;
 
 onMounted(() => {
-    if (whiteboardDataCache.value) {
-        openWhiteboard();
-        return;
-    }
+    const cache = fileDataCache.value;
+    fileDataCache.value = null;
 
-    if (fileDataCache.value) {
-        processFileOpenResult(fileDataCache.value);
-        fileDataCache.value = null;
+    if (cache) {
+        if (cache.type === 'blank') {
+            createNewBlankPage(cache.data);
+            return;
+        }
+
+        processFileOpenResult(cache.data);
         return;
     }
 
     if (Electron.value?.onFileOpened) {
         unsubscribeFileOpen = Electron.value.onFileOpened((fileData) => {
             if (!fileData || isFileLoaded.value) return;
-            console.log('File opened from system:', fileData.filename);
             processFileOpenResult(fileData);
         });
     }
@@ -600,7 +527,7 @@ defineExpose({
         deletePage(pageIndex.value, addToHistory);
     },
     insertBlankPage: handleInsertBlankPage,
-    openWhiteboard,
+    createNewBlankPage,
     scrollToFirstPage,
     scrollToLastPage,
 })
@@ -613,7 +540,7 @@ defineExpose({
                     <!-- Toolbar -->
                     <ul class="navbar-nav mx-auto">
                         <!-- Drawing -->
-                        <template v-if="hasActiveTool && !isEraser">
+                        <template v-if="isDrawing || isTextMode">
                             <li class="nav-item" v-for="(strokeStyle, index) in initialStrokeStyles">
                                 <a class="nav-link" href="#" @click.prevent="handleStrokeStyleButtonClick(index)" :class="{ active: strokeStyle.color === drawColor }">
                                     <i class="bi bi-circle-fill" :style="{ color: strokeStyle.color }"></i>
@@ -721,89 +648,73 @@ defineExpose({
                                 <i class="bi bi-arrow-clockwise"></i>
                             </a>
                         </li>
-
-                        <template v-if="!showWhiteboard">
-                            <!-- Pagination -->
-                            <li class="nav-item vr bg-white mx-2"></li>
-                            <li class="nav-item d-none d-lg-block">
-                                <div class="input-group">
-                                    <input type="text" class="form-control-plaintext" :value="pageNum" @input="handlePageNumber" :disabled="showWhiteboard" />
-                                    <div class="input-group-text bg-transparent border-0 text-secondary p-0 pe-1">/ {{ pageCount }}</div>
-                                </div>
-                            </li>
-                            <li class="nav-item">
-                                <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex - 1)" :class="{ disabled: showWhiteboard || isFirstPage }" title="Previous Page">
-                                    <i class="bi bi-chevron-up"></i>
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex + 1)" :class="{ disabled: showWhiteboard || isLastPage }" title="Next Page">
-                                    <i class="bi bi-chevron-down"></i>
-                                </a>
-                            </li>
-                            
-                            <!-- Zoom -->
-                            <li class="nav-item vr bg-white mx-2"></li>
-                            <li class="nav-item">
-                                <a href="#" class="nav-link" @click.prevent="zoom(-1)" :class="{ disabled: isViewLocked || zoomPercentage <= minZoom }">
-                                    <i class="bi bi-zoom-out"></i>
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a href="#" class="nav-link" @click.prevent="zoom(1)" :class="{ disabled: isViewLocked || zoomPercentage >= maxZoom }">
-                                    <i class="bi bi-zoom-in"></i>
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <select name="zoom-level" id="zoom-level" class="form-control-plaintext" @change="onZoomLevelChange" :disabled="isViewLocked">
-                                    <option value="fit-height">Fit Height</option>
-                                    <option value="fit-width">Fit Width</option>
-                                    <template v-for="value in zoomLevels">
-                                        <option :value="value" :selected="zoomPercentage === value">
-                                            {{ value }} %
-                                        </option>
-                                    </template>
-                                </select>
-                            </li>
-                        </template>
+                        
+                        <!-- Pagination -->
+                        <li class="nav-item vr bg-white mx-2"></li>
+                        <li class="nav-item d-none d-lg-block">
+                            <div class="input-group">
+                                <input type="text" class="form-control-plaintext" :value="pageNum" @input="handlePageNumberInput" />
+                                <div class="input-group-text bg-transparent border-0 text-secondary p-0 pe-1">/ {{ pageCount }}</div>
+                            </div>
+                        </li>
+                        <li class="nav-item">
+                            <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex - 1)" :class="{ disabled: isFirstPage }" title="Previous Page">
+                                <i class="bi bi-chevron-up"></i>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex + 1)" :class="{ disabled: isLastPage }" title="Next Page">
+                                <i class="bi bi-chevron-down"></i>
+                            </a>
+                        </li>
+                        
+                        <!-- Zoom -->
+                        <li class="nav-item vr bg-white mx-2"></li>
+                        <li class="nav-item">
+                            <a href="#" class="nav-link" @click.prevent="zoom(-1)" :class="{ disabled: isViewLocked || zoomPercentage <= minZoom }">
+                                <i class="bi bi-zoom-out"></i>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="#" class="nav-link" @click.prevent="zoom(1)" :class="{ disabled: isViewLocked || zoomPercentage >= maxZoom }">
+                                <i class="bi bi-zoom-in"></i>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <select name="zoom-level" id="zoom-level" class="form-control-plaintext" @change="onZoomLevelChange" :disabled="isViewLocked">
+                                <option value="fit-height">Fit Height</option>
+                                <option value="fit-width">Fit Width</option>
+                                <template v-for="value in zoomLevels">
+                                    <option :value="value" :selected="zoomPercentage === value">
+                                        {{ value }} %
+                                    </option>
+                                </template>
+                            </select>
+                        </li>
     
                         <li class="nav-item vr bg-white mx-2"></li>
                         
                         <!-- Selection Tool -->
                         <li class="nav-item">
-                            <a class="nav-link" href="#" @click.prevent="captureSelection" :class="{ active: isSelectionMode || showWhiteboard }" title="Select Area to Whiteboard">
+                            <a class="nav-link" href="#" @click.prevent="captureSelection" :class="{ active: isSelectionMode }" title="Select Area to Whiteboard">
                                 <i class="bi bi-scissors"></i>
                             </a>
                         </li>
     
                         <!-- View Lock -->
-                        <li v-if="!showWhiteboard" class="nav-item" :title="isViewLocked ? 'Unlock View' : 'Lock View'">
+                        <li class="nav-item" :title="isViewLocked ? 'Unlock View' : 'Lock View'">
                             <a href="#" class="nav-link" @click.prevent="lockView" :class="{ active: isViewLocked }">
                                 <i class="bi" :class="isViewLocked ? 'bi-lock-fill' : 'bi-lock'"></i>
                             </a>
                         </li>
-    
-                        <!-- Whiteboard Controls -->
-                        <template v-if="showWhiteboard">
-                            <li class="nav-item" title="Copy to Clipboard (Ctrl+C)">
-                                <a href="#" class="nav-link" @click.prevent="copyWhiteboardToClipboard()">
-                                    <i :class="`bi bi-clipboard${whiteboardRecentlyCopied ? '-check' : ''}`"></i>
-                                </a>
-                            </li>
-                            <li class="nav-item" title="Download Whiteboard">
-                                <a href="#" class="nav-link" @click.prevent="downloadWhiteboard()">
-                                    <i class="bi bi-download"></i>
-                                </a>
-                            </li>
-                        </template>
                     </ul>
                 </div>
             </nav>
         </template>
-        <div class="pdf-reader" ref="pdfReader" :class="{ 'overflow-hidden': isViewLocked || showWhiteboard }">
+        <div class="pdf-reader" ref="pdfReader" :class="{ 'overflow-hidden': isViewLocked }">
             <EmptyState v-if="!isFileLoaded" @open-file="handleFileOpen" />
 
-            <div v-else class="pages-container" :class="{ 'whiteboard-mode': showWhiteboard }" ref="pagesContainer" :style="{ width: `${zoomPercentage}%` }">
+            <div v-else class="pages-container" ref="pagesContainer" :style="{ width: `${zoomPercentage}%` }">
                 <template v-for="page in pageCount" :key="page">
                     <div  class="page-container" :data-page="page" v-show="!deletedPages.has(page)">
                         <div class="canvas-container" :class="{ 'canvas-loading': !renderedPages.has(page) }">

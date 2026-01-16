@@ -92,7 +92,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     const fontSize = ref(16);
     const textboxPosition = ref(null); // Screen position for the textbox
 
-    // Selection and Whiteboard
+    // Selection & Capture variables
     const isSelectionMode = ref(false);
     const selectionStart = ref(null);
     const selectionEnd = ref(null);

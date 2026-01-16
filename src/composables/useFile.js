@@ -5,7 +5,7 @@ import { useStore } from "./useStore";
 import { GlobalWorkerOptions, getDocument } from "pdfjs-dist";
 import { uuid } from "./useUuid";
 import { showModal } from "./useModal";
-import { setCurrentTab } from "./useTabs";
+import { fileDataCache, openNewTab, setCurrentTab } from "./useTabs";
 
 GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.449/build/pdf.worker.min.mjs';
 
@@ -45,16 +45,8 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
     // Zoom State Variables
     const zoomPercentage = ref(100); // 25 to 100
 
-    // Whiteboard State Variables
-    const showWhiteboard = ref(false);
-
     // Saved State Variables
     const fileRecentlySaved = ref(false);
-    let savedPdfDoc = null;
-    let savedPageCount = 0;
-    let savedPageIndex = 0;
-    let savedStrokesPerPage = {};
-    let savedWidth = 100; // Save page width before entering whiteboard
 
     // Pagination State Variables
     const pageCount = ref(0);
@@ -81,12 +73,15 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         return pageNum.value >= (pageCount.value - deletedPages.value.size);
     });
 
-    const resetPdfDoc = () => {
-        pdfDoc = null;
-    }
+    const handlePageNumberInput = (event) => {
+        const page = parseInt(event.target.value);
+        if (isNaN(page) || page < 1 || page > pageCount.value - deletedPages.size) {
+            // Invalid page number
+            event.target.value = pageNum.value;
+            return;
+        }
 
-    const hasSavedPdfDoc = () => {
-        return savedPdfDoc !== null;
+        scrollToPage(page - 1);
     }
 
     const setupLazyLoadObserver = () => {
@@ -355,46 +350,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         });
     };
 
-    const clearSavedState = () => {
-        savedPdfDoc = null;
-        savedPageCount = 0;
-        savedPageIndex = 0;
-        savedStrokesPerPage = {};
-        savedWidth = 100;
-    };
-
-    const updateSavedState = () => {
-        savedPdfDoc = pdfDoc;
-        savedPageCount = pageCount.value;
-        savedPageIndex = pageIndex.value;
-        savedStrokesPerPage = JSON.parse(JSON.stringify(strokesPerPage.value));
-        savedWidth = zoomPercentage.value;
-    };
-
-    const restoreSavedState = () => {
-        if (savedPdfDoc) {
-            pdfDoc = savedPdfDoc;
-            pageCount.value = savedPageCount;
-            pageIndex.value = savedPageIndex;
-        } else if (imagePage.value) {
-            pdfDoc = null;
-            pageCount.value = 1;
-            pageIndex.value = 0;
-        }
-
-        strokesPerPage.value = JSON.parse(JSON.stringify(savedStrokesPerPage));
-        zoomPercentage.value = savedWidth; // Restore zoom width
-    };
-
     const renderAllPages = async () => {
-        if (showWhiteboard.value) {
-            // Whiteboard mode: render single page with background image
-            pageCount.value = 1;
-            pageIndex.value = 0;
-            strokesPerPage.value = { 1: strokesPerPage.value[1] || [] };
-            return;
-        }
-
         if (imagePage.value) {
             pageCount.value = 1;
             await renderImageFileCallback(imagePage.value);
@@ -427,8 +383,6 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             loadFileCallback();
             renderedPages.value.clear();
             drawingContexts.value = [];
-            showWhiteboard.value = false;
-            clearSavedState();
             
             imagePage.value = reader.result;
             strokesPerPage.value = { 1: [] };
@@ -459,8 +413,6 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         strokesPerPage.value = {};
         renderedPages.value.clear();
         drawingContexts.value = [];
-        showWhiteboard.value = false;
-        clearSavedState();
         pdfDoc = pdfDoc_;
         imagePage.value = null;
         handleFileLoadEvent('pdf', pdfDoc.numPages);
@@ -529,8 +481,6 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             loadFileCallback();
             renderedPages.value.clear();
             drawingContexts.value = [];
-            showWhiteboard.value = false;
-            clearSavedState();
             
             imagePage.value = dataUrl;
             strokesPerPage.value = { 1: [] };
@@ -870,8 +820,6 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             strokesPerPage.value = { 1: [] };
             renderedPages.value.clear();
             drawingContexts.value = [];
-            showWhiteboard.value = false;
-            clearSavedState();
             pdfDoc = pdfDoc_;
             imagePage.value = null;
             handleFileLoadEvent('pdf', pdfDoc.numPages);
@@ -881,9 +829,25 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             setupIntersectionObserver();
             setupLazyLoadObserver();
             
-            if (typeof callback === 'function') {
-                callback({ type: 'create-blank-page', pageNumber: 1 });
-            }
+            // Wait for the page to be rendered by lazy load observer
+            await nextTick();
+            
+            // Reset page index to 0 for the new blank page
+            pageIndex.value = 0;
+            
+            // Poll for canvas to be ready
+            const waitForCanvas = () => {
+                const canvas = drawingCanvases.value[0];
+                if (canvas && canvas.width > 0) {
+                    if (typeof callback === 'function') {
+                        callback({ type: 'create-blank-page', pageNumber: 1 });
+                    }
+                } else {
+                    setTimeout(waitForCanvas, 50);
+                }
+            };
+            
+            waitForCanvas();
         }).catch(async error => {
             console.error('Error creating blank PDF:', error);
             await showModal('Error creating blank page: ' + error.message);
@@ -974,12 +938,14 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         });
     };
 
-    const createImage = (src, redrawAllStrokesCallback, addToHistoryCallback) => {
+    const createImage = (imageData, redrawAllStrokesCallback, addToHistoryCallback) => {
+        if(!imageData) return;
         const img = new Image();
         img.onload = () => {
             // Add image to current page in visible viewport
             const canvasIndex = pageIndex.value;
             const canvas = drawingCanvases.value[canvasIndex];
+            
             if (!canvas) return;
             
             // Calculate visible viewport position on the canvas
@@ -1005,21 +971,20 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
                 viewportCenterY = visibleCenterY * scaleY;
             }
             
-            const maxWidth = canvas.width * 0.5;
-            const maxHeight = canvas.height * 0.5;
+            // Use the full image dimensions without artificial limits
             let width = img.width;
             let height = img.height;
             
-            // Scale down if too large
-            if (width > maxWidth || height > maxHeight) {
-                const ratio = Math.min(maxWidth / width, maxHeight / height);
+            // Only scale down if image is larger than canvas
+            if (width > canvas.width || height > canvas.height) {
+                const ratio = Math.min(canvas.width / width, canvas.height / height);
                 width *= ratio;
                 height *= ratio;
             }
             
-            // Center the image in the visible viewport
-            const x = Math.max(0, Math.min(canvas.width - width, viewportCenterX - width / 2));
-            const y = Math.max(0, Math.min(canvas.height - height, viewportCenterY - height / 2));
+            // Center the image in the canvas
+            const x = Math.max(0, (canvas.width - width) / 2);
+            const y = Math.max(0, (canvas.height - height) / 2);
             
             const imageStroke = [{
                 type: 'image',
@@ -1027,7 +992,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
                 y,
                 width,
                 height,
-                imageData: src,
+                imageData,
                 originalWidth: width,
                 originalHeight: height
             }];
@@ -1043,7 +1008,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             addToHistoryCallback({ type: 'add', canvasIndex, strokeId, stroke: imageStroke });
         };
 
-        img.src = src;
+        img.src = imageData;
     }
 
     const createImageImportHandler = (redrawAllStrokesCallback, addToHistoryCallback) => {
@@ -1060,6 +1025,18 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             // Reset input
             event.target.value = '';
         };
+    };
+
+    // Open a blank page
+    const openNewBlankPage = (redrawAllStrokes, addToHistory, imageData) => {
+        if (isFileLoaded.value) {
+            openNewTab();
+            return;
+        }
+        
+        createBlankPage(() => {
+            createImage(imageData, redrawAllStrokes, addToHistory);
+        });
     };
 
     return {
@@ -1085,13 +1062,8 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         isFirstPage,
         isLastPage,
         zoomPercentage,
-        showWhiteboard,
         fileRecentlySaved,
-        resetPdfDoc,
-        hasSavedPdfDoc,
-        clearSavedState,
-        updateSavedState,
-        restoreSavedState,
+        handlePageNumberInput,
         renderAllPages,
         loadImageFile,
         loadPdfFile,
@@ -1113,6 +1085,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         deletedPages,
         deletePage,
         createBlankPage,
+        openNewBlankPage,
         insertBlankPage,
         createImageImportHandler,
         createImage
