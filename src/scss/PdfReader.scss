@@ -57,6 +57,8 @@
 }
 
 .pdf-reader {
+    margin-top: 72px; /* height of navbar */
+    height: calc(100vh - 72px);
     background-color: $text-muted;
     overflow: auto;
     touch-action: pan-y pan-x;
