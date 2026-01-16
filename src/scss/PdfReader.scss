@@ -8,6 +8,15 @@
         top: 31.5px !important;
     }
 
+    .navbar-nav {
+        max-height: 34px !important;
+
+        &:hover {
+            max-height: none !important;
+        }
+    }
+
+
     background: $dark-bg-gradient !important;
     border-bottom: 1px solid $border-color;
 
