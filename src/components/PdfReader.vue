@@ -554,179 +554,177 @@ defineExpose({
     <div class="container-fluid bg-dark" @dragenter.prevent="onDragEnter" @dragleave.prevent="onDragLeave" @dragover.prevent @drop.prevent="onDrop">
         <template v-if="isFileLoaded">
             <nav :class="`navbar navbar-expand navbar-dark bg-dark fixed-top py-1 fixed-${toolbarPosition}`">
-                <div ref="toolbarContainer" class="container-fluid">
-                    <!-- Toolbar -->
-                    <ul ref="toolbar" class="navbar-nav mx-auto flex-wrap justify-content-center">
-                        <!-- Drawing -->
-                        <template v-if="isDrawing || isTextMode">
-                            <li class="nav-item" v-for="(strokeStyle, index) in initialStrokeStyles">
-                                <a class="nav-link" href="#" @click.prevent="handleStrokeStyleButtonClick(index)" :class="{ active: strokeStyle.color === drawColor }">
-                                    <i class="bi bi-circle-fill" :style="{ color: strokeStyle.color }"></i>
-                                </a>
-                            </li>
-                            <li class="nav-item btn-group">
-                                <a href="#" role="button" class="nav-link" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
-                                    <i class="bi bi-palette-fill"></i>
-                                </a>
-                                <div class="dropdown-menu dropdown-menu-dark rounded-3 p-3">
-                                    <div class="mb-3">
-                                        <div class="form-label">Color</div>
-                                        <div class="row row-cols-5">
-                                            <template v-for="color in colors">
-                                                <div class="col" v-if="!initialStrokeStyles.find(el => el.color === color)">
-                                                    <div role="button" class="fs-3" :style="{ color }" @click="setInitialStrokeColor(color)" :title="color">
-                                                        <i class="bi bi-circle-fill"></i>
-                                                    </div>
+                <!-- Toolbar -->
+                <ul ref="toolbar" class="navbar-nav mx-auto flex-wrap justify-content-center">
+                    <!-- Drawing -->
+                    <template v-if="isDrawing || isTextMode">
+                        <li class="nav-item" v-for="(strokeStyle, index) in initialStrokeStyles">
+                            <a class="nav-link" href="#" @click.prevent="handleStrokeStyleButtonClick(index)" :class="{ active: strokeStyle.color === drawColor }">
+                                <i class="bi bi-circle-fill" :style="{ color: strokeStyle.color }"></i>
+                            </a>
+                        </li>
+                        <li class="nav-item btn-group">
+                            <a href="#" role="button" class="nav-link" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                                <i class="bi bi-palette-fill"></i>
+                            </a>
+                            <div class="dropdown-menu dropdown-menu-dark rounded-3 p-3">
+                                <div class="mb-3">
+                                    <div class="form-label">Color</div>
+                                    <div class="row row-cols-5">
+                                        <template v-for="color in colors">
+                                            <div class="col" v-if="!initialStrokeStyles.find(el => el.color === color)">
+                                                <div role="button" class="fs-3" :style="{ color }" @click="setInitialStrokeColor(color)" :title="color">
+                                                    <i class="bi bi-circle-fill"></i>
                                                 </div>
-                                            </template>
-                                        </div>
-                                        <div class="mb-2">
-                                            <svg width="100%" height="40" viewBox="0 0 200 40" preserveAspectRatio="none">
-                                                <path 
-                                                    d="M 0,20 Q 25,5 50,20 T 100,20 T 150,20 T 200,20" 
-                                                    fill="none" 
-                                                    :stroke="activeStrokeStyle?.color" 
-                                                    :stroke-width="activeStrokeStyle?.thickness" 
-                                                    stroke-linecap="round"
-                                                />
-                                            </svg>
-                                        </div>
+                                            </div>
+                                        </template>
                                     </div>
-                                    <div class="mb-3">
-                                        <label class="form-label">Thickness</label>
-                                        <div class="d-flex align-items-center">
-                                            <input type="range" class="form-range" min="1" max="10" :value="activeStrokeStyle?.thickness" @input="setInitialStrokeThickness($event.target.value)" />
-                                            <input type="text" class="form-control-plaintext" min="1" max="10" :value="activeStrokeStyle?.thickness" readonly />
-                                        </div>
+                                    <div class="mb-2">
+                                        <svg width="100%" height="40" viewBox="0 0 200 40" preserveAspectRatio="none">
+                                            <path 
+                                                d="M 0,20 Q 25,5 50,20 T 100,20 T 150,20 T 200,20" 
+                                                fill="none" 
+                                                :stroke="activeStrokeStyle?.color" 
+                                                :stroke-width="activeStrokeStyle?.thickness" 
+                                                stroke-linecap="round"
+                                            />
+                                        </svg>
                                     </div>
                                 </div>
-                            </li>
-                            <li class="nav-item vr bg-white mx-2"></li>
-                        </template>
-                        <li class="nav-item">
-                            <a class="nav-link" href="#" @click.prevent="selectDrawingTool('pen')" :class="{ active: isDrawing && drawMode === 'pen' }" title="Draw (D)">
-                                <i class="bi bi-pencil-fill"></i>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="#" @click.prevent="selectEraser" :class="{ active: isEraser }" title="Eraser (E)">
-                                <i class="bi bi-eraser-fill"></i>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="#" @click.prevent="selectDrawingTool('line')" :class="{ active: isDrawing && drawMode === 'line' }" title="Line (L)">
-                                <i class="bi bi-slash-lg"></i>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="#" @click.prevent="selectDrawingTool('rectangle')" :class="{ active: isDrawing && drawMode === 'rectangle' }" title="Rectangle (R)">
-                                <i class="bi bi-square"></i>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="#" @click.prevent="selectDrawingTool('circle')" :class="{ active: isDrawing && drawMode === 'circle' }" title="Circle (O)">
-                                <i class="bi bi-circle"></i>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="#" class="nav-link" @click.prevent="selectText" :class="{ active: isTextMode }" title="Add Text (T)">
-                                <i class="bi bi-textarea-t"></i>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="#" class="nav-link" @click.prevent="importImage" title="Import Image (I)">
-                                <i class="bi bi-image"></i>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="#" @click.prevent="selectStrokeMode" :class="{ active: !hasActiveTool && !isTextSelectionMode }" title="Stroke Selection (P)">
-                                <i class="bi bi-cursor-fill"></i>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="#" @click.prevent="toggleTextSelection" :class="{ active: isTextSelectionMode }" title="Text Selection (S)">
-                                <i class="bi bi-cursor-text"></i>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="#" @click.prevent="toggleTouchDrawing" :class="{ active: enableTouchDrawing }" :title="`${enableTouchDrawing ? 'Disable' : 'Enable'} Touch Drawing`">
-                                <i class="bi bi-hand-index-thumb-fill"></i>
-                            </a>
-                        </li>
-                        <li class="nav-item vr bg-white mx-2"></li>
-    
-                        <!-- Undo/Redo -->
-                        <li class="nav-item">
-                            <a class="nav-link" href="#" @click.prevent="undo()" :class="{ disabled: !canUndo }" title="Undo (Ctrl+Z)">
-                                <i class="bi bi-arrow-counterclockwise"></i>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="#" @click.prevent="redo()" :class="{ disabled: !canRedo }" title="Redo (Ctrl+Y)">
-                                <i class="bi bi-arrow-clockwise"></i>
-                            </a>
-                        </li>
-                        
-                        <!-- Pagination -->
-                        <li class="nav-item vr bg-white mx-2"></li>
-                        <li class="nav-item">
-                            <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex - 1)" :class="{ disabled: isFirstPage }" title="Previous Page">
-                                <i class="bi bi-chevron-up"></i>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex + 1)" :class="{ disabled: isLastPage }" title="Next Page">
-                                <i class="bi bi-chevron-down"></i>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <div class="input-group flex-nowrap">
-                                <input type="text" class="form-control-plaintext" :value="pageNum" @input="handlePageNumberInput" />
-                                <div class="input-group-text bg-transparent border-0 text-secondary p-0 pe-1">/ {{ pageCount }}</div>
+                                <div class="mb-3">
+                                    <label class="form-label">Thickness</label>
+                                    <div class="d-flex align-items-center">
+                                        <input type="range" class="form-range" min="1" max="10" :value="activeStrokeStyle?.thickness" @input="setInitialStrokeThickness($event.target.value)" />
+                                        <input type="text" class="form-control-plaintext" min="1" max="10" :value="activeStrokeStyle?.thickness" readonly />
+                                    </div>
+                                </div>
                             </div>
                         </li>
-                        
-                        <!-- Zoom -->
                         <li class="nav-item vr bg-white mx-2"></li>
-                        <li class="nav-item">
-                            <a href="#" class="nav-link" @click.prevent="zoom(-1)" :class="{ disabled: isViewLocked || zoomPercentage <= minZoom }">
-                                <i class="bi bi-zoom-out"></i>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="#" class="nav-link" @click.prevent="zoom(1)" :class="{ disabled: isViewLocked || zoomPercentage >= maxZoom }">
-                                <i class="bi bi-zoom-in"></i>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <select name="zoom-level" id="zoom-level" class="form-control-plaintext" @change="onZoomLevelChange" :disabled="isViewLocked">
-                                <option value="fit-height">Fit Height</option>
-                                <option value="fit-width">Fit Width</option>
-                                <template v-for="value in zoomLevels">
-                                    <option :value="value" :selected="zoomPercentage === value">
-                                        {{ value }} %
-                                    </option>
-                                </template>
-                            </select>
-                        </li>
-    
-                        <li class="nav-item vr bg-white mx-2"></li>
-                        
-                        <!-- Selection Tool -->
-                        <li class="nav-item">
-                            <a class="nav-link" href="#" @click.prevent="captureSelection" :class="{ active: isSelectionMode }" title="Select Area to Whiteboard">
-                                <i class="bi bi-scissors"></i>
-                            </a>
-                        </li>
-    
-                        <!-- View Lock -->
-                        <li class="nav-item" :title="isViewLocked ? 'Unlock View' : 'Lock View'">
-                            <a href="#" class="nav-link" @click.prevent="lockView" :class="{ active: isViewLocked }">
-                                <i class="bi" :class="isViewLocked ? 'bi-lock-fill' : 'bi-lock'"></i>
-                            </a>
-                        </li>
-                    </ul>
-                </div>
+                    </template>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" @click.prevent="selectDrawingTool('pen')" :class="{ active: isDrawing && drawMode === 'pen' }" title="Draw (D)">
+                            <i class="bi bi-pencil-fill"></i>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" @click.prevent="selectEraser" :class="{ active: isEraser }" title="Eraser (E)">
+                            <i class="bi bi-eraser-fill"></i>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" @click.prevent="selectDrawingTool('line')" :class="{ active: isDrawing && drawMode === 'line' }" title="Line (L)">
+                            <i class="bi bi-slash-lg"></i>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" @click.prevent="selectDrawingTool('rectangle')" :class="{ active: isDrawing && drawMode === 'rectangle' }" title="Rectangle (R)">
+                            <i class="bi bi-square"></i>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" @click.prevent="selectDrawingTool('circle')" :class="{ active: isDrawing && drawMode === 'circle' }" title="Circle (O)">
+                            <i class="bi bi-circle"></i>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" @click.prevent="selectText" :class="{ active: isTextMode }" title="Add Text (T)">
+                            <i class="bi bi-textarea-t"></i>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" @click.prevent="importImage" title="Import Image (I)">
+                            <i class="bi bi-image"></i>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" @click.prevent="selectStrokeMode" :class="{ active: !hasActiveTool && !isTextSelectionMode }" title="Stroke Selection (P)">
+                            <i class="bi bi-cursor-fill"></i>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" @click.prevent="toggleTextSelection" :class="{ active: isTextSelectionMode }" title="Text Selection (S)">
+                            <i class="bi bi-cursor-text"></i>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" @click.prevent="toggleTouchDrawing" :class="{ active: enableTouchDrawing }" :title="`${enableTouchDrawing ? 'Disable' : 'Enable'} Touch Drawing`">
+                            <i class="bi bi-hand-index-thumb-fill"></i>
+                        </a>
+                    </li>
+                    <li class="nav-item vr bg-white mx-2"></li>
+
+                    <!-- Undo/Redo -->
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" @click.prevent="undo()" :class="{ disabled: !canUndo }" title="Undo (Ctrl+Z)">
+                            <i class="bi bi-arrow-counterclockwise"></i>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" @click.prevent="redo()" :class="{ disabled: !canRedo }" title="Redo (Ctrl+Y)">
+                            <i class="bi bi-arrow-clockwise"></i>
+                        </a>
+                    </li>
+                    
+                    <!-- Pagination -->
+                    <li class="nav-item vr bg-white mx-2"></li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex - 1)" :class="{ disabled: isFirstPage }" title="Previous Page">
+                            <i class="bi bi-chevron-up"></i>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex + 1)" :class="{ disabled: isLastPage }" title="Next Page">
+                            <i class="bi bi-chevron-down"></i>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <div class="input-group flex-nowrap">
+                            <input type="text" class="form-control-plaintext" :value="pageNum" @input="handlePageNumberInput" />
+                            <div class="input-group-text bg-transparent border-0 text-secondary p-0 pe-1">/ {{ pageCount }}</div>
+                        </div>
+                    </li>
+                    
+                    <!-- Zoom -->
+                    <li class="nav-item vr bg-white mx-2"></li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" @click.prevent="zoom(-1)" :class="{ disabled: isViewLocked || zoomPercentage <= minZoom }">
+                            <i class="bi bi-zoom-out"></i>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" @click.prevent="zoom(1)" :class="{ disabled: isViewLocked || zoomPercentage >= maxZoom }">
+                            <i class="bi bi-zoom-in"></i>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <select name="zoom-level" id="zoom-level" class="form-control-plaintext" @change="onZoomLevelChange" :disabled="isViewLocked">
+                            <option value="fit-height">Fit Height</option>
+                            <option value="fit-width">Fit Width</option>
+                            <template v-for="value in zoomLevels">
+                                <option :value="value" :selected="zoomPercentage === value">
+                                    {{ value }} %
+                                </option>
+                            </template>
+                        </select>
+                    </li>
+
+                    <li class="nav-item vr bg-white mx-2"></li>
+                    
+                    <!-- Selection Tool -->
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" @click.prevent="captureSelection" :class="{ active: isSelectionMode }" title="Select Area to Whiteboard">
+                            <i class="bi bi-scissors"></i>
+                        </a>
+                    </li>
+
+                    <!-- View Lock -->
+                    <li class="nav-item" :title="isViewLocked ? 'Unlock View' : 'Lock View'">
+                        <a href="#" class="nav-link" @click.prevent="lockView" :class="{ active: isViewLocked }">
+                            <i class="bi" :class="isViewLocked ? 'bi-lock-fill' : 'bi-lock'"></i>
+                        </a>
+                    </li>
+                </ul>
             </nav>
         </template>
         <div class="pdf-reader" ref="pdfReader" :class="{ 'overflow-hidden': isViewLocked }" :style="`margin-top: ${toolbarHeight}px; height: calc(100vh - ${toolbarHeight}px);`">
