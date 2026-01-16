@@ -538,7 +538,7 @@ defineExpose({
             <nav class="navbar navbar-expand navbar-dark bg-dark fixed-top py-1">
                 <div class="container-fluid">
                     <!-- Toolbar -->
-                    <ul class="navbar-nav mx-auto">
+                    <ul class="navbar-nav mx-auto flex-wrap justify-content-center">
                         <!-- Drawing -->
                         <template v-if="isDrawing || isTextMode">
                             <li class="nav-item" v-for="(strokeStyle, index) in initialStrokeStyles">
@@ -661,7 +661,7 @@ defineExpose({
                                 <i class="bi bi-chevron-down"></i>
                             </a>
                         </li>
-                        <li class="nav-item d-none d-lg-block">
+                        <li class="nav-item">
                             <div class="input-group">
                                 <input type="text" class="form-control-plaintext" :value="pageNum" @input="handlePageNumberInput" />
                                 <div class="input-group-text bg-transparent border-0 text-secondary p-0 pe-1">/ {{ pageCount }}</div>

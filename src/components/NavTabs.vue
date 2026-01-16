@@ -83,12 +83,11 @@ onBeforeUnmount(() => {
                         </a>
                     </li>
                     <li><hr class="text-primary my-1"></li>
-                    <li><hr class="text-primary my-1"></li>
                     <li><h6 class="dropdown-header">Page</h6></li>
                     <li>
                         <a class="dropdown-item small" :class="{ disabled: activeTab.emptyState }" href="#" @click.prevent="emit('page-blank')">
                             <i class="bi bi-file-earmark me-1"></i>
-                            Insert Blank Page
+                            Insert Blank After
                         </a>
                     </li>
                     <li>
@@ -106,7 +105,7 @@ onBeforeUnmount(() => {
                     <li>
                         <a class="dropdown-item small" :class="{ disabled: activeTab.emptyState, 'text-danger': !activeTab.emptyState }" href="#" @click.prevent="emit('page-delete')">
                             <i class="bi bi-trash3 me-1"></i>
-                            Delete Page (Del)
+                            Delete (Del)
                         </a>
                     </li>
                 </ul>
