@@ -10,6 +10,14 @@ import { fileDataCache, openNewTab } from "../composables/useTabs";
 import { useWindowEvents } from "../composables/useWindowEvents";
 import EmptyState from "./EmptyState.vue";
 
+const props = defineProps({
+    toolbarPosition: {
+        type: String,
+        default: 'top',
+        validator: (value) => ['top', 'bottom'].includes(value)
+    }
+});
+
 // Cursor Style
 const cursorStyle = computed(() => {
     if (resizeCursor.value) return resizeCursor.value;
@@ -535,7 +543,7 @@ defineExpose({
 <template>
     <div class="container-fluid bg-dark" @dragenter.prevent="onDragEnter" @dragleave.prevent="onDragLeave" @dragover.prevent @drop.prevent="onDrop">
         <template v-if="isFileLoaded">
-            <nav class="navbar navbar-expand navbar-dark bg-dark fixed-top py-1">
+            <nav :class="`navbar navbar-expand navbar-dark bg-dark fixed-top py-1 fixed-${toolbarPosition}`">
                 <div class="container-fluid">
                     <!-- Toolbar -->
                     <ul class="navbar-nav mx-auto flex-wrap justify-content-center">

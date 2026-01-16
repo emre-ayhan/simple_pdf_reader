@@ -13,12 +13,18 @@ const emit = defineEmits([
     'page-delete'
 ]);
 
-const openNewBlankPage = () => {
-    fileDataCache.value = {
-        type: 'blank',
-        data: null
-    };
-    emit('file-new');
+const menuItems = {
+    file: [
+        { label: 'New Blank Page', action: 'file-new', icon: 'bi-pencil-square', shortcut: 'Ctrl+Shift+N' },
+        { label: 'Open', action: 'file-open', icon: 'bi-folder', shortcut: 'Ctrl+O' },
+        { label: 'Save', action: 'file-save', icon: 'bi-floppy', shortcut: 'Ctrl+S' }
+    ],
+    page: [
+        { label: 'Insert Blank After', action: 'page-blank', icon: 'bi-file-earmark' },
+        { label: 'First Page', action: 'page-first', icon: 'bi-chevron-double-up', shortcut: 'Home' },
+        { label: 'Last Page', action: 'page-last', icon: 'bi-chevron-double-down', shortcut: 'End' },
+        { label: 'Delete', action: 'page-delete', icon: 'bi-trash3' }
+    ]
 };
 
 const electronButtons = [
@@ -63,51 +69,18 @@ onBeforeUnmount(() => {
                 Menu
             </a>
                 <ul class="dropdown-menu dropdown-menu-dark">
-                    <li><h6 class="dropdown-header">File</h6></li>
-                    <li>
-                        <a class="dropdown-item small" href="#" @click.prevent="openNewBlankPage">
-                            <i class="bi bi-pencil-square me-1"></i>
-                            New Blank Page (Ctrl+Shift+N)
-                        </a>
-                    </li>
-                    <li>
-                        <a class="dropdown-item small" href="#" @click.prevent="emit('file-open')">
-                            <i class="bi bi-folder me-1"></i>
-                            Open (Ctrl+O)
-                        </a>
-                    </li>
-                    <li>
-                        <a class="dropdown-item small" :class="{ disabled: !fileHasUnsavedChanges(activeTab?.id) || activeTab.emptyState }" href="#" @click.prevent="emit('file-save')">
-                            <i class="bi bi-floppy me-1"></i>
-                            Save (Ctrl+S)
-                        </a>
-                    </li>
-                    <li><hr class="text-primary my-1"></li>
-                    <li><h6 class="dropdown-header">Page</h6></li>
-                    <li>
-                        <a class="dropdown-item small" :class="{ disabled: activeTab.emptyState }" href="#" @click.prevent="emit('page-blank')">
-                            <i class="bi bi-file-earmark me-1"></i>
-                            Insert Blank After
-                        </a>
-                    </li>
-                    <li>
-                        <a class="dropdown-item small" :class="{ disabled: activeTab.emptyState }" href="#" @click.prevent="emit('page-first')">
-                            <i class="bi bi-chevron-double-up me-1"></i>
-                            First Page (Home)
-                        </a>
-                    </li>
-                    <li>
-                        <a class="dropdown-item small" :class="{ disabled: activeTab.emptyState }" href="#" @click.prevent="emit('page-last')">
-                            <i class="bi bi-chevron-double-down me-1"></i>
-                            Last Page (End)
-                        </a>
-                    </li>
-                    <li>
-                        <a class="dropdown-item small" :class="{ disabled: activeTab.emptyState, 'text-danger': !activeTab.emptyState }" href="#" @click.prevent="emit('page-delete')">
-                            <i class="bi bi-trash3 me-1"></i>
-                            Delete (Del)
-                        </a>
-                    </li>
+                    <template v-for="(item, group, index) in menuItems">
+                        <li v-if="index"><hr class="text-primary my-1"></li>
+                        <li><h6 class="dropdown-header text-capitalize">{{ group }}</h6></li>
+                        <template v-for="menuItem in item">
+                            <li>
+                                <a class="dropdown-item small" :class="{ disabled: activeTab.emptyState && group === 'page' }" href="#" @click.prevent="emit(menuItem.action)">
+                                    <i :class="`${menuItem.icon} me-1`"></i>
+                                    {{ menuItem.label }} <span v-if="menuItem.shortcut">({{ menuItem.shortcut }})</span>
+                                </a>
+                            </li>
+                        </template>
+                    </template>
                 </ul>
         </li>
         <template v-for="(tab, index) in tabs" :key="tab">

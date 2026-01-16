@@ -3,6 +3,7 @@ import NavTabs from './components/NavTabs.vue';
 import PdfReader from './components/PdfReader.vue';
 import PageModal from './components/PageModal.vue';
 import { ref } from 'vue';
+import { fileDataCache } from './composables/useTabs';
 
 const reader = ref(null);
 
@@ -20,6 +21,10 @@ const saveFile = () => {
 
 const newBlankPage = () => {
     if (!(reader.value)) return;
+    fileDataCache.value = {
+        type: 'blank',
+        data: null
+    };
     reader.value.createNewBlankPage();
 };
 
