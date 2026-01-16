@@ -536,7 +536,7 @@ defineExpose({
     <div class="container-fluid bg-dark" @dragenter.prevent="onDragEnter" @dragleave.prevent="onDragLeave" @dragover.prevent @drop.prevent="onDrop">
         <template v-if="isFileLoaded">
             <nav class="navbar navbar-expand navbar-dark bg-dark fixed-top py-1">
-                <div class="container">
+                <div class="container-fluid">
                     <!-- Toolbar -->
                     <ul class="navbar-nav mx-auto">
                         <!-- Drawing -->
@@ -651,12 +651,6 @@ defineExpose({
                         
                         <!-- Pagination -->
                         <li class="nav-item vr bg-white mx-2"></li>
-                        <li class="nav-item d-none d-lg-block">
-                            <div class="input-group">
-                                <input type="text" class="form-control-plaintext" :value="pageNum" @input="handlePageNumberInput" />
-                                <div class="input-group-text bg-transparent border-0 text-secondary p-0 pe-1">/ {{ pageCount }}</div>
-                            </div>
-                        </li>
                         <li class="nav-item">
                             <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex - 1)" :class="{ disabled: isFirstPage }" title="Previous Page">
                                 <i class="bi bi-chevron-up"></i>
@@ -666,6 +660,12 @@ defineExpose({
                             <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex + 1)" :class="{ disabled: isLastPage }" title="Next Page">
                                 <i class="bi bi-chevron-down"></i>
                             </a>
+                        </li>
+                        <li class="nav-item d-none d-lg-block">
+                            <div class="input-group">
+                                <input type="text" class="form-control-plaintext" :value="pageNum" @input="handlePageNumberInput" />
+                                <div class="input-group-text bg-transparent border-0 text-secondary p-0 pe-1">/ {{ pageCount }}</div>
+                            </div>
                         </li>
                         
                         <!-- Zoom -->
