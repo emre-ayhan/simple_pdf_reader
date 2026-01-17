@@ -35,6 +35,10 @@ const fileHasUnsavedChanges = (fileId) => {
     return session.historyStep !== session.savedHistoryStep;
 }
 
+const activePageHasUnsavedChanges = computed(() => {
+    return fileHasUnsavedChanges(activeTab.value.id);
+});
+
 const setCurrentTab = (fileData) => {
     tabs.value[activeTabIndex.value] = {
         ...fileData,
@@ -105,6 +109,7 @@ export {
     tabs,
     activeTabIndex,
     activeTab,
+    activePageHasUnsavedChanges,
     openEmptyStateTab,
     tabHistory,
     openTabs,

@@ -1,31 +1,25 @@
 <script setup>
-import { onBeforeUnmount, onMounted } from 'vue';
+import { computed, onBeforeUnmount, onMounted } from 'vue';
 import { Electron } from '../composables/useElectron';
-import { openNewTab, closeTab, activeTabIndex, activeTab, tabs, tabHistory, openTabs, markAsActive, isLastTabOnEmptyState, fileHasUnsavedChanges, handleElectronButtonClick, fileDataCache } from '../composables/useTabs';
+import { openNewTab, closeTab, activeTabIndex, activeTab, tabs, tabHistory, openTabs, markAsActive, isLastTabOnEmptyState, fileHasUnsavedChanges, activePageHasUnsavedChanges, handleElectronButtonClick, fileDataCache } from '../composables/useTabs';
 
 const emit = defineEmits([
-    'file-new',
-    'file-open',
-    'file-save',
-    'page-blank',
-    'page-first',
-    'page-last',
-    'page-delete'
+    'menu-item-click'
 ]);
 
-const menuItems = {
+const menuItems = computed(() => ({
     file: [
-        { label: 'New Blank Page', action: 'file-new', icon: 'bi-pencil-square', shortcut: 'Ctrl+Shift+N' },
-        { label: 'Open', action: 'file-open', icon: 'bi-folder', shortcut: 'Ctrl+O' },
-        { label: 'Save', action: 'file-save', icon: 'bi-floppy', shortcut: 'Ctrl+S' }
+        { label: 'New Blank Page', action: 'openNewBlankPage', icon: 'bi-pencil-square', shortcut: 'Ctrl+Shift+N' },
+        { label: 'Open', action: 'openFile', icon: 'bi-folder', shortcut: 'Ctrl+O' },
+        { label: 'Save', action: 'saveFile', icon: 'bi-floppy', shortcut: 'Ctrl+S', disabled: !activePageHasUnsavedChanges.value }
     ],
     page: [
-        { label: 'Insert Blank After', action: 'page-blank', icon: 'bi-file-earmark-arrow-down' },
-        { label: 'First Page', action: 'page-first', icon: 'bi-chevron-double-up', shortcut: 'Home' },
-        { label: 'Last Page', action: 'page-last', icon: 'bi-chevron-double-down', shortcut: 'End' },
-        { label: 'Delete', action: 'page-delete', icon: 'bi-trash3' }
+        { label: 'Insert Blank After', action: 'insertBlankPage', icon: 'bi-file-earmark-arrow-down' },
+        { label: 'First Page', action: 'scrollToFirstPage', icon: 'bi-chevron-double-up', shortcut: 'Home' },
+        { label: 'Last Page', action: 'scrollToLastPage', icon: 'bi-chevron-double-down', shortcut: 'End' },
+        { label: 'Delete', action: 'deletePage', icon: 'bi-trash3' }
     ]
-};
+}));
 
 const electronButtons = [
     { action: 'fullscreen', icon: 'bi-arrows-fullscreen', title: 'Fullscreen' },
@@ -74,7 +68,7 @@ onBeforeUnmount(() => {
                         <li><h6 class="dropdown-header text-capitalize">{{ group }}</h6></li>
                         <template v-for="menuItem in item">
                             <li>
-                                <a class="dropdown-item small" :class="{ disabled: activeTab.emptyState && group === 'page' }" href="#" @click.prevent="emit(menuItem.action)">
+                                <a class="dropdown-item small" :class="{ disabled: activeTab.emptyState && group === 'page' || menuItem.disabled }" href="#" @click.prevent="emit('menu-item-click', menuItem.action)">
                                     <i :class="`${menuItem.icon} me-1`"></i>
                                     {{ menuItem.label }} <span v-if="menuItem.shortcut">({{ menuItem.shortcut }})</span>
                                 </a>

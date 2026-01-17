@@ -529,15 +529,15 @@ onUnmounted(() => {
 });
 
 defineExpose({
-    handleFileOpen,
-    handleSaveFile,
+    openNewBlankPage: createNewBlankPage,
+    openFile: handleFileOpen,
+    saveFile: handleSaveFile,
+    insertBlankPage: handleInsertBlankPage,
+    scrollToFirstPage,
+    scrollToLastPage,
     deletePage: () => {
         deletePage(pageIndex.value, addToHistory);
     },
-    insertBlankPage: handleInsertBlankPage,
-    createNewBlankPage,
-    scrollToFirstPage,
-    scrollToLastPage,
 })
 </script>
 <template>
