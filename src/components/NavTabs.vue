@@ -9,7 +9,7 @@ const emit = defineEmits([
 
 const menuItems = computed(() => ({
     file: [
-        { label: 'New Blank Page', action: 'openNewBlankPage', icon: 'bi-pencil-square', shortcut: 'Ctrl+Shift+N' },
+        { label: 'New Blank Page', action: 'openNewBlankPage', icon: 'bi-pencil-square' },
         { label: 'Open', action: 'openFile', icon: 'bi-folder', shortcut: 'Ctrl+O' },
         { label: 'Save', action: 'saveFile', icon: 'bi-floppy', shortcut: 'Ctrl+S', disabled: !activePageHasUnsavedChanges.value }
     ],
@@ -65,7 +65,7 @@ onBeforeUnmount(() => {
                 <ul class="dropdown-menu dropdown-menu-dark">
                     <template v-for="(item, group, index) in menuItems">
                         <li v-if="index"><hr class="text-primary my-1"></li>
-                        <li><h6 class="dropdown-header text-capitalize">{{ group }}</h6></li>
+                        <li><h6 class="dropdown-header text-capitalize text-primary">{{ group }}</h6></li>
                         <template v-for="menuItem in item">
                             <li>
                                 <a class="dropdown-item small" :class="{ disabled: activeTab.emptyState && group === 'page' || menuItem.disabled }" href="#" @click.prevent="emit('menu-item-click', menuItem.action)">
