@@ -20,7 +20,7 @@ const menuItems = {
         { label: 'Save', action: 'file-save', icon: 'bi-floppy', shortcut: 'Ctrl+S' }
     ],
     page: [
-        { label: 'Insert Blank After', action: 'page-blank', icon: 'bi-file-earmark' },
+        { label: 'Insert Blank After', action: 'page-blank', icon: 'bi-file-earmark-arrow-down' },
         { label: 'First Page', action: 'page-first', icon: 'bi-chevron-double-up', shortcut: 'Home' },
         { label: 'Last Page', action: 'page-last', icon: 'bi-chevron-double-down', shortcut: 'End' },
         { label: 'Delete', action: 'page-delete', icon: 'bi-trash3' }
