@@ -612,6 +612,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 const stroke = strokes[selectedStroke.value.strokeIndex];
                 
                 if (stroke && resizeStartBounds.value) {
+                    showStrokeMenu.value = false;
                     const first = stroke[0];
                     const startBounds = resizeStartBounds.value.padded;
                     const startRawBounds = resizeStartBounds.value.raw;
@@ -756,6 +757,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                     // Redraw to show the resize preview
                     redrawAllStrokes(currentCanvasIndex);
                     drawSelectionHighlight(currentCanvasIndex, selectedStroke.value.strokeIndex);
+                    showStrokeMenu.value = false;
                 }
                 
                 e.preventDefault();

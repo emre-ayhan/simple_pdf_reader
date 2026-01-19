@@ -236,7 +236,7 @@ const selectDrawingTool = (mode) => {
     if (!isFileLoaded.value) return;
     
     const wasActive = isDrawing.value && drawMode.value === mode;
-    resetToolState();
+    resetAllTools();
     
     if (!wasActive) {
         isDrawing.value = true;
@@ -254,7 +254,7 @@ const selectEraser = () => {
 const selectText = () => {
     if (!isFileLoaded.value) return;
     const wasActive = isTextMode.value;
-    resetToolState();
+    resetAllTools();
     isTextMode.value = !wasActive;
 };
 
@@ -673,7 +673,7 @@ defineExpose({
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="toggleTextSelection" :class="{ active: isTextSelectionMode }" title="Text Selection (S)">
+                        <a class="nav-link" href="#" @click.prevent="toggleTextSelection" :class="{ active: isTextSelectionMode && !isTextHighlightMode }" title="Text Selection (S)">
                             <i class="bi bi-cursor-text"></i>
                         </a>
                     </li>
@@ -779,7 +779,7 @@ defineExpose({
                                     cursor: cursorStyle,
                                     pointerEvents: 'auto',
                                     touchAction: (isViewLocked || isPenHovering || (enableTouchDrawing && hasActiveTool)) ? 'none' : 'pan-y pan-x',
-                                    zIndex: hasActiveTool ? 3 : 1
+                                    zIndex: isTextSelectionMode ? 1 : 3
                                 }"
                                 :data-color="drawColor"
                             ></canvas>
