@@ -629,32 +629,23 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                     const isCornerResize = ['nw', 'ne', 'sw', 'se'].includes(handle);
                     
                     if (isCornerResize) {
-                        // For corner resizes, maintain aspect ratio
-                        const baseWidth = Math.max(1, startBounds.maxX - startBounds.minX);
-                        const baseHeight = Math.max(1, startBounds.maxY - startBounds.minY);
-                        const baseAspectRatio = baseWidth / baseHeight;
-                        
-                        // Determine which corner and apply scaling accordingly
+                        // For corner resizes, opposite corner stays fixed and dragged corner moves
                         if (handle === 'se') {
-                            // Bottom-right: use max of dx/dy with aspect ratio
-                            const scale = Math.max(dx / baseWidth, dy / baseHeight);
-                            newMaxX = startBounds.maxX + (scale * baseWidth);
-                            newMaxY = startBounds.maxY + (scale * baseHeight);
+                            // Bottom-right: top-left stays fixed
+                            newMaxX = startBounds.maxX + dx;
+                            newMaxY = startBounds.maxY + dy;
                         } else if (handle === 'sw') {
-                            // Bottom-left: width decreases, height increases
-                            const scale = Math.max(-dx / baseWidth, dy / baseHeight);
-                            newMinX = startBounds.minX + (scale * baseWidth);
-                            newMaxY = startBounds.maxY + (scale * baseHeight);
+                            // Bottom-left: top-right stays fixed
+                            newMinX = startBounds.minX + dx;
+                            newMaxY = startBounds.maxY + dy;
                         } else if (handle === 'nw') {
-                            // Top-left: both decrease
-                            const scale = Math.max(-dx / baseWidth, -dy / baseHeight);
-                            newMinX = startBounds.minX + (scale * baseWidth);
-                            newMinY = startBounds.minY + (scale * baseHeight);
+                            // Top-left: bottom-right stays fixed
+                            newMinX = startBounds.minX + dx;
+                            newMinY = startBounds.minY + dy;
                         } else if (handle === 'ne') {
-                            // Top-right: width increases, height decreases
-                            const scale = Math.max(dx / baseWidth, -dy / baseHeight);
-                            newMaxX = startBounds.maxX + (scale * baseWidth);
-                            newMinY = startBounds.minY + (scale * baseHeight);
+                            // Top-right: bottom-left stays fixed
+                            newMaxX = startBounds.maxX + dx;
+                            newMinY = startBounds.minY + dy;
                         }
                     } else {
                         // For edge resizes, allow independent scaling
