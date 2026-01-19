@@ -180,6 +180,7 @@ startSession();
 // Toolbar Actions
 const isViewLocked = ref(false);
 const isTextSelectionMode = ref(false);
+const isTextHighlightMode = ref(false);
 
 const lockView = () => {
     if (!isFileLoaded.value) return;
@@ -188,28 +189,39 @@ const lockView = () => {
 
 const resetAllTools = () => {
     resetToolState();
+    isTextHighlightMode.value = false;
     isTextSelectionMode.value = false;
     window.getSelection()?.removeAllRanges();
+    document.removeEventListener('mouseup', handleTextSelectionMouseUp);
 };
+
 
 const handleTextSelectionMouseUp = () => {
     // Small delay to ensure selection is complete
     setTimeout(highlightTextSelection, 10);
 };
 
-const toggleTextSelection = () => {
+
+const toggleTextHighlightMode = () => {
     if (!isFileLoaded.value) return;
-    isTextSelectionMode.value = !isTextSelectionMode.value;
-    if (isTextSelectionMode.value) {
-        resetToolState();
-        // Add mouseup listener to detect when text is selected
+    resetToolState();
+    isTextHighlightMode.value = !isTextHighlightMode.value;
+
+    if (isTextHighlightMode.value) {
+        isTextSelectionMode.value = true;
         nextTick(() => {
             document.addEventListener('mouseup', handleTextSelectionMouseUp);
         });
-    } else {
-        window.getSelection()?.removeAllRanges();
-        document.removeEventListener('mouseup', handleTextSelectionMouseUp);
+        return;
     }
+
+    resetAllTools();
+};
+
+const toggleTextSelection = () => {
+    if (!isFileLoaded.value) return;
+    resetAllTools();
+    isTextSelectionMode.value = !isTextSelectionMode.value;
 };
 
 const imageInput = ref(null);
@@ -418,7 +430,7 @@ useWindowEvents(fileId, {
             action: (event) => {
                 if (isTextMode.value) return;
                 event.preventDefault();
-                toggleTextSelection();
+                toggleTextHighlightMode();
             }
         },
         t: {
@@ -569,7 +581,7 @@ defineExpose({
                 <!-- Toolbar -->
                 <ul ref="toolbar" class="navbar-nav mx-auto flex-wrap justify-content-center">
                     <!-- Drawing -->
-                    <template v-if="isDrawing || isTextMode">
+                    <template v-if="isDrawing || isTextMode || isTextHighlightMode">
                         <li class="nav-item" v-for="(strokeStyle, index) in initialStrokeStyles">
                             <a class="nav-link" href="#" @click.prevent="handleStrokeStyleButtonClick(index)" :class="{ active: strokeStyle.color === drawColor }">
                                 <i class="bi bi-circle-fill" :style="{ color: strokeStyle.color }"></i>
@@ -640,7 +652,7 @@ defineExpose({
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="toggleTextSelection" :class="{ active: isTextSelectionMode }" title="Highlight Text (H)">
+                        <a class="nav-link" href="#" @click.prevent="toggleTextHighlightMode" :class="{ active: isTextHighlightMode }" title="Highlight Text (H)">
                             <i class="bi bi-highlighter"></i>
                         </a>
                     </li>
