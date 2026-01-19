@@ -4,7 +4,7 @@
     border: 0 !important;
     margin: 0 !important;
     padding: .5rem !important;
-    padding-bottom: 0 !important;
+
     font-size: small !important;
     z-index: 1035;
     -webkit-app-region: drag;
@@ -43,6 +43,20 @@
             background-color: $primary;
             color: $dark !important;
             font-weight: 600;
+        }
+    }
+
+    &.fixed-bottom {
+        .nav-link {
+            border-top-left-radius: 0 !important;
+            border-top-right-radius: 0 !important;
+            border-bottom-left-radius: $border-radius-lg !important;
+            border-bottom-right-radius: $border-radius-lg !important;
+            border-top: 0 !important;
+        }
+
+        .nav-link:not(.nav-add) {
+            border-bottom: 1px solid $primary !important;
         }
     }
 

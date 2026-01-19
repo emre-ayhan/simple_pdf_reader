@@ -1,7 +1,15 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { Electron } from '../composables/useElectron';
 import { openNewTab, closeTab, activeTabIndex, activeTab, tabs, tabHistory, openTabs, markAsActive, isLastTabOnEmptyState, fileHasUnsavedChanges, activePageHasUnsavedChanges, handleElectronButtonClick, fileDataCache } from '../composables/useTabs';
+
+const props = defineProps({
+    toolbarPosition: {
+        type: String,
+        default: 'top',
+        validator: (value) => ['top', 'bottom'].includes(value)
+    }
+});
 
 const emit = defineEmits([
     'menu-item-click'
@@ -20,8 +28,7 @@ const menuItems = computed(() => ({
         { label: 'Delete', action: 'deletePage', icon: 'bi-trash3' }
     ],
     pereferences: [
-        { label: 'Settings', action: 'openSettings', icon: 'bi-gear' },
-        { label: 'About', action: 'openAbout', icon: 'bi-info-circle' }
+        { label: `Move Toolbar (${props.toolbarPosition === 'top' ? 'bottom' : 'top'})`, action: 'toggleToolbarPosition', icon: props.toolbarPosition === 'top' ? 'bi-arrow-down-square' : 'bi-arrow-up-square' },
     ]
 }));
 
@@ -60,13 +67,13 @@ onBeforeUnmount(() => {
 });
 </script>
 <template>
-    <ul class="nav nav-tabs fixed-top" id="appTabs" role="tablist">
+    <ul :class="`nav nav-tabs fixed-${props.toolbarPosition} ${activeTab.emptyState ? 'empty-state' : ''}`" id="appTabs" role="tablist">
         <!-- Nav Menu -->
         <li class="nav-item dropdown">
             <a class="nav-link nav-link-menu" data-bs-toggle="dropdown" href="#" role="button" aria-expanded="false">
                 Menu
             </a>
-                <ul class="dropdown-menu dropdown-menu-dark">
+                <ul class="dropdown-menu dropdown-menu-dark rounded-3">
                     <template v-for="(item, group, index) in menuItems">
                         <li v-if="index"><hr class="text-primary my-1"></li>
                         <li><h6 class="dropdown-header text-capitalize text-primary">{{ group }}</h6></li>
@@ -89,12 +96,12 @@ onBeforeUnmount(() => {
                             <span class="align-top fs-5 lh-1" v-if="fileHasUnsavedChanges(tab.id)">*</span>
                             {{ tab.filename }}
                         </div>
-                        <i class="bi bi-x-lg d-none d-lg-block" v-if="(index === activeTabIndex && !isLastTabOnEmptyState) || openTabs.length > 1" @click.stop.prevent="closeTab(index)"></i>
+                        <i class="bi bi-x-lg" v-if="(index === activeTabIndex && !isLastTabOnEmptyState) || openTabs.length > 1" @click.stop.prevent="closeTab(index)"></i>
                     </div>
                 </button>
             </li>
         </template>
-        <li class="nav-item d-none d-lg-block" role="presentation">
+        <li class="nav-item" role="presentation">
             <button class="nav-link nav-add" id="add-tab" type="button" role="tab" aria-selected="false" :disabled="isLastTabOnEmptyState" @click="openNewTab">
                 <i class="bi bi-plus-lg"></i>
             </button>

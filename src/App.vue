@@ -2,16 +2,19 @@
 import NavTabs from './components/NavTabs.vue';
 import PdfReader from './components/PdfReader.vue';
 import PageModal from './components/PageModal.vue';
-import { ref } from 'vue';
+import { onBeforeMount, ref } from 'vue';
+import { useStore } from './composables/useStore';
 
+const store = useStore();
 const reader = ref(null);
+const toolbarPosition = ref('top');
+
 const appHandlers = {
-    openSettings: () => {
-        
+    toggleToolbarPosition() {
+        const newPosition = toolbarPosition.value === 'top' ? 'bottom' : 'top';
+        store.set('toolbarPosition', newPosition);
+        toolbarPosition.value = newPosition;
     },
-    openAbout: () => {
-        
-    }
 }
 
 const menuItemClickHandler = (action) => {
@@ -20,10 +23,16 @@ const menuItemClickHandler = (action) => {
     if (typeof handler !== 'function') return;
     handler();
 }
+
+onBeforeMount(() => {
+    store.get('toolbarPosition', 'top').then(position => {
+        toolbarPosition.value = position;
+    });
+})
 </script>
 <template>
-    <nav-tabs @menu-item-click="menuItemClickHandler">
-        <PdfReader ref="reader" />
+    <nav-tabs @menu-item-click="menuItemClickHandler" :toolbar-position="toolbarPosition">
+        <PdfReader ref="reader" :toolbar-position="toolbarPosition" />
     </nav-tabs>
     <PageModal />
 </template>

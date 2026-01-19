@@ -5,7 +5,11 @@
 
 .navbar {
     &.fixed-top {
-        top: 31.5px !important;
+        top: $navtabsHeight !important;
+    }
+
+    &.fixed-bottom {
+        bottom: $navtabsHeight !important;
     }
 
     background: $dark-bg-gradient !important;
@@ -56,9 +60,17 @@
     }
 }
 
+
 .pdf-reader {
-    margin-top: 72px; /* height of navbar */
-    height: calc(100vh - 72px);
+    &.toolbar-top {
+        margin-top: $navtabsHeight;
+    }
+
+    &.toolbar-bottom {
+        margin-bottom: $navtabsHeight;
+    }
+
+    height: calc(100vh - #{$navtabsHeight});
     background-color: $text-muted;
     overflow: auto;
     touch-action: pan-y pan-x;
@@ -66,6 +78,18 @@
     &.overflow-hidden {
         touch-action: none;
         overflow: hidden;
+    }
+}
+
+.navbar + .pdf-reader {
+    height: calc(100vh - #{$navtabsHeight + $toolbarHeight});
+
+    &.toolbar-top {
+        margin-top: $navtabsHeight + $toolbarHeight; /* height of navbar */
+    }
+
+    &.toolbar-bottom {
+        margin-bottom: $navtabsHeight + $toolbarHeight; /* height of navbar */
     }
 }
 

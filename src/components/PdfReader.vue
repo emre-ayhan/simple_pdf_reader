@@ -761,7 +761,7 @@ defineExpose({
                 </ul>
             </nav>
         </template>
-        <div class="pdf-reader" ref="pdfReader" :class="{ 'overflow-hidden': isViewLocked }">
+        <div :class="`pdf-reader toolbar-${toolbarPosition} ${isViewLocked ? 'overflow-hidden' : ''}`" ref="pdfReader">
             <EmptyState v-if="!isFileLoaded" @open-file="handleFileOpen" />
 
             <div v-else class="pages-container" ref="pagesContainer" :style="{ width: `${zoomPercentage}%` }">
