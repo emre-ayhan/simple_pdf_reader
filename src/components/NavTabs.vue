@@ -18,6 +18,10 @@ const menuItems = computed(() => ({
         { label: 'First Page', action: 'scrollToFirstPage', icon: 'bi-chevron-double-up', shortcut: 'Home' },
         { label: 'Last Page', action: 'scrollToLastPage', icon: 'bi-chevron-double-down', shortcut: 'End' },
         { label: 'Delete', action: 'deletePage', icon: 'bi-trash3' }
+    ],
+    pereferences: [
+        { label: 'Settings', action: 'openSettings', icon: 'bi-gear' },
+        { label: 'About', action: 'openAbout', icon: 'bi-info-circle' }
     ]
 }));
 
