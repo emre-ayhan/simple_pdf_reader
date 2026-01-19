@@ -592,14 +592,14 @@ defineExpose({
                         </li>
                         <li class="nav-item vr bg-white mx-2"></li>
                     </template>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="selectDrawingTool('pen')" :class="{ active: isDrawing && drawMode === 'pen' }" title="Draw (D)">
-                            <i class="bi bi-pencil-fill"></i>
+                    <li class="nav-item" v-if="drawMode === 'pen' && isDrawing">
+                        <a class="nav-link" href="#" @click.prevent="selectEraser" :class="{ active: isEraser }" title="Eraser (E)">
+                            <i class="bi bi-eraser-fill"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="selectEraser" :class="{ active: isEraser }" title="Eraser (E)">
-                            <i class="bi bi-eraser-fill"></i>
+                        <a class="nav-link" href="#" @click.prevent="selectDrawingTool('pen')" :class="{ active: isDrawing && drawMode === 'pen' }" title="Draw (D)">
+                            <i class="bi bi-pencil-fill"></i>
                         </a>
                     </li>
                     <li class="nav-item">
