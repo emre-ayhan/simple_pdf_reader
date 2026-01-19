@@ -1235,8 +1235,6 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             redrawAllStrokes(selectedStroke.value.pageIndex);
             drawSelectionHighlight(selectedStroke.value.pageIndex, selectedStroke.value.strokeIndex);
         }
-        
-        showStrokeMenu.value = false;
     };
 
     const changeStrokeThickness = (newThickness) => {
@@ -1455,7 +1453,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         window.getSelection()?.removeAllRanges();
     };
 
-    const handleContextMenu = (e) => {
+    const handleStrokeMenu = (e) => {
         if (!isDragMode.value) return;
         
         const canvasIndex = getCanvasIndexFromEvent(e);
@@ -1959,20 +1957,29 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                     const menuWidth = rect.width;
                     const menuHeight = rect.height;
 
-                    // Compute center positions due to translate(-50%, 10px)
-                    const rightCenterX = clientMaxX + offset + menuWidth / 2;
-                    const leftCenterX = clientMinX - offset - menuWidth / 2;
-                    const aboveY = clientMinY; // top aligned with stroke
+                    // Anchor menu top-right to stroke bottom-right with a small offset
+                    let desiredRight = clientMaxX + offset;
+                    let desiredTop = clientMaxY + offset;
+                    let desiredLeft = desiredRight - menuWidth;
 
-                    // If placing to the right fits fully, use it; else try left
-                    if (rightCenterX + menuWidth / 2 <= viewportWidth - margin) {
-                        preferredX = rightCenterX;
-                    } else if (leftCenterX - menuWidth / 2 >= margin) {
-                        preferredX = leftCenterX;
+                    // If right placement overflows, place menu to the left of the stroke
+                    if (desiredRight > viewportWidth - margin) {
+                        desiredRight = clientMinX - offset;
+                        desiredLeft = desiredRight - menuWidth;
                     }
 
-                    // Prefer vertical near the top of the stroke
-                    preferredY = aboveY;
+                    // If bottom placement overflows, move menu above the stroke
+                    if (desiredTop + menuHeight > viewportHeight - margin) {
+                        desiredTop = clientMinY - offset - menuHeight;
+                    }
+
+                    // Clamp to viewport margins to keep fully visible
+                    desiredLeft = Math.min(Math.max(margin, desiredLeft), viewportWidth - margin - menuWidth);
+                    desiredTop = Math.min(Math.max(margin, desiredTop), viewportHeight - margin - menuHeight);
+
+                    // Convert desired top-left into transform-adjusted center coordinates
+                    preferredX = desiredLeft + halfW;
+                    preferredY = desiredTop - offsetY;
                 }
             }
         }
@@ -2037,7 +2044,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         changeStrokeThickness,
         changeStrokeText,
         deleteSelectedStroke,
-        handleContextMenu,
+        handleStrokeMenu,
         resizeCursor,
         initialStrokeStyles,
         activeStrokeStyle,

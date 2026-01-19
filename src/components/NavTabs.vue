@@ -4,6 +4,7 @@ import { Electron } from '../composables/useElectron';
 import { openNewTab, closeTab, activeTabIndex, activeTab, tabs, tabHistory, openTabs, markAsActive, isLastTabOnEmptyState, fileHasUnsavedChanges, activePageHasUnsavedChanges, handleElectronButtonClick, fileDataCache } from '../composables/useTabs';
 
 const emit = defineEmits([
+    'navbar-click',
     'menu-item-click'
 ]);
 
@@ -56,7 +57,7 @@ onBeforeUnmount(() => {
 });
 </script>
 <template>
-    <ul class="nav nav-tabs fixed-top" id="appTabs" role="tablist">
+    <ul class="nav nav-tabs fixed-top" id="appTabs" role="tablist" @click.stop="emit('navbar-click')">
         <!-- Nav Menu -->
         <li class="nav-item dropdown">
             <a class="nav-link nav-link-menu" data-bs-toggle="dropdown" href="#" role="button" aria-expanded="false">

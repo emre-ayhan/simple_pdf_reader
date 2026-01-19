@@ -245,21 +245,22 @@
 }
 
 .stroke-menu {
-    position: fixed;
-    z-index: 9998;
+    position: absolute;
+    z-index: 1049;
     pointer-events: all;
     transform: translate(-50%, 10px);
     
     .stroke-menu-content {
-        &:not(.image-stroke) {
-            background: $dark-bg-gradient;
-            box-shadow: $box-shadow-lg;
-        }
-
+        background: $dark-bg-gradient;
+        box-shadow: $box-shadow-lg;
         border: 1px solid $border-color;
         border-radius: $border-radius-lg;
         padding: 12px;
         max-width: 256px;
+
+        &.image-stroke {
+            padding: 0;
+        }
     }
     
     .stroke-menu-section {

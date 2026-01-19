@@ -148,7 +148,7 @@ const {
     changeStrokeThickness,
     changeStrokeText,
     deleteSelectedStroke,
-    handleContextMenu,
+    handleStrokeMenu,
     initialStrokeStyles,
     activeStrokeStyle,
     setInitialStrokeColor,
@@ -340,7 +340,7 @@ const zoom = (direction) => {
 }
 
 const hasActiveTool = computed(() => {
-    return isDrawing.value || isEraser.value || isTextMode.value || isSelectionMode.value;
+    return isDrawing.value || isEraser.value || isTextMode.value || isSelectionMode.value || isTextHighlightMode.value;
 });
 
 let resizeTimeout = null;
@@ -572,6 +572,7 @@ defineExpose({
     deletePage: () => {
         deletePage(pageIndex.value, addToHistory);
     },
+    resetAllTools
 })
 </script>
 <template>
@@ -773,7 +774,7 @@ defineExpose({
                                 @pointerup="stopDrawing"
                                 @pointerleave="onPointerLeave"
                                 @pointercancel="stopDrawing"
-                                @contextmenu="handleContextMenu"
+                                @click="handleStrokeMenu"
                                 :style="{
                                     cursor: cursorStyle,
                                     pointerEvents: 'auto',
@@ -825,24 +826,20 @@ defineExpose({
             <div class="stroke-menu-content" :class="{ 'image-stroke': selectedStroke?.stroke[0]?.type === 'image' }">
                 <template v-if="selectedStroke?.stroke[0]?.type !== 'image'">
                     <div class="stroke-menu-section">
-                        <label class="stroke-menu-label">Color</label>
                         <div class="stroke-menu-colors d-flex flex-column">
-                            <div class="row row-cols-5">
-                                <template v-for="color in colors">
-                                    <div class="col py-1">
-                                        <button
-                                            class="color-btn"
-                                            :style="{ backgroundColor: color }"
-                                            :title="color"
-                                            @click.stop="changeStrokeColor(color)"
-                                        ></button>
-                                    </div>
+                            <div class="d-flex align-items-center justify-content-between">
+                                <template v-for="strokeStyle in initialStrokeStyles">
+                                    <button
+                                        class="color-btn"
+                                        :style="{ backgroundColor: strokeStyle.color }"
+                                        :title="strokeStyle.color"
+                                        @click.stop="changeStrokeColor(strokeStyle.color)"
+                                    ></button>
                                 </template>
                             </div>
                         </div>
                     </div>
                     <div v-if="selectedStroke?.stroke[0]?.type === 'text'" class="stroke-menu-section">
-                        <label class="stroke-menu-label">Text</label>
                         <input 
                             type="text" 
                             class="form-control form-control-sm" 
@@ -853,8 +850,7 @@ defineExpose({
                         />
                     </div>
                     <div class="stroke-menu-section" v-else>
-                        <label class="stroke-menu-label">Thickness</label>
-                        <div class="d-flex align-items-center gap-2">
+                        <div class="d-flex align-items-center gap-1">
                             <input type="range" class="form-range" min="1" max="10" @input="(e) => changeStrokeThickness(parseInt(e.target.value))" :value="selectedStroke?.stroke[0]?.thickness || 1" />
                             <input type="text" class="form-control-plaintext" min="1" max="10" :value="selectedStroke?.stroke[0]?.thickness || 1" readonly />
                         </div>

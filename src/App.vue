@@ -12,9 +12,14 @@ const menuItemClickHandler = (action) => {
     if (typeof handler !== 'function') return;
     handler();
 }
+
+const resetAllTools = () => {
+    if (!reader.value) return;
+    reader.value.resetAllTools();
+};
 </script>
 <template>
-    <nav-tabs @menu-item-click="menuItemClickHandler">
+    <nav-tabs @navbar-click="resetAllTools" @menu-item-click="menuItemClickHandler">
         <PdfReader ref="reader" />
     </nav-tabs>
     <PageModal />
