@@ -345,6 +345,10 @@ const hasActiveTool = computed(() => {
 
 let resizeTimeout = null;
 
+const isTextInputFocused = computed(() => {
+    return isTextMode.value || selectedStroke.value?.stroke[0]?.type === 'text';
+});
+
 // Page Event Handlers
 useWindowEvents(fileId, {
     resize: {
@@ -366,14 +370,14 @@ useWindowEvents(fileId, {
     keydown: {
         d: {
             action: (event) => {
-                if (isTextMode.value) return;
+                if (isTextInputFocused.value) return;
                 event.preventDefault();
                 selectDrawingTool('pen');
             }
         },
         e: {
             action: (event) => {
-                if (isTextMode.value) return;
+                if (isTextInputFocused.value) return;
                 event.preventDefault();
                 selectEraser();
             }
@@ -386,14 +390,14 @@ useWindowEvents(fileId, {
                     return;
                 }
 
-                if (isTextMode.value) return;
+                if (isTextInputFocused.value) return;
                 event.preventDefault();
                 selectDrawingTool('line');
             }
         },
         r: {
             action: (event) => {
-                if (isTextMode.value) return;
+                if (isTextInputFocused.value) return;
                 event.preventDefault();
                 selectDrawingTool('rectangle');
             }
@@ -406,7 +410,7 @@ useWindowEvents(fileId, {
                     return;
                 }
 
-                if (isTextMode.value) return;
+                if (isTextInputFocused.value) return;
                 event.preventDefault();
                 selectDrawingTool('circle');
             }
@@ -421,21 +425,21 @@ useWindowEvents(fileId, {
         },
         e: {
             action: (event) => {
-                if (isTextMode.value) return;
+                if (isTextInputFocused.value) return;
                 event.preventDefault();
                 selectEraser();
             }
         },
         h: {
             action: (event) => {
-                if (isTextMode.value) return;
+                if (isTextInputFocused.value) return;
                 event.preventDefault();
                 toggleTextHighlightMode();
             }
         },
         t: {
             action: (event) => {
-                if (isTextMode.value) return;
+                if (isTextInputFocused.value) return;
                 event.preventDefault();
                 selectText();
             }
@@ -448,7 +452,7 @@ useWindowEvents(fileId, {
                     return;
                 }
 
-                if (isTextMode.value) return;
+                if (isTextInputFocused.value) return;
                 event.preventDefault();
                 toggleTextSelection();
             }
@@ -484,14 +488,14 @@ useWindowEvents(fileId, {
         },
         Home: {
             action: (event) => {
-                if (isFirstPage.value) return;
+                if (isFirstPage.value || isTextInputFocused.value) return;
                 event.preventDefault();
                 scrollToFirstPage();
             }
         },
         End: {
             action: (event) => {
-                if (isLastPage.value) return;
+                if (isLastPage.value || isTextInputFocused.value) return;
                 event.preventDefault();
                 scrollToLastPage();
             }
@@ -505,13 +509,13 @@ useWindowEvents(fileId, {
         },
         ArrowLeft: {
             action: () => {
-                if (isFirstPage.value) return;
+                if (isFirstPage.value || isTextInputFocused.value) return;
                 scrollToPage(pageIndex.value - 1);
             }
         },
         ArrowRight: {
             action: () => {
-                if (isLastPage.value) return;
+                if (isLastPage.value || isTextInputFocused.value) return;
                 scrollToPage(pageIndex.value + 1);
             }
         },
