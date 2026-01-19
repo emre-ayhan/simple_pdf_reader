@@ -1199,7 +1199,6 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         isDrawing.value = false;
         isEraser.value = false;
         isSelectionMode.value = false;
-        // isDragMode is now computed, don't set it
         selectedStroke.value = null;
         isDragging.value = false;
         isResizing.value = false;

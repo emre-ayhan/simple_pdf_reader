@@ -640,7 +640,7 @@ defineExpose({
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="toggleTextSelection" :class="{ active: isTextSelectionMode }" title="Text Selection / Highlight (H)">
+                        <a class="nav-link" href="#" @click.prevent="toggleTextSelection" :class="{ active: isTextSelectionMode }" title="Highlight Text (H)">
                             <i class="bi bi-highlighter"></i>
                         </a>
                     </li>
