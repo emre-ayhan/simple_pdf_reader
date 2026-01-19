@@ -1022,6 +1022,9 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
     const openNewBlankPage = (redrawAllStrokes, addToHistory, imageData) => {
         if (isFileLoaded.value) {
             openNewTab();
+            fileDataCache.value = {
+                type: 'blank',
+            }
             return;
         }
         
