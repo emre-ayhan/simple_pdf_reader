@@ -11,7 +11,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     // Drawing variables
     const isDrawing = ref(false);
     const isEraser = ref(false);
-    const drawMode = ref('pen'); // 'pen', 'line', 'rectangle', 'circle', 'text'
+    const drawMode = ref('pen'); // 'pen', 'line', 'rectangle', 'circle', 'text', 'highlight'
     const drawColor = ref('blue');
     const drawThickness = ref(2);
     const currentStrokeId = ref(null);
@@ -183,6 +183,21 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                    y <= first.y + first.height + threshold;
         }
         
+        // Check highlight-rect strokes
+        if (first.type === 'highlight-rect') {
+            // Check all rectangles in the compound highlight
+            const rects = first.rects || [{ x: first.x, y: first.y, width: first.width, height: first.height }];
+            for (const rect of rects) {
+                if (x >= rect.x - threshold && 
+                    x <= rect.x + rect.width + threshold && 
+                    y >= rect.y - threshold && 
+                    y <= rect.y + rect.height + threshold) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        
         // Check text strokes
         if (first.type === 'text') {
             const ctx = drawingContexts.value[0];
@@ -230,7 +245,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             return Math.abs(distance - radius) < threshold;
         }
         
-        // Check pen strokes
+        // Check pen strokes (point-based)
         for (let point of stroke) {
             const distance = Math.sqrt((point.x - x) ** 2 + (point.y - y) ** 2);
             if (distance < threshold) {
@@ -269,6 +284,21 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 minY: first.y - pad,
                 maxX: first.x + first.width + pad,
                 maxY: first.y + first.height + pad
+            };
+        } else if (first.type === 'highlight-rect') {
+            const rects = first.rects || [{ x: first.x, y: first.y, width: first.width, height: first.height }];
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            rects.forEach(rect => {
+                minX = Math.min(minX, rect.x);
+                minY = Math.min(minY, rect.y);
+                maxX = Math.max(maxX, rect.x + rect.width);
+                maxY = Math.max(maxY, rect.y + rect.height);
+            });
+            return {
+                minX: minX - pad,
+                minY: minY - pad,
+                maxX: maxX + pad,
+                maxY: maxY + pad
             };
         } else if (first.type === 'text') {
             const ctx = drawingContexts.value[0];
@@ -658,6 +688,28 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                         first.y = newRawMinY;
                         first.width = newRawMaxX - newRawMinX;
                         first.height = newRawMaxY - newRawMinY;
+                    } else if (origFirst.type === 'highlight-rect') {
+                        // Scale all rectangles in the compound highlight
+                        const origRects = origFirst.rects || [{ x: origFirst.x, y: origFirst.y, width: origFirst.width, height: origFirst.height }];
+                        const rects = first.rects || [{ x: first.x, y: first.y, width: first.width, height: first.height }];
+                        
+                        // Calculate original bounds
+                        let origMinX = Infinity, origMinY = Infinity, origMaxX = -Infinity, origMaxY = -Infinity;
+                        origRects.forEach(rect => {
+                            origMinX = Math.min(origMinX, rect.x);
+                            origMinY = Math.min(origMinY, rect.y);
+                            origMaxX = Math.max(origMaxX, rect.x + rect.width);
+                            origMaxY = Math.max(origMaxY, rect.y + rect.height);
+                        });
+                        
+                        // Scale each rectangle
+                        rects.forEach((rect, i) => {
+                            const origRect = origRects[i];
+                            rect.x = newRawMinX + (origRect.x - origMinX) * scaleXFactor;
+                            rect.y = newRawMinY + (origRect.y - origMinY) * scaleYFactor;
+                            rect.width = origRect.width * scaleXFactor;
+                            rect.height = origRect.height * scaleYFactor;
+                        });
                     } else if (origFirst.type === 'text') {
                         first.x = newRawMinX;
                         first.y = newRawMinY;
@@ -740,6 +792,17 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                     if (first.type === 'image') {
                         first.x += dx;
                         first.y += dy;
+                    } else if (first.type === 'highlight-rect') {
+                        const rects = first.rects || [{ x: first.x, y: first.y, width: first.width, height: first.height }];
+                        rects.forEach(rect => {
+                            rect.x += dx;
+                            rect.y += dy;
+                        });
+                        // Also update old format if present
+                        if (first.x !== undefined) {
+                            first.x += dx;
+                            first.y += dy;
+                        }
                     } else if (first.type === 'text') {
                         first.x += dx;
                         first.y += dy;
@@ -1264,6 +1327,48 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         showStrokeMenu.value = false;
     };
 
+    const createHighlightRectangle = (pageIndex, rectsOrX, y, width, height) => {
+        const pageNumber = pageIndex + 1;
+        if (!strokesPerPage.value[pageNumber]) {
+            strokesPerPage.value[pageNumber] = [];
+        }
+        
+        const id = uuid();
+        
+        // Check if we received an array of rects or individual values
+        let highlightStroke;
+        if (Array.isArray(rectsOrX)) {
+            // Multiple rectangles - create a compound highlight
+            highlightStroke = [{
+                id,
+                type: 'highlight-rect',
+                rects: rectsOrX, // Array of {x, y, width, height}
+                color: drawColor.value,
+                thickness: drawThickness.value
+            }];
+        } else {
+            // Single rectangle (backward compatibility)
+            highlightStroke = [{
+                id,
+                type: 'highlight-rect',
+                rects: [{ x: rectsOrX, y, width, height }],
+                color: drawColor.value,
+                thickness: drawThickness.value
+            }];
+        }
+        
+        strokesPerPage.value[pageNumber].push(highlightStroke);
+        
+        strokeChangeCallback({
+            id,
+            type: 'add',
+            page: pageNumber,
+            stroke: highlightStroke
+        });
+        
+        redrawAllStrokes(pageIndex);
+    };
+
     const handleContextMenu = (e) => {
         if (!isDragMode.value) return;
         
@@ -1336,6 +1441,24 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             minY = first.y - padding;
             maxX = first.x + first.width + padding;
             maxY = first.y + first.height + padding;
+            ctx.strokeRect(minX, minY, maxX - minX, maxY - minY);
+        } else if (first.type === 'highlight-rect') {
+            // Calculate bounding box for all rectangles
+            const rects = first.rects || [{ x: first.x, y: first.y, width: first.width, height: first.height }];
+            minX = Infinity;
+            minY = Infinity;
+            maxX = -Infinity;
+            maxY = -Infinity;
+            rects.forEach(rect => {
+                minX = Math.min(minX, rect.x);
+                minY = Math.min(minY, rect.y);
+                maxX = Math.max(maxX, rect.x + rect.width);
+                maxY = Math.max(maxY, rect.y + rect.height);
+            });
+            minX -= padding;
+            minY -= padding;
+            maxX += padding;
+            maxY += padding;
             ctx.strokeRect(minX, minY, maxX - minX, maxY - minY);
         } else if (first.type === 'text') {
             ctx.font = `${first.fontSize}px Arial`;
@@ -1512,12 +1635,31 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 
                 const first = stroke[0];
                 
+                // Save canvas state before drawing each stroke
+                drawingContext.save();
+                
                 // Check if it's an image
                 if (first.type === 'image') {
                     const img = imageMap.get(index);
                     if (img) {
                         drawingContext.drawImage(img, first.x, first.y, first.width, first.height);
                     }
+                    drawingContext.restore();
+                    return;
+                }
+                
+                // Check if it's a highlight rectangle
+                if (first.type === 'highlight-rect') {
+                    drawingContext.fillStyle = first.color;
+                    drawingContext.globalAlpha = 0.3;
+                    // Use a single path to avoid overlapping seams
+                    drawingContext.beginPath();
+                    const rects = first.rects || [{ x: first.x, y: first.y, width: first.width, height: first.height }];
+                    rects.forEach(rect => {
+                        drawingContext.rect(rect.x, rect.y, rect.width, rect.height);
+                    });
+                    drawingContext.fill();
+                    drawingContext.restore(); // This resets globalAlpha
                     return;
                 }
                 
@@ -1527,6 +1669,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                     drawingContext.fillStyle = first.color;
                     drawingContext.textBaseline = 'top';
                     drawingContext.fillText(first.text, first.x, first.y);
+                    drawingContext.restore();
                     return;
                 }
                 
@@ -1552,6 +1695,9 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                     drawingContext.lineJoin = 'round';
                     drawingContext.stroke();
                 }
+                
+                // Restore canvas state after drawing
+                drawingContext.restore();
             });
         });
     };
@@ -1671,7 +1817,25 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 const first = stroke[0];
                 let minX, minY, maxX, maxY;
 
-                if (first.type === 'text') {
+                if (first.type === 'image') {
+                    minX = first.x;
+                    minY = first.y;
+                    maxX = first.x + first.width;
+                    maxY = first.y + first.height;
+                } else if (first.type === 'highlight-rect') {
+                    // Calculate bounding box for all rectangles
+                    const rects = first.rects || [{ x: first.x, y: first.y, width: first.width, height: first.height }];
+                    minX = Infinity;
+                    minY = Infinity;
+                    maxX = -Infinity;
+                    maxY = -Infinity;
+                    rects.forEach(rect => {
+                        minX = Math.min(minX, rect.x);
+                        minY = Math.min(minY, rect.y);
+                        maxX = Math.max(maxX, rect.x + rect.width);
+                        maxY = Math.max(maxY, rect.y + rect.height);
+                    });
+                } else if (first.type === 'text') {
                     const ctx = drawingContexts.value[canvasIdx];
                     if (ctx) {
                         ctx.font = `${first.fontSize}px Arial`;
@@ -1794,6 +1958,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         setInitialStrokeColor,
         setInitialStrokeThickness,
         handleStrokeStyleButtonClick,
-        clampStrokeMenuPosition
+        clampStrokeMenuPosition,
+        createHighlightRectangle
     }
 }

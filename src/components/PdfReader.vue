@@ -25,6 +25,7 @@ const cursorStyle = computed(() => {
     if (isTextMode.value) return 'text';
     if (isDrawing.value ) {
         if(drawMode.value == 'pen') return `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="${drawColor.value}" class="bi bi-pencil-fill" viewBox="0 0 16 16"><path d="M12.854.146a.5.5 0 0 0-.707 0L10.5 1.793 14.207 5.5l1.647-1.646a.5.5 0 0 0 0-.708zm.646 6.061L9.793 2.5 3.293 9H3.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.207zm-7.468 7.468A.5.5 0 0 1 6 13.5V13h-.5a.5.5 0 0 1-.5-.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.5-.5V10h-.5a.5.5 0 0 1-.175-.032l-.179.178a.5.5 0 0 0-.11.168l-2 5a.5.5 0 0 0 .65.65l5-2a.5.5 0 0 0 .168-.11z"/></svg>') 8 8, auto`;
+        if(drawMode.value == 'highlight') return 'text';
         return 'crosshair';
     };
     if (isEraser.value) return `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-eraser-fill" viewBox="0 0 16 16"><path d="M8.086 2.207a2 2 0 0 1 2.828 0l3.879 3.879a2 2 0 0 1 0 2.828l-5.5 5.5A2 2 0 0 1 7.879 15H5.12a2 2 0 0 1-1.414-.586l-2.5-2.5a2 2 0 0 1 0-2.828zm.66 11.34L3.453 8.254 1.914 9.793a1 1 0 0 0 0 1.414l2.5 2.5a1 1 0 0 0 .707.293H7.88a1 1 0 0 0 .707-.293z"/></svg>') 8 8, auto`;
@@ -154,6 +155,7 @@ const {
     setInitialStrokeThickness,
     handleStrokeStyleButtonClick,
     clampStrokeMenuPosition,
+    createHighlightRectangle,
 } = useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPage, drawingCanvases, drawingContexts, strokeChangeCallback, captureSelectionCallback);
 
 // History management
@@ -195,9 +197,113 @@ const toggleTextSelection = () => {
     isTextSelectionMode.value = !isTextSelectionMode.value;
     if (isTextSelectionMode.value) {
         resetToolState();
+        // Add mouseup listener to detect when text is selected
+        nextTick(() => {
+            document.addEventListener('mouseup', handleTextSelectionMouseUp);
+        });
     } else {
         window.getSelection()?.removeAllRanges();
+        document.removeEventListener('mouseup', handleTextSelectionMouseUp);
     }
+};
+
+const handleTextSelectionMouseUp = () => {
+    // Small delay to ensure selection is complete
+    setTimeout(() => {
+        const selection = window.getSelection();
+        if (selection && !selection.isCollapsed && selection.rangeCount > 0) {
+            highlightTextSelection();
+        }
+    }, 10);
+};
+
+const highlightTextSelection = () => {
+    if (!isFileLoaded.value) return;
+    
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;
+    
+    const range = selection.getRangeAt(0);
+    const rects = range.getClientRects();
+    
+    if (rects.length === 0) return;
+    
+    // Group rects by page and store all rectangles for each page
+    const rectsByPage = new Map();
+    
+    Array.from(rects).forEach(rect => {
+        // Skip very small rects (often artifacts)
+        if (rect.width < 1 || rect.height < 1) return;
+        
+        // Find which page this rect belongs to
+        for (let i = 0; i < drawingCanvases.value.length; i++) {
+            const canvas = drawingCanvases.value[i];
+            const canvasRect = canvas.getBoundingClientRect();
+            
+            // Check if rect overlaps with canvas
+            if (rect.bottom > canvasRect.top && rect.top < canvasRect.bottom &&
+                rect.right > canvasRect.left && rect.left < canvasRect.right) {
+                
+                const scaleX = canvas.width / canvasRect.width;
+                const scaleY = canvas.height / canvasRect.height;
+                
+                const x = (rect.left - canvasRect.left) * scaleX;
+                const y = (rect.top - canvasRect.top) * scaleY;
+                const width = rect.width * scaleX;
+                const height = rect.height * scaleY;
+                
+                if (!rectsByPage.has(i)) {
+                    rectsByPage.set(i, []);
+                }
+                rectsByPage.get(i).push({ x, y, width, height });
+                break;
+            }
+        }
+    });
+    
+    // Merge overlapping/adjacent rectangles and create highlights
+    rectsByPage.forEach((rects, pageIndex) => {
+        if (rects.length === 0) return;
+        
+        // Sort rectangles by y position first, then x
+        rects.sort((a, b) => {
+            const yDiff = a.y - b.y;
+            return Math.abs(yDiff) < 2 ? a.x - b.x : yDiff;
+        });
+        
+        // Merge rectangles that are on the same line and close/overlapping
+        const merged = [];
+        let current = { ...rects[0] };
+        
+        for (let i = 1; i < rects.length; i++) {
+            const rect = rects[i];
+            const verticalOverlap = Math.max(0, Math.min(current.y + current.height, rect.y + rect.height) - Math.max(current.y, rect.y));
+            const onSameLine = verticalOverlap > Math.min(current.height, rect.height) * 0.5;
+            const gap = rect.x - (current.x + current.width);
+            const closeOrOverlapping = gap < 3; // Small tolerance for gaps
+            
+            if (onSameLine && closeOrOverlapping) {
+                // Merge: extend current rectangle
+                const newRight = Math.max(current.x + current.width, rect.x + rect.width);
+                const newTop = Math.min(current.y, rect.y);
+                const newBottom = Math.max(current.y + current.height, rect.y + rect.height);
+                current.x = Math.min(current.x, rect.x);
+                current.y = newTop;
+                current.width = newRight - current.x;
+                current.height = newBottom - newTop;
+            } else {
+                // Start new rectangle
+                merged.push(current);
+                current = { ...rect };
+            }
+        }
+        merged.push(current);
+        
+        createHighlightRectangle(pageIndex, merged);
+    });
+    
+    // Clear the text selection
+    window.getSelection()?.removeAllRanges();
 };
 
 const imageInput = ref(null);
@@ -395,18 +501,25 @@ useWindowEvents(fileId, {
                 }
             }
         },
+        e: {
+            action: (event) => {
+                if (isTextMode.value) return;
+                event.preventDefault();
+                selectEraser();
+            }
+        },
+        h: {
+            action: (event) => {
+                if (isTextMode.value) return;
+                event.preventDefault();
+                toggleTextSelection();
+            }
+        },
         t: {
             action: (event) => {
                 if (isTextMode.value) return;
                 event.preventDefault();
                 selectText();
-            }
-        },
-        p: {
-            action: (event) => {
-                if (isTextMode.value) return;
-                event.preventDefault();
-                selectStrokeMode();
             }
         },
         s: {
@@ -520,6 +633,9 @@ onBeforeUnmount(() => {
 onUnmounted(() => {
     endSession();
     
+    // Clean up text selection listener
+    document.removeEventListener('mouseup', handleTextSelectionMouseUp);
+    
     if (intersectionObserver.value) {
         intersectionObserver.value.disconnect();
     }
@@ -615,6 +731,11 @@ defineExpose({
                     <li class="nav-item">
                         <a class="nav-link" href="#" @click.prevent="selectDrawingTool('circle')" :class="{ active: isDrawing && drawMode === 'circle' }" title="Circle (O)">
                             <i class="bi bi-circle"></i>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" @click.prevent="toggleTextSelection" :class="{ active: isTextSelectionMode }" title="Text Selection / Highlight (H)">
+                            <i class="bi bi-highlighter"></i>
                         </a>
                     </li>
                     <li class="nav-item">
