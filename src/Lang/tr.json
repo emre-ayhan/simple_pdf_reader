@@ -46,6 +46,7 @@
     "Thickness": "Kalınlık",
     "Type text...": "Metin yazın...",
     "Enter text": "Metin girin",
-    "Drop PDF here to open": "Açmak için PDF'i buraya bırakın",
-    "Download": "İndir"
+    "Download": "İndir",
+    "Open PDF / Image": "PDF / Resim Aç",
+    "or drag and drop a file anywhere": "veya bir dosyayı herhangi bir yere sürükleyip bırakın"
 }

@@ -24,8 +24,12 @@ const openFile = () => emit('open-file');
             <p class="empty-lead d-none d-md-block">This reader keeps your PDFs and Images quick to open, easy to mark up, and ready for sharing.</p>
       
             <div class="empty-actions">
-              <button class="btn btn-primary" @click.prevent="openFile">Open PDF or Image</button>
-              <span class="empty-hint">or drop a file anywhere</span>
+              <button class="btn btn-primary" @click.prevent="openFile">
+                {{ $t('Open PDF / Image') }}
+              </button>
+              <span class="empty-hint">
+                {{ $t('or drag and drop a file anywhere') }}
+              </span>
             </div>
       
             <div class="empty-grid row row-cols-1 row-cols-xl-3 g-3">
