@@ -3,6 +3,8 @@ import { computed, inject, onBeforeUnmount, onMounted, ref } from 'vue';
 import { Electron } from '../composables/useElectron';
 import { openNewTab, closeTab, activeTabIndex, activeTab, tabs, tabHistory, openTabs, markAsActive, isLastTabOnEmptyState, fileHasUnsavedChanges, activePageHasUnsavedChanges, handleElectronButtonClick, fileDataCache } from '../composables/useTabs';
 
+const currentLocale = inject('currentLocale');
+
 const props = defineProps({
     toolbarPosition: {
         type: String,
@@ -15,7 +17,10 @@ const emit = defineEmits([
     'menu-item-click'
 ]);
 
-const currentLocale = inject('currentLocale');
+
+const onMenuItemClick = (action, value) => {
+    emit('menu-item-click', action, value);
+};
 
 const menuItems = computed(() => ({
     file: [
@@ -30,12 +35,12 @@ const menuItems = computed(() => ({
         { label: 'Delete', action: 'deletePage', icon: 'trash3' }
     ],
     pereferences: [
-        { label: `Move Toolbar to ${props.toolbarPosition === 'top' ? 'Bottom' : 'Top'}`, action: 'toggleToolbarPosition', icon: props.toolbarPosition === 'top' ? 'arrow-down-square' : 'arrow-up-square' },
         { label: 'Language', icon: 'translate', items: [
                 { label: 'English', action: 'changeLocale', value: 'en', icon: currentLocale.value === 'en' ? 'check-circle-fill' : 'circle' },
                 { label: 'Turkish', action: 'changeLocale', value: 'tr', icon: currentLocale.value === 'tr' ? 'check-circle-fill' : 'circle' }
             ]
-        }
+        },
+        { label: `Move Toolbar to ${props.toolbarPosition === 'top' ? 'Bottom' : 'Top'}`, action: 'toggleToolbarPosition', icon: props.toolbarPosition === 'top' ? 'arrow-down-square' : 'arrow-up-square' },
     ]
 }));
 
@@ -77,7 +82,7 @@ onBeforeUnmount(() => {
     <ul :class="`nav nav-tabs fixed-${props.toolbarPosition} ${activeTab.emptyState ? 'empty-state' : ''}`" id="appTabs" role="tablist">
         <!-- Nav Menu -->
         <li class="nav-item dropdown">
-            <a class="nav-link nav-link-menu" data-bs-toggle="dropdown" href="#" role="button" data-bs-auto-close="outside" aria-expanded="false">
+            <a class="nav-link nav-link-menu" data-bs-toggle="dropdown" href="#" role="button" aria-expanded="false">
                 Menu
             </a>
                 <ul class="dropdown-menu dropdown-menu-dark rounded-3">
@@ -88,14 +93,14 @@ onBeforeUnmount(() => {
                             <li>
                                 <template v-if="menuItem.items">
                                     <div class="dropend">
-                                        <button class="dropdown-item small dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                        <button class="dropdown-item small dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" @click.stop>
                                             <i :class="`bi bi-${menuItem.icon} me-1`"></i>
                                             {{ $t(menuItem.label) }}
                                         </button>
                                         <ul class="dropdown-menu dropdown-menu-dark rounded-3">
                                             <template v-for="subItem in menuItem.items">
                                                 <li>
-                                                    <a class="dropdown-item small" :class="{ disabled: activeTab.emptyState && group === 'page' || subItem.disabled }" href="#" @click.prevent="emit('menu-item-click', subItem.action, subItem.value)">
+                                                    <a class="dropdown-item small" :class="{ disabled: activeTab.emptyState && group === 'page' || subItem.disabled }" href="#" @click.prevent="onMenuItemClick(subItem.action, subItem.value)">
                                                         <i :class="`bi bi-${subItem.icon} me-1`"></i>
                                                         {{ $t(subItem.label) }} <span v-if="subItem.shortcut">({{ subItem.shortcut }})</span>
                                                     </a>
@@ -105,7 +110,7 @@ onBeforeUnmount(() => {
                                     </div>
                                 </template>
 
-                                <a class="dropdown-item small" :class="{ disabled: activeTab.emptyState && group === 'page' || menuItem.disabled }" href="#" @click.prevent="emit('menu-item-click', menuItem.action, menuItem.value)" v-else>
+                                <a class="dropdown-item small" :class="{ disabled: activeTab.emptyState && group === 'page' || menuItem.disabled }" href="#" @click.prevent="onMenuItemClick(menuItem.action, menuItem.value)" v-else>
                                     <i :class="`bi bi-${menuItem.icon} me-1`"></i>
                                     {{ $t(menuItem.label) }} <span v-if="menuItem.shortcut">({{ menuItem.shortcut }})</span>
                                 </a>
