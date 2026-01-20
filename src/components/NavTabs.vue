@@ -28,7 +28,7 @@ const menuItems = computed(() => ({
         { label: 'Delete', action: 'deletePage', icon: 'bi-trash3' }
     ],
     pereferences: [
-        { label: `Move Toolbar (${props.toolbarPosition === 'top' ? 'bottom' : 'top'})`, action: 'toggleToolbarPosition', icon: props.toolbarPosition === 'top' ? 'bi-arrow-down-square' : 'bi-arrow-up-square' },
+        { label: `Move Toolbar to ${props.toolbarPosition === 'top' ? 'Bottom' : 'Top'}`, action: 'toggleToolbarPosition', icon: props.toolbarPosition === 'top' ? 'bi-arrow-down-square' : 'bi-arrow-up-square' },
     ]
 }));
 
