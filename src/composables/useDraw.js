@@ -26,6 +26,8 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         'brown', 'sienna', 'olive', 'maroon'
     ];
 
+    const initialStrokeIndex = ref(0);
+
     const initialStrokeStyles = ref([{
         color: 'blue',
         thickness: 2
@@ -49,6 +51,14 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             initialStrokeStyles.value = value;
         }
     })
+
+    storeGet('initialStrokeIndex', 0).then(value => {
+        initialStrokeIndex.value = value;
+        const style = initialStrokeStyles.value[value];
+        if (!style) return;
+        drawColor.value = style.color;
+        drawThickness.value = style.thickness;
+    });
 
     const setInitialStrokeColor = (color) => {
         const index = initialStrokeStyles.value.findIndex(style => style.color === drawColor.value);
@@ -74,6 +84,8 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         const style = initialStrokeStyles.value[index];
         drawColor.value = style.color;
         drawThickness.value = style.thickness;
+        initialStrokeIndex.value = index;
+        storeSet('initialStrokeIndex', index);
     }
 
 
