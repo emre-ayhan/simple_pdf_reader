@@ -100,6 +100,7 @@ onBeforeUnmount(() => {
                                             {{ $t(menuItem.label) }}
                                         </button>
                                         <ul class="dropdown-menu dropdown-menu-dark rounded-3">
+                                            <li><h6 class="dropdown-header text-capitalize text-primary">{{ $t(menuItem.label) }}</h6></li>
                                             <template v-for="subItem in menuItem.items">
                                                 <li>
                                                     <a class="dropdown-item small" :class="{ disabled: activeTab.emptyState && group === 'page' || subItem.disabled }" href="#" @click.prevent="onMenuItemClick(subItem.action, subItem.value)">
