@@ -598,7 +598,7 @@ defineExpose({
                             </a>
                             <div class="dropdown-menu dropdown-menu-dark rounded-3 p-3">
                                 <div class="mb-3">
-                                    <div class="form-label">Color</div>
+                                    <div class="form-label">{{ $t('Color') }}</div>
                                     <div class="row row-cols-5">
                                         <template v-for="color in colors">
                                             <div class="col" v-if="!initialStrokeStyles.find(el => el.color === color)">
@@ -621,7 +621,7 @@ defineExpose({
                                     </div>
                                 </div>
                                 <div class="mb-3">
-                                    <label class="form-label">Thickness</label>
+                                    <label class="form-label">{{ $t('Thickness') }}</label>
                                     <div class="d-flex align-items-center">
                                         <input type="range" class="form-range" min="1" max="10" :value="activeStrokeStyle?.thickness" @input="setInitialStrokeThickness($event.target.value)" />
                                         <input type="text" class="form-control-plaintext" min="1" max="10" :value="activeStrokeStyle?.thickness" readonly />
@@ -632,57 +632,57 @@ defineExpose({
                         <li class="nav-item vr bg-white mx-2"></li>
                     </template>
                     <li class="nav-item" v-if="drawMode === 'pen' && isDrawing">
-                        <a class="nav-link" href="#" @click.prevent="selectEraser" :class="{ active: isEraser }" title="Eraser (E)">
+                        <a class="nav-link" href="#" @click.prevent="selectEraser" :class="{ active: isEraser }" :title="$t('Eraser') + ' (E)'">
                             <i class="bi bi-eraser-fill"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="selectDrawingTool('pen')" :class="{ active: isDrawing && drawMode === 'pen' }" title="Draw (D)">
+                        <a class="nav-link" href="#" @click.prevent="selectDrawingTool('pen')" :class="{ active: isDrawing && drawMode === 'pen' }" :title="$t('Draw') + ' (D)'">
                             <i class="bi bi-pencil-fill"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="selectDrawingTool('line')" :class="{ active: isDrawing && drawMode === 'line' }" title="Line (L)">
+                        <a class="nav-link" href="#" @click.prevent="selectDrawingTool('line')" :class="{ active: isDrawing && drawMode === 'line' }" :title="$t('Line') + ' (L)'">
                             <i class="bi bi-slash-lg"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="selectDrawingTool('rectangle')" :class="{ active: isDrawing && drawMode === 'rectangle' }" title="Rectangle (R)">
+                        <a class="nav-link" href="#" @click.prevent="selectDrawingTool('rectangle')" :class="{ active: isDrawing && drawMode === 'rectangle' }" :title="$t('Rectangle') + ' (R)'">
                             <i class="bi bi-square"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="selectDrawingTool('circle')" :class="{ active: isDrawing && drawMode === 'circle' }" title="Circle (O)">
+                        <a class="nav-link" href="#" @click.prevent="selectDrawingTool('circle')" :class="{ active: isDrawing && drawMode === 'circle' }" :title="$t('Circle') + ' (O)'">
                             <i class="bi bi-circle"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="toggleTextHighlightMode" :class="{ active: isTextHighlightMode }" title="Highlight Text (H)">
+                        <a class="nav-link" href="#" @click.prevent="toggleTextHighlightMode" :class="{ active: isTextHighlightMode }" :title="$t('Highlight Text') + ' (H)'">
                             <i class="bi bi-highlighter"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="selectText" :class="{ active: isTextMode }" title="Add Text (T)">
+                        <a href="#" class="nav-link" @click.prevent="selectText" :class="{ active: isTextMode }" :title="$t('Add Text') + ' (T)'">
                             <i class="bi bi-textarea-t"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="importImage" title="Import Image (I)">
+                        <a href="#" class="nav-link" @click.prevent="importImage" :title="$t('Import Image') + ' (I)'">
                             <i class="bi bi-image"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="selectStrokeMode" :class="{ active: !hasActiveTool && !isTextSelectionMode }" title="Stroke Selection (P)">
+                        <a class="nav-link" href="#" @click.prevent="selectStrokeMode" :class="{ active: !hasActiveTool && !isTextSelectionMode }" :title="$t('Stroke Selection') + ' (P)'">
                             <i class="bi bi-cursor-fill"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="toggleTextSelection" :class="{ active: isTextSelectionMode && !isTextHighlightMode }" title="Text Selection (S)">
+                        <a class="nav-link" href="#" @click.prevent="toggleTextSelection" :class="{ active: isTextSelectionMode && !isTextHighlightMode }" :title="$t('Text Selection') + ' (S)'">
                             <i class="bi bi-cursor-text"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="toggleTouchDrawing" :class="{ active: enableTouchDrawing }" :title="`${enableTouchDrawing ? 'Disable' : 'Enable'} Touch Drawing`">
+                        <a class="nav-link" href="#" @click.prevent="toggleTouchDrawing" :class="{ active: enableTouchDrawing }" :title="enableTouchDrawing ? $t('Disable Touch Drawing') : $t('Enable Touch Drawing')">
                             <i class="bi bi-hand-index-thumb-fill"></i>
                         </a>
                     </li>
@@ -690,12 +690,12 @@ defineExpose({
 
                     <!-- Undo/Redo -->
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="undo()" :class="{ disabled: !canUndo }" title="Undo (Ctrl+Z)">
+                        <a class="nav-link" href="#" @click.prevent="undo()" :class="{ disabled: !canUndo }" :title="$t('Undo') + ' (Ctrl+Z)'">
                             <i class="bi bi-arrow-counterclockwise"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="redo()" :class="{ disabled: !canRedo }" title="Redo (Ctrl+Y)">
+                        <a class="nav-link" href="#" @click.prevent="redo()" :class="{ disabled: !canRedo }" :title="$t('Redo') + ' (Ctrl+Y)'">
                             <i class="bi bi-arrow-clockwise"></i>
                         </a>
                     </li>
@@ -703,12 +703,12 @@ defineExpose({
                     <!-- Pagination -->
                     <li class="nav-item vr bg-white mx-2"></li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex - 1)" :class="{ disabled: isFirstPage }" title="Previous Page">
+                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex - 1)" :class="{ disabled: isFirstPage }" :title="$t('Previous Page')">
                             <i class="bi bi-chevron-up"></i>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex + 1)" :class="{ disabled: isLastPage }" title="Next Page">
+                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex + 1)" :class="{ disabled: isLastPage }" :title="$t('Next Page')">
                             <i class="bi bi-chevron-down"></i>
                         </a>
                     </li>
@@ -733,8 +733,8 @@ defineExpose({
                     </li>
                     <li class="nav-item">
                         <select name="zoom-level" id="zoom-level" class="form-control-plaintext" @change="onZoomLevelChange" :disabled="isViewLocked">
-                            <option value="fit-height">Fit Height</option>
-                            <option value="fit-width">Fit Width</option>
+                            <option value="fit-height">{{ $t('Fit Height') }}</option>
+                            <option value="fit-width">{{ $t('Fit Width') }}</option>
                             <template v-for="value in zoomLevels">
                                 <option :value="value" :selected="zoomPercentage === value">
                                     {{ value }} %
@@ -747,13 +747,13 @@ defineExpose({
                     
                     <!-- Selection Tool -->
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="captureSelection" :class="{ active: isSelectionMode }" title="Select Area to Whiteboard">
+                        <a class="nav-link" href="#" @click.prevent="captureSelection" :class="{ active: isSelectionMode }" :title="$t('Select Area to Whiteboard')">
                             <i class="bi bi-scissors"></i>
                         </a>
                     </li>
 
                     <!-- View Lock -->
-                    <li class="nav-item" :title="isViewLocked ? 'Unlock View' : 'Lock View'">
+                    <li class="nav-item" :title="isViewLocked ? $t('Unlock View') : $t('Lock View')">
                         <a href="#" class="nav-link" @click.prevent="lockView" :class="{ active: isViewLocked }">
                             <i class="bi" :class="isViewLocked ? 'bi-lock-fill' : 'bi-lock'"></i>
                         </a>
@@ -807,7 +807,7 @@ defineExpose({
                 type="text" 
                 v-model="textInput" 
                 class="text-input-field" 
-                placeholder="Type text..." 
+                :placeholder="$t('Type text...')" 
                 @keydown.enter="confirmText()"
                 @keydown.esc="cancelText()"
                 @blur="handleTextboxBlur()"
@@ -850,7 +850,7 @@ defineExpose({
                             :value="selectedStroke?.stroke[0]?.text || ''"
                             @input="(e) => changeStrokeText(e.target.value)"
                             @click.stop
-                            placeholder="Enter text"
+                            :placeholder="$t('Enter text')"
                         />
                     </div>
                     <div class="stroke-menu-section" v-else>
@@ -861,7 +861,7 @@ defineExpose({
                     </div>
                 </template>
                 <button class="stroke-menu-btn delete-btn" @click.stop="deleteSelectedStroke()">
-                    <i class="bi bi-trash-fill"></i> Delete
+                    <i class="bi bi-trash-fill"></i> {{ $t('Delete') }}
                 </button>
             </div>
         </div>
@@ -869,7 +869,7 @@ defineExpose({
         <div v-if="isDraggingFile" class="drag-overlay">
             <div class="drag-message">
                 <i class="bi bi-file-earmark-pdf-fill display-1"></i>
-                <h3>Drop PDF here to open</h3>
+                <h3>{{ $t('Drop PDF here to open') }}</h3>
             </div>
         </div>
     </div>

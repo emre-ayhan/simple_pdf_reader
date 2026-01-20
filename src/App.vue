@@ -2,12 +2,13 @@
 import NavTabs from './components/NavTabs.vue';
 import PdfReader from './components/PdfReader.vue';
 import PageModal from './components/PageModal.vue';
-import { onBeforeMount, ref } from 'vue';
+import { inject, onBeforeMount, ref } from 'vue';
 import { useStore } from './composables/useStore';
 
 const store = useStore();
 const reader = ref(null);
 const toolbarPosition = ref('top');
+const changeLocale = inject('changeLocale');
 
 const appHandlers = {
     toggleToolbarPosition() {
@@ -15,13 +16,14 @@ const appHandlers = {
         store.set('toolbarPosition', newPosition);
         toolbarPosition.value = newPosition;
     },
+    changeLocale
 }
 
-const menuItemClickHandler = (action) => {
+const menuItemClickHandler = (action, value) => {
     if (!reader.value || !action) return;
     const handler = reader.value[action] || appHandlers[action];
     if (typeof handler !== 'function') return;
-    handler();
+    handler(value);
 }
 
 onBeforeMount(() => {
