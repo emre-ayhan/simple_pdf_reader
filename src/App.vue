@@ -4,6 +4,7 @@ import PdfReader from './components/PdfReader.vue';
 import PageModal from './components/PageModal.vue';
 import { inject, onBeforeMount, ref } from 'vue';
 import { useStore } from './composables/useStore';
+import { toggleTouchDrawing } from './composables/useTouchDrawing';
 
 const store = useStore();
 const reader = ref(null);
@@ -16,7 +17,8 @@ const appHandlers = {
         store.set('toolbarPosition', newPosition);
         toolbarPosition.value = newPosition;
     },
-    changeLocale
+    changeLocale,
+    toggleTouchDrawing
 }
 
 const menuItemClickHandler = (action, value) => {

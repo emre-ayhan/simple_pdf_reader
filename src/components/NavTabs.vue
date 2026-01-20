@@ -2,6 +2,7 @@
 import { computed, inject, onBeforeUnmount, onMounted, ref } from 'vue';
 import { Electron } from '../composables/useElectron';
 import { openNewTab, closeTab, activeTabIndex, activeTab, tabs, tabHistory, openTabs, markAsActive, isLastTabOnEmptyState, fileHasUnsavedChanges, activePageHasUnsavedChanges, handleElectronButtonClick, fileDataCache } from '../composables/useTabs';
+import { enableTouchDrawing } from '../composables/useTouchDrawing.js';
 
 const currentLocale = inject('currentLocale');
 
@@ -40,6 +41,7 @@ const menuItems = computed(() => ({
                 { label: 'Turkish', action: 'changeLocale', value: 'tr', icon: currentLocale.value === 'tr' ? 'check-circle-fill' : 'circle' }
             ]
         },
+        { label: enableTouchDrawing.value ? 'Disable Touch Drawing' : 'Enable Touch Drawing', action: 'toggleTouchDrawing', icon: enableTouchDrawing.value ? 'hand-index-thumb-fill' : 'hand-index-thumb' },
         { label: `Move Toolbar to ${props.toolbarPosition === 'top' ? 'Bottom' : 'Top'}`, action: 'toggleToolbarPosition', icon: props.toolbarPosition === 'top' ? 'arrow-down-square' : 'arrow-up-square' },
     ]
 }));

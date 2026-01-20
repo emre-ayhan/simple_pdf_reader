@@ -118,7 +118,6 @@ const captureSelectionCallback = (canvasIndex, selectedCanvas) => {
 const {
     isDrawing,
     isEraser,
-    enableTouchDrawing,
     drawMode,
     drawColor,
     colors,
@@ -274,13 +273,6 @@ const captureSelection = () => {
     resetToolState();
     isSelectionMode.value = !wasActive;
 };
-
-const toggleTouchDrawing = () => {
-    enableTouchDrawing.value = !enableTouchDrawing.value;
-    const { set: storeSet } = useStore();
-    storeSet('enableTouchDrawing', enableTouchDrawing.value);
-};
-
 
 // Zoom Management
 const minZoom = 25;
@@ -576,7 +568,7 @@ defineExpose({
     deletePage: () => {
         deletePage(pageIndex.value, addToHistory);
     },
-    resetAllTools
+    resetAllTools,
 })
 </script>
 <template>
@@ -679,11 +671,6 @@ defineExpose({
                     <li class="nav-item">
                         <a class="nav-link" href="#" @click.prevent="toggleTextSelection" :class="{ active: isTextSelectionMode && !isTextHighlightMode }" :title="$t('Text Selection') + ' (S)'">
                             <i class="bi bi-cursor-text"></i>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="toggleTouchDrawing" :class="{ active: enableTouchDrawing }" :title="enableTouchDrawing ? $t('Disable Touch Drawing') : $t('Enable Touch Drawing')">
-                            <i class="bi bi-hand-index-thumb-fill"></i>
                         </a>
                     </li>
                     <li class="nav-item vr bg-white mx-2"></li>
