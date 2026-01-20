@@ -54,8 +54,8 @@
 @import "bootstrap/scss/utilities/api";
 // scss-docs-end import-stack
 
-
+// App Styles
 @import 'base';
-@import 'PdfReader';
-@import 'NavTabs';
-@import 'EmptyState';
+@import 'pdf-reader';
+@import 'nav-tabs';
+@import 'empty-state';
