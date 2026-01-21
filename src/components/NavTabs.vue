@@ -144,7 +144,7 @@ onBeforeUnmount(() => {
         <div class="btn-group position-absolute end-0 top-0" v-if="Electron">
             <template v-for="btn in electronButtons">
                 <button :class="`btn btn-electron ${btn.action}`" type="button" role="tab" aria-selected="false" @click="handleElectronButtonClick(btn.action)" :title="$t(btn.title)">
-                    <i :class="btn.icon"></i>
+                    <i :class="`bi bi-${btn.icon}`"></i>
                 </button>
             </template>
         </div>
