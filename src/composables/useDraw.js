@@ -1073,6 +1073,10 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 redrawAllStrokes(currentCanvasIndex);
                 // Redraw highlight to show final position
                 if (selectedStroke.value) {
+                    // Update originalStroke to reflect the new state so subsequent edits are based on this
+                    selectedStroke.value.stroke = JSON.parse(JSON.stringify(stroke));
+                    selectedStroke.value.originalStroke = JSON.parse(JSON.stringify(stroke));
+                    
                     drawSelectionHighlight(currentCanvasIndex, selectedStroke.value.strokeIndex);
                 }
             }
@@ -2005,9 +2009,17 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                     }
                 } else if (first.type === 'line' || first.type === 'rectangle' || first.type === 'circle') {
                     if (first.type === 'circle') {
-                        const r = Math.sqrt((first.endX - first.startX) ** 2 + (first.endY - first.startY) ** 2);
-                        minX = first.startX - r; maxX = first.startX + r;
-                        minY = first.startY - r; maxY = first.startY + r;
+                        let rx, ry;
+                        if (first.radiusX !== undefined || first.radiusY !== undefined) {
+                            rx = first.radiusX !== undefined ? first.radiusX : Math.abs(first.endX - first.startX);
+                            ry = first.radiusY !== undefined ? first.radiusY : Math.abs(first.endY - first.startY);
+                        } else {
+                            const radius = Math.sqrt((first.endX - first.startX) ** 2 + (first.endY - first.startY) ** 2);
+                            rx = radius;
+                            ry = radius;
+                        }
+                        minX = first.startX - rx; maxX = first.startX + rx;
+                        minY = first.startY - ry; maxY = first.startY + ry;
                     } else {
                         minX = Math.min(first.startX, first.endX);
                         maxX = Math.max(first.startX, first.endX);

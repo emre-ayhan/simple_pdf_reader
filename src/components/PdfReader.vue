@@ -817,22 +817,20 @@ defineExpose({
              }">
             <div class="stroke-menu-content" :class="{ 'image-stroke': selectedStroke?.stroke[0]?.type === 'image' }">
                 <div class="stroke-menu-section">
-                    <div class="stroke-menu-colors d-flex flex-column">
-                        <div class="d-flex align-items-center justify-content-between">
-                            <template v-if="selectedStroke?.stroke[0]?.type !== 'image'">
-                                <button 
-                                    v-for="strokeStyle in initialStrokeStyles"
-                                    class="color-btn"
-                                    :style="{ backgroundColor: strokeStyle.color }"
-                                    :title="strokeStyle.color"
-                                    @click.stop="changeStrokeColor(strokeStyle.color)"
-                                ></button>
-                                <div class="vr bg-primary"></div>
-                            </template>
-                            <button class="btn btn-sm btn-danger rounded-circle" :title="$t('Delete')" @click.stop="deleteSelectedStroke()">
-                                <i class="bi bi-trash-fill"></i>
-                            </button>
-                        </div>
+                    <div class="stroke-menu-colors">
+                        <template v-if="selectedStroke?.stroke[0]?.type !== 'image'">
+                            <button 
+                                v-for="strokeStyle in initialStrokeStyles"
+                                class="btn-color"
+                                :style="{ backgroundColor: strokeStyle.color }"
+                                :title="strokeStyle.color"
+                                @click.stop="changeStrokeColor(strokeStyle.color)"
+                            ></button>
+                            <div class="vr bg-primary"></div>
+                        </template>
+                        <button class="btn btn-link link-danger border-0 p-0" :title="$t('Delete')" @click.stop="deleteSelectedStroke()">
+                            <i class="bi bi-trash-fill"></i>
+                        </button>
                     </div>
                 </div>
                 <template v-if="selectedStroke?.stroke[0]?.type !== 'image'">
