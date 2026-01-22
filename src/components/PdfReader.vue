@@ -574,8 +574,8 @@ defineExpose({
 </script>
 <template>
     <div class="container-fluid bg-dark" @dragenter.prevent="onDragEnter" @dragleave.prevent="onDragLeave" @dragover.prevent @drop.prevent="onDrop">
-        <template v-if="isFileLoaded">
-            <nav :class="`navbar navbar-expand navbar-dark bg-dark py-1 fixed-${toolbarPosition}`">
+        <nav :class="`navbar navbar-expand navbar-dark bg-dark py-1 fixed-${toolbarPosition}`">
+            <template v-if="isFileLoaded">
                 <!-- Toolbar -->
                 <ul ref="toolbar" class="navbar-nav mx-auto flex-wrap justify-content-center">
                     <!-- Drawing -->
@@ -747,8 +747,8 @@ defineExpose({
                         </a>
                     </li>
                 </ul>
-            </nav>
-        </template>
+            </template>
+        </nav>
         <div :class="`pdf-reader toolbar-${toolbarPosition} ${isViewLocked ? 'overflow-hidden' : ''}`" ref="pdfReader">
             <EmptyState v-if="!isFileLoaded" @open-file="handleFileOpen" />
 

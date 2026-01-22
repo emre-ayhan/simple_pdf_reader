@@ -4,10 +4,17 @@
     border: 0 !important;
     margin: 0 !important;
     padding: .5rem !important;
-
     font-size: small !important;
     z-index: 1035;
     -webkit-app-region: drag;
+    
+    &.fixed-top {
+        padding-bottom: 0 !important;
+
+        .nav-add {
+            margin-bottom: 4px !important;
+        }
+    }
 
     .nav-item {
         border: 0 !important;
@@ -20,9 +27,9 @@
         border-top-right-radius: $border-radius-lg !important;
         color: var(--bs-secondary);
         padding: .25rem .75rem;
-        margin-right: .25rem !important;
+        margin-right: 4px !important;
         height: 32px !important;
-        border-bottom: 0 !important;
+        border: 0 !important;
         -webkit-app-region: no-drag;
         line-height: 24px !important;
 
@@ -33,13 +40,12 @@
         &:hover,
         &:active {
             color: $primary !important;
-            border-color: $primary !important;
         }
 
         &.active {
             background-color: transparent !important;
             color: $primary !important;
-            border-color: $primary !important;
+            background-color: $dark-bg-accent !important;
         }
 
         &.nav-link-menu {
@@ -49,27 +55,33 @@
         }
 
         &.nav-add {
-            border-radius: 100% !important;
+            border-radius: $border-radius-lg !important;
             padding: 0 !important;
-            width: 32px !important;
+            width: 28px !important;
+            height: 28px !important;
 
             &:hover {
-                border: 1px solid $primary !important;
+                background-color: $dark-bg-accent !important;
             }
         }
     }
 
     &.fixed-bottom {
-        .nav-link {
+        padding-top: 0 !important;
+
+        .nav-add {
+            margin-top: 4px !important;
+        }
+
+        .nav-link:not(.nav-add) {
             border-top-left-radius: 0 !important;
             border-top-right-radius: 0 !important;
             border-bottom-left-radius: $border-radius-lg !important;
             border-bottom-right-radius: $border-radius-lg !important;
-            border-top: 0 !important;
             
-            &.active:not(.nav-add),
+            &.active,
             &:hover {
-                border-bottom: 1px solid $primary !important;
+                border-bottom: 1px solid $dark-bg-accent !important;
             }
         }
 

@@ -1,5 +1,5 @@
 .dropdown-menu-dark {
-    background: $dark-bg-gradient !important;
+    background: $dark-bg-accent !important;
     border: 1px solid $border-color !important;
 }
 
@@ -12,8 +12,7 @@
         bottom: $navtabsHeight !important;
     }
 
-    background: $dark-bg-gradient !important;
-    border-bottom: 1px solid $border-color;
+    background: $dark-bg-accent !important;
 
     .dropdown-menu-dark {
         .form-range {
@@ -81,7 +80,7 @@
     }
 }
 
-.navbar + .pdf-reader {
+.navbar:has(.navbar-nav) + .pdf-reader {
     height: calc(100vh - #{$navtabsHeight + $toolbarHeight});
 
     &.toolbar-top {
