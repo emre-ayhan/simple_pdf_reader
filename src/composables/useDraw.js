@@ -160,7 +160,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         return -1;
     };
 
-    const drawShape = (ctx, type, startX, startY, endX, endY) => {
+    const drawShape = (ctx, type, startX, startY, endX, endY, stroke = null) => {
         if (type === 'line') {
             ctx.beginPath();
             ctx.moveTo(startX, startY);
@@ -169,9 +169,17 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         } else if (type === 'rectangle') {
             ctx.strokeRect(startX, startY, endX - startX, endY - startY);
         } else if (type === 'circle') {
-            const radius = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2));
             ctx.beginPath();
-            ctx.arc(startX, startY, radius, 0, 2 * Math.PI);
+            if (stroke && (stroke.radiusX !== undefined || stroke.radiusY !== undefined)) {
+                // Draw as ellipse
+                const rx = stroke.radiusX !== undefined ? stroke.radiusX : Math.abs(endX - startX);
+                const ry = stroke.radiusY !== undefined ? stroke.radiusY : Math.abs(endY - startY);
+                ctx.ellipse(startX, startY, rx, ry, 0, 0, 2 * Math.PI);
+            } else {
+                // Draw as perfect circle
+                const radius = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2));
+                ctx.arc(startX, startY, radius, 0, 2 * Math.PI);
+            }
             ctx.stroke();
         }
     };
@@ -246,6 +254,22 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         }
         
         if (first.type === 'circle') {
+            if (first.radiusX !== undefined || first.radiusY !== undefined) {
+                // Ellipse hit detection
+                const rx = first.radiusX !== undefined ? first.radiusX : Math.abs(first.endX - first.startX);
+                const ry = first.radiusY !== undefined ? first.radiusY : Math.abs(first.endY - first.startY);
+                
+                // (x-h)^2/a^2 + (y-k)^2/b^2 = 1
+                const normalizedX = (x - first.startX);
+                const normalizedY = (y - first.startY);
+                
+                const value = (normalizedX * normalizedX) / (rx * rx) + (normalizedY * normalizedY) / (ry * ry);
+                
+                // Allow selecting if close to proper 1 (border)
+                // Approximate width of stroke in ellipse units
+                const epsilon = threshold / Math.min(rx, ry); 
+                return Math.abs(value - 1) < epsilon * 2; // Loose check
+            }
             const radius = Math.sqrt((first.endX - first.startX) ** 2 + (first.endY - first.startY) ** 2);
             const distance = Math.sqrt((x - first.startX) ** 2 + (y - first.startY) ** 2);
             return Math.abs(distance - radius) < threshold;
@@ -319,12 +343,20 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             };
         } else if (first.type === 'line' || first.type === 'rectangle' || first.type === 'circle') {
             if (first.type === 'circle') {
-                const radius = Math.sqrt((first.endX - first.startX) ** 2 + (first.endY - first.startY) ** 2);
+                let rx, ry;
+                if (first.radiusX !== undefined || first.radiusY !== undefined) {
+                    rx = first.radiusX !== undefined ? first.radiusX : Math.abs(first.endX - first.startX);
+                    ry = first.radiusY !== undefined ? first.radiusY : Math.abs(first.endY - first.startY);
+                } else {
+                    const radius = Math.sqrt((first.endX - first.startX) ** 2 + (first.endY - first.startY) ** 2);
+                    rx = radius;
+                    ry = radius;
+                }
                 return {
-                    minX: first.startX - radius - pad,
-                    minY: first.startY - radius - pad,
-                    maxX: first.startX + radius + pad,
-                    maxY: first.startY + radius + pad
+                    minX: first.startX - rx - pad,
+                    minY: first.startY - ry - pad,
+                    maxX: first.startX + rx + pad,
+                    maxY: first.startY + ry + pad
                 };
             }
             return {
@@ -635,23 +667,47 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                     const isCornerResize = ['nw', 'ne', 'sw', 'se'].includes(handle);
                     
                     if (isCornerResize) {
-                        // For corner resizes, opposite corner stays fixed and dragged corner moves
+                        const startWidth = startBounds.maxX - startBounds.minX;
+                        const startHeight = startBounds.maxY - startBounds.minY;
+                        const aspectRatio = startWidth / startHeight;
+
+                        let width, height;
+
+                        // Calculate proposed dimensions based on drag
                         if (handle === 'se') {
-                            // Bottom-right: top-left stays fixed
-                            newMaxX = startBounds.maxX + dx;
-                            newMaxY = startBounds.maxY + dy;
+                            width = (startBounds.maxX + dx) - startBounds.minX;
+                            height = (startBounds.maxY + dy) - startBounds.minY;
                         } else if (handle === 'sw') {
-                            // Bottom-left: top-right stays fixed
-                            newMinX = startBounds.minX + dx;
-                            newMaxY = startBounds.maxY + dy;
+                            width = startBounds.maxX - (startBounds.minX + dx);
+                            height = (startBounds.maxY + dy) - startBounds.minY;
                         } else if (handle === 'nw') {
-                            // Top-left: bottom-right stays fixed
-                            newMinX = startBounds.minX + dx;
-                            newMinY = startBounds.minY + dy;
+                            width = startBounds.maxX - (startBounds.minX + dx);
+                            height = startBounds.maxY - (startBounds.minY + dy);
                         } else if (handle === 'ne') {
-                            // Top-right: bottom-left stays fixed
-                            newMaxX = startBounds.maxX + dx;
-                            newMinY = startBounds.minY + dy;
+                            width = (startBounds.maxX + dx) - startBounds.minX;
+                            height = startBounds.maxY - (startBounds.minY + dy);
+                        }
+
+                        // Enforce aspect ratio based on dominant axis
+                        if (Math.abs(width / startWidth) > Math.abs(height / startHeight)) {
+                            height = width / aspectRatio; // Maintain sign for direction
+                        } else {
+                            width = height * aspectRatio; // Maintain sign for direction
+                        }
+
+                        // Apply new dimensions to corners
+                        if (handle === 'se') {
+                            newMaxX = startBounds.minX + width;
+                            newMaxY = startBounds.minY + height;
+                        } else if (handle === 'sw') {
+                            newMinX = startBounds.maxX - width;
+                            newMaxY = startBounds.minY + height;
+                        } else if (handle === 'nw') {
+                            newMinX = startBounds.maxX - width;
+                            newMinY = startBounds.maxY - height;
+                        } else if (handle === 'ne') {
+                            newMaxX = startBounds.minX + width;
+                            newMinY = startBounds.maxY - height;
                         }
                     } else {
                         // For edge resizes, allow independent scaling
@@ -713,20 +769,21 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                         first.y = newRawMinY;
                         first.fontSize = Math.max(8, Math.round(origFirst.fontSize * Math.min(scaleXFactor, scaleYFactor)));
                     } else if (origFirst.type === 'circle') {
-                        // Keep the circle aligned with its bounding box by scaling center and radius vector from original bounds
-                        const origBounds = startRawBounds;
-                        const origCenterX = origFirst.startX;
-                        const origCenterY = origFirst.startY;
-                        const origRadiusVecX = origFirst.endX - origFirst.startX;
-                        const origRadiusVecY = origFirst.endY - origFirst.startY;
-
-                        const newCenterX = newRawMinX + (origCenterX - origBounds.minX) * scaleXFactor;
-                        const newCenterY = newRawMinY + (origCenterY - origBounds.minY) * scaleYFactor;
-
-                        first.startX = newCenterX;
-                        first.startY = newCenterY;
-                        first.endX = newCenterX + origRadiusVecX * scaleXFactor;
-                        first.endY = newCenterY + origRadiusVecY * scaleYFactor;
+                        // Calculate new center and radii for ellipse
+                        const newWidth = newRawMaxX - newRawMinX;
+                        const newHeight = newRawMaxY - newRawMinY;
+                        
+                        first.startX = newRawMinX + newWidth / 2;
+                        first.startY = newRawMinY + newHeight / 2;
+                        
+                        first.radiusX = newWidth / 2;
+                        first.radiusY = newHeight / 2;
+                        
+                        // Update end coordinates to match the X-radius for consistency with basic circle logic
+                        // (though drawShape will prioritize radiusX/Y if present)
+                        first.endX = first.startX + first.radiusX;
+                        first.endY = first.startY;
+                        
                         first.x = first.startX;
                         first.y = first.startY;
                     } else if (origFirst.type === 'line' || origFirst.type === 'rectangle') {
@@ -1529,13 +1586,13 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         ctx.lineWidth = 2;
         
         let minX, minY, maxX, maxY, padding = 5;
+        let shouldDrawBorder = false;
         
         if (first.type === 'image') {
-            minX = first.x - padding;
-            minY = first.y - padding;
-            maxX = first.x + first.width + padding;
-            maxY = first.y + first.height + padding;
-            ctx.strokeRect(minX, minY, maxX - minX, maxY - minY);
+            minX = first.x;
+            minY = first.y;
+            maxX = first.x + first.width;
+            maxY = first.y + first.height;
         } else if (first.type === 'highlight-rect') {
             // Calculate bounding box for all rectangles
             const rects = first.rects || [{ x: first.x, y: first.y, width: first.width, height: first.height }];
@@ -1549,36 +1606,36 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 maxX = Math.max(maxX, rect.x + rect.width);
                 maxY = Math.max(maxY, rect.y + rect.height);
             });
-            minX -= padding;
-            minY -= padding;
-            maxX += padding;
-            maxY += padding;
-            ctx.strokeRect(minX, minY, maxX - minX, maxY - minY);
         } else if (first.type === 'text') {
             ctx.font = `${first.fontSize}px Arial`;
             const metrics = ctx.measureText(first.text);
-            minX = first.x - padding;
-            minY = first.y - padding;
-            maxX = first.x + metrics.width + padding;
-            maxY = first.y + first.fontSize + padding;
-            ctx.strokeRect(minX, minY, maxX - minX, maxY - minY);
+            minX = first.x;
+            minY = first.y;
+            maxX = first.x + metrics.width;
+            maxY = first.y + first.fontSize;
+            shouldDrawBorder = true;
         } else if (first.type === 'line' || first.type === 'rectangle' || first.type === 'circle') {
-            minX = Math.min(first.startX, first.endX);
-            maxX = Math.max(first.startX, first.endX);
-            minY = Math.min(first.startY, first.endY);
-            maxY = Math.max(first.startY, first.endY);
-            
             if (first.type === 'circle') {
-                const radius = Math.sqrt((first.endX - first.startX) ** 2 + (first.endY - first.startY) ** 2);
-                ctx.beginPath();
-                ctx.arc(first.startX, first.startY, radius + padding, 0, 2 * Math.PI);
-                ctx.stroke();
-                minX = first.startX - radius - padding;
-                maxX = first.startX + radius + padding;
-                minY = first.startY - radius - padding;
-                maxY = first.startY + radius + padding;
+                let rx, ry;
+                if (first.radiusX !== undefined || first.radiusY !== undefined) {
+                    rx = first.radiusX !== undefined ? first.radiusX : Math.abs(first.endX - first.startX);
+                    ry = first.radiusY !== undefined ? first.radiusY : Math.abs(first.endY - first.startY);
+                } else {
+                    const radius = Math.sqrt((first.endX - first.startX) ** 2 + (first.endY - first.startY) ** 2);
+                    rx = radius;
+                    ry = radius;
+                }
+                minX = first.startX - rx;
+                maxX = first.startX + rx;
+                minY = first.startY - ry;
+                maxY = first.startY + ry;
+                shouldDrawBorder = true;
             } else {
-                ctx.strokeRect(minX - padding, minY - padding, maxX - minX + padding * 2, maxY - minY + padding * 2);
+                minX = Math.min(first.startX, first.endX);
+                maxX = Math.max(first.startX, first.endX);
+                minY = Math.min(first.startY, first.endY);
+                maxY = Math.max(first.startY, first.endY);
+                if (first.type === 'line') shouldDrawBorder = true;
             }
         } else {
             // Pen stroke - draw bounding box
@@ -1592,7 +1649,16 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 maxX = Math.max(maxX, point.x);
                 maxY = Math.max(maxY, point.y);
             }
-            ctx.strokeRect(minX - padding, minY - padding, maxX - minX + padding * 2, maxY - minY + padding * 2);
+            shouldDrawBorder = true;
+        }
+
+        minX -= padding;
+        minY -= padding;
+        maxX += padding;
+        maxY += padding;
+        
+        if (shouldDrawBorder) {
+            ctx.strokeRect(minX, minY, maxX - minX, maxY - minY);
         }
         
         // Draw resize handles
@@ -1773,7 +1839,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                     drawingContext.lineWidth = first.thickness;
                     drawingContext.lineCap = 'round';
                     drawingContext.lineJoin = 'round';
-                    drawShape(drawingContext, first.type, first.startX, first.startY, first.endX, first.endY)
+                    drawShape(drawingContext, first.type, first.startX, first.startY, first.endX, first.endY, first)
                 } else {
                     // It's a pen stroke
                     drawingContext.beginPath();
