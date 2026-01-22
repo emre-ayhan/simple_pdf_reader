@@ -300,6 +300,10 @@
         flex-wrap: wrap;
     }
 
+    .stroke-menu-section:not(:last-child) {
+        margin-bottom: 8px;
+    }
+
     .btn-color,
     .btn {
         width: 20px;
