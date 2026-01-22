@@ -1148,6 +1148,17 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             cancelText();
             return;
         }
+
+        // Calculate scale factor from canvas to screen to ensure text size matches
+        let scale = 1;
+        const canvas = drawingCanvases.value[textCanvasIndex.value];
+        if (canvas) {
+            const rect = canvas.getBoundingClientRect();
+            // Use height ratio to determine font scaling
+            if (rect.height > 0) {
+                scale = canvas.height / rect.height;
+            }
+        }
         
         const pageIndex = textCanvasIndex.value + 1;
         if (!strokesPerPage.value[pageIndex]) {
@@ -1164,7 +1175,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             thickness: drawThickness.value,
             type: 'text',
             text: textInput.value,
-            fontSize: fontSize.value
+            fontSize: fontSize.value * scale
         }];
         
         strokesPerPage.value[pageIndex].push(textStroke);
