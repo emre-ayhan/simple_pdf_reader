@@ -9,6 +9,7 @@ import { useHistory } from "../composables/useHistory";
 import { fileDataCache, openNewTab } from "../composables/useTabs";
 import { useWindowEvents } from "../composables/useWindowEvents";
 import EmptyState from "./EmptyState.vue";
+import { enableTouchDrawing } from "../composables/useTouchDrawing";
 
 const props = defineProps({
     toolbarPosition: {
@@ -815,21 +816,26 @@ defineExpose({
                  top: strokeMenuPosition.y + 'px'
              }">
             <div class="stroke-menu-content" :class="{ 'image-stroke': selectedStroke?.stroke[0]?.type === 'image' }">
-                <template v-if="selectedStroke?.stroke[0]?.type !== 'image'">
-                    <div class="stroke-menu-section">
-                        <div class="stroke-menu-colors d-flex flex-column">
-                            <div class="d-flex align-items-center justify-content-between">
-                                <template v-for="strokeStyle in initialStrokeStyles">
-                                    <button
-                                        class="color-btn"
-                                        :style="{ backgroundColor: strokeStyle.color }"
-                                        :title="strokeStyle.color"
-                                        @click.stop="changeStrokeColor(strokeStyle.color)"
-                                    ></button>
-                                </template>
-                            </div>
+                <div class="stroke-menu-section">
+                    <div class="stroke-menu-colors d-flex flex-column">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <template v-if="selectedStroke?.stroke[0]?.type !== 'image'">
+                                <button 
+                                    v-for="strokeStyle in initialStrokeStyles"
+                                    class="color-btn"
+                                    :style="{ backgroundColor: strokeStyle.color }"
+                                    :title="strokeStyle.color"
+                                    @click.stop="changeStrokeColor(strokeStyle.color)"
+                                ></button>
+                                <div class="vr bg-primary"></div>
+                            </template>
+                            <button class="btn btn-sm btn-danger rounded-circle" :title="$t('Delete')" @click.stop="deleteSelectedStroke()">
+                                <i class="bi bi-trash-fill"></i>
+                            </button>
                         </div>
                     </div>
+                </div>
+                <template v-if="selectedStroke?.stroke[0]?.type !== 'image'">
                     <div v-if="selectedStroke?.stroke[0]?.type === 'text'" class="stroke-menu-section">
                         <input 
                             type="text" 
@@ -847,9 +853,6 @@ defineExpose({
                         </div>
                     </div>
                 </template>
-                <button class="stroke-menu-btn delete-btn" @click.stop="deleteSelectedStroke()">
-                    <i class="bi bi-trash-fill"></i> {{ $t('Delete') }}
-                </button>
             </div>
         </div>
 

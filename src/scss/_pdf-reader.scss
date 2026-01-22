@@ -284,6 +284,7 @@
 
         &.image-stroke {
             padding: 0;
+            background: none;
         }
     }
     
@@ -344,15 +345,6 @@
         
         &:hover {
             background-color: rgba(255, 255, 255, 0.2);
-        }
-        
-        &.delete-btn {
-            background-color: rgba(220, 53, 69, 0.2);
-            color: #dc3545;
-            
-            &:hover {
-                background-color: rgba(220, 53, 69, 0.3);
-            }
         }
     }
 }
