@@ -2,42 +2,49 @@
 
 A feature-rich PDF reader application built with Vue 3 and Vite, containerized with Docker. This application allows you to view PDF documents and annotate them with various drawing tools.
 
-## Whiteboard & Image Support
+## Workspace & Image Support
 
 - 🖼️ **Open images as pages**: Drop or select PNG/JPG/GIF/WebP/BMP/SVG files; they render as a single page with full drawing tools, zoom, and page persistence.
-- ✂️ **Capture to whiteboard**: Select any area of a PDF and pop it into a whiteboard for focused markup; export via download, copy-to-clipboard, or native share (where supported).
-- 🔍 **Whiteboard zoom**: Zoom in/out while preserving aspect ratio; overflow is clipped to keep the view tidy.
-- ↩️ **Exit safely**: Closing whiteboard returns you to the PDF (or the opened image) with prior zoom and page preserved.
+- ✂️ **Capture to Workspace**: Select any area of a PDF and pop it into a workspace for focused markup; export via download, copy-to-clipboard, or native share (where supported).
+- 🔍 **Workspace zoom**: Zoom in/out while preserving aspect ratio; overflow is clipped to keep the view tidy.
+- ↩️ **Exit safely**: Closing workspace returns you to the PDF (or the opened image) with prior zoom and page preserved.
 
 ## Features
 
-### PDF Viewing
-- 📄 Load and view PDF files from your local system
-- 🔢 Navigate through pages with next/previous buttons
-- 🔍 Adjustable zoom with multiple preset levels (50%, 75%, 100%, 150%, 200%)
-- 📱 Responsive design that works on desktop and mobile devices
-- 💾 Automatic page position memory (saves your last viewed page)
+### 📄 PDF Viewing & Management
+- **Multi-Tab Interface**: Open and switch between multiple PDF files or images in a single window.
+- **Page Management**: Insert blank pages for extra notes or delete unwanted pages from your document.
+- **Navigation Controls**: Jump to specific pages, go to first/last page, and use standard next/previous navigation.
+- **View Options**: Zoom in/out with presets, **Fit Width** / **Fit Height** modes, and Fullscreen toggle.
+- **Smart History**: Automatically saves and restores your last viewed page for every file.
 
-### Drawing & Annotation Tools
-- ✏️ **Pen Tool**: Free-hand drawing on PDF pages
-- 📏 **Line Tool**: Draw straight lines
-- ⬛ **Rectangle Tool**: Draw rectangular shapes
-- ⭕ **Circle Tool**: Draw circular shapes
-- 🧹 **Eraser Tool**: Remove annotations
-- 🎨 **Color Palette**: 30 predefined colors organized in 5 rows
-- 📐 **Adjustable Thickness**: Choose from 4 line thickness options (1-4px)
-- ♿ **Stylus Support**: Full support for digital pen/stylus input with pointer events
-- 🔄 **Undo/Clear**: Clear all annotations with one click
+### 🎨 Drawing & Annotation
+- **Comprehensive Toolset**: 
+  - ✏️ **Pen**: Free-hand drawing with pressure sensitivity.
+  - 📏 **Shapes**: Lines, Rectangles, and Circles (perfect or ellipse).
+  - 📝 **Text**: Insert text boxes anywhere on the page.
+  - 🖍️ **Highlight**: Transparent highlighter for emphasizing text.
+  - 🖼️ **Image Import**: Paste or import images directly onto PDF pages.
+- **Stroke Selection**: Select, move, and modify existing drawings.
+- **Stylus & Touch**: Dedicated toggle for Touch Drawing and full Stylus support.
+- **Customization**: 
+  - 30 predefined colors.
+  - Adjustable line thickness.
+  - 4 programmable "Quick Style" slots for your favorite pen settings.
+- **History**: Robust Undo/Redo system for all annotations.
+
+###  User Interface
+- **Flexible Layout**: Move the main toolbar to the Top or Bottom of the screen based on your preference.
+- **Localization**: Fully localized in **English**, **Turkish**, and **Portuguese**.
+- **Responsive**: layouts optimized for both desktop pointers and touch devices.
+- **Theme**: Clean, modern interface using Bootstrap 5.
 
 ### Technical Features
 - Vue 3 with Composition API
-- PDF.js for reliable PDF rendering
-- Bootstrap 5 for modern UI components
-- Vite for fast development and building
-- Electron for desktop application packaging
-- Docker support for development and production
-- Nginx for production serving
-- LocalStorage integration for page persistence
+- PDF.js for reliable rendering
+- Electron for native desktop experience
+- Docker support for containerized deployment
+- LocalStorage for setting persistence
 
 ## Prerequisites
 

@@ -20,8 +20,8 @@ const openFile = () => emit('open-file');
                 <i class="bi bi-github"></i>
               </a>
             </div>
-            <h1 class="empty-title">Fast, focused reading with ink-ready tools.</h1>
-            <p class="empty-lead d-none d-md-block">This reader keeps your PDFs and Images quick to open, easy to mark up, and ready for sharing.</p>
+            <h1 class="empty-title">{{ $t('Fast, focused reading with ink-ready tools.') }}</h1>
+            <p class="empty-lead d-none d-md-block">{{ $t('This reader keeps your PDFs and Images quick to open, easy to mark up, and ready for sharing.') }}</p>
       
             <div class="empty-actions">
               <button class="btn btn-primary" @click.prevent="openFile">
@@ -35,34 +35,35 @@ const openFile = () => emit('open-file');
             <div class="empty-grid row row-cols-1 row-cols-xl-3 g-3">
               <div class="col">
                 <div class="empty-section">
-                  <div class="empty-section-title">Capture Image Support</div>
+                  <div class="empty-section-title">{{ $t('Smart Capture & Images') }}</div>
                   <ul>
-                    <li>Open images as pages with full drawing, zoom, and persistence.</li>
-                    <li>Capture any PDF area into a new blank page for focused markup and exports.</li>
-                    <li>Zoom pages in and out while keeping aspect ratio tidy.</li>
-                    <li>Exit page safely and return to your exact page and zoom.</li>
+                    <li>{{ $t('Open images as full documents with zoom.') }}</li>
+                    <li>{{ $t('Capture PDF areas to a focused workspace.') }}</li>
+                    <li>{{ $t('Export via clipboard or file download.') }}</li>
+                    <li>{{ $t('Non-destructive markup on captured clips.') }}</li>
                   </ul>
                 </div>
               </div>
               <div class="col">
                 <div class="empty-section">
-                  <div class="empty-section-title">PDF Viewing</div>
+                  <div class="empty-section-title">{{ $t('Advanced PDF Tools') }}</div>
                   <ul>
-                    <li>Load local PDFs and keep your last viewed page.</li>
-                    <li>Navigate pages quickly with keyboard or toolbar controls.</li>
-                    <li>Adjust zoom with fit-width or fit-height modes.</li>
-                    <li>Responsive layout tuned for desktop and mobile.</li>
+                    <li v-html="$t('<strong>Multi-tab</strong> support for side-by-side work.')"></li>
+                    <li>{{ $t('Insert blank pages or delete unwanted ones.') }}</li>
+                    <li>{{ $t('Fit-to-Width and Fit-to-Height view modes.') }}</li>
+                    <li>{{ $t('Auto-save reading position for every file.') }}</li>
                   </ul>
                 </div>
               </div>
               <div class="col">
                 <div class="empty-section">
-                  <div class="empty-section-title">Drawing & Annotation Tools</div>
+                  <div class="empty-section-title">{{ $t('Rich Annotations') }}</div>
                   <ul>
-                    <li>Pen, line, rectangle, circle, and eraser tools with 30 colors.</li>
-                    <li>Adjustable stroke thickness and undo/redo history.</li>
-                    <li>Stylus-ready pointer support for smooth inking.</li>
-                    <li>One-click clear when you need a fresh slate.</li>
+                    <li>{{ $t('Pen, Shapes, Text, and Highlighter tools.') }}</li>
+                    <li v-html="$t('<strong>Stroke Selection</strong> to move & resize notes.')"></li>
+                    <li>{{ $t('Import images directly onto PDF pages.') }}</li>
+                    <li>{{ $t('Full Stylus support & Touch Drawing mode.') }}</li>
+                    <li>{{ $t('Customizable colors and Quick Styles.') }}</li>
                   </ul>
                 </div>
               </div>
