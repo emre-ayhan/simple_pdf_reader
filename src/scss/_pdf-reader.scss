@@ -323,7 +323,7 @@
 }
 
 select.form-control-plaintext {
-    width: auto !important;
+    min-width: 80px !important;
     option {
         color: $dark;
     }

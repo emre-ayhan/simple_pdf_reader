@@ -720,7 +720,7 @@ defineExpose({
                         </a>
                     </li>
                     <li class="nav-item">
-                        <select name="zoom-level" id="zoom-level" class="form-control-plaintext" @change="onZoomLevelChange" :disabled="isViewLocked">
+                        <select name="zoom-level" id="zoom-level" class="form-control-plaintext zoom-level" @change="onZoomLevelChange" :disabled="isViewLocked">
                             <option value="fit-height">{{ $t('Fit Height') }}</option>
                             <option value="fit-width">{{ $t('Fit Width') }}</option>
                             <template v-for="value in zoomLevels">
