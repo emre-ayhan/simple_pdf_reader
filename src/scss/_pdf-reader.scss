@@ -14,6 +14,18 @@
 
     background: $dark-bg-accent !important;
 
+    .form-control-plaintext {
+        width: 44px !important;
+        text-align: center;
+        color: $text-light !important;
+        border: none;
+        background-color: transparent;
+
+        &:disabled {
+            color: $secondary !important;
+        }
+    }
+
     .dropdown-menu-dark {
         .form-range {
             &::-webkit-slider-thumb {
@@ -120,18 +132,6 @@
     background-color: rgba(0, 0, 0, 0.5);
     padding: 5px 15px;
     border-radius: 20px;
-}
-
-.form-control-plaintext {
-    width: 44px !important;
-    text-align: center;
-    color: $text-light !important;
-    border: none;
-    background-color: transparent;
-
-    &:disabled {
-        color: $secondary !important;
-    }
 }
 
 .canvas-container {
@@ -286,9 +286,15 @@
             background: none;
         }
 
-        .form-control-plaintext {
-            text-align: end;
-            width: 20px !important;
+        .form-control {
+            background-color: transparent !important;
+            color: $text-light !important;
+            
+            &:focus {
+                border-color: $primary !important;
+                box-shadow: none !important;
+                outline: none !important;
+            };
         }
     }
     
@@ -304,8 +310,7 @@
         margin-bottom: 8px;
     }
 
-    .btn-color,
-    .btn {
+    .btn-color {
         width: 20px;
         height: 20px;
         border: 2px solid rgba(255, 255, 255, 0.3);
@@ -319,6 +324,13 @@
             border-color: rgba(255, 255, 255, 0.8);
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         }
+    }
+
+    .btn-delete {
+        width: 20px;
+        height: 20px;
+        line-height: 0;
+        font-size: 20px;
     }
 }
 

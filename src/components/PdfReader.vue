@@ -828,7 +828,7 @@ defineExpose({
                             ></button>
                             <div class="vr bg-primary"></div>
                         </template>
-                        <button class="btn btn-link link-danger border-0 p-0" :title="$t('Delete')" @click.stop="deleteSelectedStroke()">
+                        <button class="btn btn-link link-danger btn-delete border-0 p-0" :title="$t('Delete')" @click.stop="deleteSelectedStroke()">
                             <i class="bi bi-trash-fill"></i>
                         </button>
                     </div>
@@ -844,7 +844,7 @@ defineExpose({
                             :placeholder="$t('Enter text')"
                         />
                     </div>
-                    <div class="stroke-menu-section" v-else>
+                    <div class="stroke-menu-section" v-else-if="selectedStroke?.stroke[0]?.type != 'highlight-rect'">
                         <div class="d-flex align-items-center gap-1">
                             <input type="range" class="form-range" min="1" max="10" @input="(e) => changeStrokeThickness(parseInt(e.target.value))" :value="selectedStroke?.stroke[0]?.thickness || 1" />
                             <input type="text" class="form-control-plaintext" min="1" max="10" :value="selectedStroke?.stroke[0]?.thickness || 1" readonly />
