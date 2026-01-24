@@ -23,29 +23,6 @@ const store = new Store({
     clearInvalidConfig: true
 });
 
-// Auto Updater Events
-autoUpdater.on('checking-for-update', () => {
-  console.log('[Updater] Checking for update...');
-})
-autoUpdater.on('update-available', (info) => {
-  console.log('[Updater] Update available.', info);
-})
-autoUpdater.on('update-not-available', (info) => {
-  console.log('[Updater] Update not available.', info);
-})
-autoUpdater.on('error', (err) => {
-  console.log('[Updater] Error in auto-updater. ' + err);
-})
-autoUpdater.on('download-progress', (progressObj) => {
-  let log_message = "Download speed: " + progressObj.bytesPerSecond;
-  log_message = log_message + ' - Downloaded ' + progressObj.percent + '%';
-  log_message = log_message + ' (' + progressObj.transferred + "/" + progressObj.total + ')';
-  console.log(log_message);
-})
-autoUpdater.on('update-downloaded', (info) => {
-  console.log('[Updater] Update downloaded');
-});
-
 let win;
 let pendingFilePath = null;
 
