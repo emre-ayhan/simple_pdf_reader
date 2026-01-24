@@ -14,18 +14,6 @@
 
     background: $dark-bg-accent !important;
 
-    .form-control-plaintext {
-        width: 44px !important;
-        text-align: center;
-        color: $text-light !important;
-        border: none;
-        background-color: transparent;
-
-        &:disabled {
-            color: $secondary !important;
-        }
-    }
-
     .dropdown-menu-dark {
         .form-range {
             &::-webkit-slider-thumb {
@@ -68,6 +56,18 @@
                 outline: none !important;
             }
         }
+    }
+}
+
+.form-control-plaintext {
+    width: 44px !important;
+    text-align: center;
+    color: $text-light !important;
+    border: none;
+    background-color: transparent;
+
+    &:disabled {
+        color: $secondary !important;
     }
 }
 
