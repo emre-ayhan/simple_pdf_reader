@@ -1108,7 +1108,7 @@ defineExpose({
             <div class="stroke-menu-content">
                 <div class="stroke-menu-section">
                     <div class="stroke-menu-colors">
-                        <template v-if="isSelectedStrokeType('image')">
+                        <template v-if="!isSelectedStrokeType('image')">
                             <button 
                                 v-for="strokeStyle in initialStrokeStyles"
                                 class="btn-color"
