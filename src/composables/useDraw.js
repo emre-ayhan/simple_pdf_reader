@@ -1689,7 +1689,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         ctx.lineWidth = 2;
         
         let minX, minY, maxX, maxY, padding = 5;
-        let shouldDrawBorder = false;
+        let shouldDrawBorder = true;
         
         if (first.type === 'image') {
             minX = first.x;
@@ -1716,7 +1716,6 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             minY = first.y;
             maxX = first.x + metrics.width;
             maxY = first.y + first.fontSize;
-            shouldDrawBorder = true;
         } else if (first.type === 'line' || first.type === 'rectangle' || first.type === 'circle') {
             if (first.type === 'circle') {
                 let rx, ry;
@@ -1732,13 +1731,12 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 maxX = first.startX + rx;
                 minY = first.startY - ry;
                 maxY = first.startY + ry;
-                shouldDrawBorder = true;
             } else {
                 minX = Math.min(first.startX, first.endX);
                 maxX = Math.max(first.startX, first.endX);
                 minY = Math.min(first.startY, first.endY);
                 maxY = Math.max(first.startY, first.endY);
-                if (first.type === 'line') shouldDrawBorder = true;
+                if (first.type === 'rectangle') shouldDrawBorder = false; // Rectangle already has border
             }
         } else {
             // Pen stroke - draw bounding box
@@ -1752,7 +1750,6 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 maxX = Math.max(maxX, point.x);
                 maxY = Math.max(maxY, point.y);
             }
-            shouldDrawBorder = true;
         }
 
         minX -= padding;
