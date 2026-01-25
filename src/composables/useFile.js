@@ -15,6 +15,148 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
 
     var pdfDoc = null;
 
+    // Prevent concurrent render() calls per page/canvas
+    const pageRenderPromises = new Map();
+
+    const renderPdfPage = async (pageNumber) => {
+        if (!pdfDoc) return;
+        if (imagePage.value) return;
+        if (!pageNumber || pageNumber < 1) return;
+        if (renderedPages.value.has(pageNumber)) return;
+
+        if (pageRenderPromises.has(pageNumber)) {
+            return pageRenderPromises.get(pageNumber);
+        }
+
+        const promise = (async () => {
+            const pageIndex = pageNumber - 1;
+            const page = await pdfDoc.getPage(pageNumber);
+
+            const pixelRatio = window.devicePixelRatio || 1;
+            const containerWidth = pdfReader.value?.clientWidth || window.innerWidth;
+            const zoomFactor = Math.max(zoomPercentage.value, 100) / 100;
+            const desiredDisplayWidth = containerWidth * zoomFactor;
+            const unscaledViewport = page.getViewport({ scale: 1 });
+            const scale = Math.max((desiredDisplayWidth * pixelRatio) / unscaledViewport.width, 3);
+            const viewport = page.getViewport({ scale });
+
+            const canvas = pdfCanvases.value[pageIndex];
+            const drawCanvas = drawingCanvases.value[pageIndex];
+            if (!canvas || !drawCanvas) return;
+
+            canvas.style.width = '';
+            canvas.style.height = '';
+            drawCanvas.style.width = '';
+            drawCanvas.style.height = '';
+
+            const ctx = canvas.getContext('2d');
+
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+            drawCanvas.height = viewport.height;
+            drawCanvas.width = viewport.width;
+
+            drawingContexts.value[pageIndex] = drawCanvas.getContext('2d');
+
+            const renderContext = {
+                canvasContext: ctx,
+                viewport,
+            };
+
+            await page.render(renderContext).promise;
+
+            const textLayerDiv = textLayerDivs.value[pageIndex];
+            if (textLayerDiv) {
+                textLayerDiv.innerHTML = '';
+
+                const cssWidth = canvas.offsetWidth;
+                const cssHeight = canvas.offsetHeight;
+                const scaleX = cssWidth / canvas.width;
+                const scaleY = cssHeight / canvas.height;
+
+                textLayerDiv.style.width = `${canvas.width}px`;
+                textLayerDiv.style.height = `${canvas.height}px`;
+                textLayerDiv.style.transform = `scale(${scaleX}, ${scaleY})`;
+
+                const textContent = await page.getTextContent();
+
+                for (const item of textContent.items) {
+                    if (!item.str) continue;
+
+                    const span = document.createElement('span');
+                    span.textContent = item.str;
+
+                    const tx = viewport.transform;
+                    const m = item.transform;
+
+                    const x = tx[0] * m[4] + tx[2] * m[5] + tx[4];
+                    const y = tx[1] * m[4] + tx[3] * m[5] + tx[5];
+
+                    const fontHeight = Math.hypot(
+                        tx[0] * m[2] + tx[2] * m[3],
+                        tx[1] * m[2] + tx[3] * m[3]
+                    );
+
+                    const fontWidth = Math.hypot(
+                        tx[0] * m[0] + tx[2] * m[1],
+                        tx[1] * m[0] + tx[3] * m[1]
+                    );
+
+                    const textWidth = item.width * viewport.scale;
+                    const fontAscent = fontHeight;
+
+                    span.style.left = `${x}px`;
+                    span.style.top = `${y - fontAscent}px`;
+                    span.style.fontSize = `${fontHeight}px`;
+                    span.style.fontFamily = item.fontName || 'sans-serif';
+
+                    const angle = Math.atan2(
+                        tx[1] * m[0] + tx[3] * m[1],
+                        tx[0] * m[0] + tx[2] * m[1]
+                    );
+
+                    let transform = `rotate(${angle}rad)`;
+                    if (fontWidth > 0 && fontHeight > 0) {
+                        const scaleX2 = fontWidth / fontHeight;
+                        if (Math.abs(scaleX2 - 1) > 0.001) {
+                            transform += ` scaleX(${scaleX2})`;
+                        }
+                    }
+                    span.style.transform = transform;
+
+                    const measureSpan = document.createElement('span');
+                    measureSpan.style.font = span.style.font || `${fontHeight}px ${item.fontName || 'sans-serif'}`;
+                    measureSpan.style.position = 'absolute';
+                    measureSpan.style.visibility = 'hidden';
+                    measureSpan.style.whiteSpace = 'pre';
+                    measureSpan.textContent = item.str;
+                    textLayerDiv.appendChild(measureSpan);
+                    const naturalWidth = measureSpan.offsetWidth;
+                    textLayerDiv.removeChild(measureSpan);
+
+                    if (textWidth > 0 && naturalWidth > 0 && item.str.length > 1) {
+                        const extraSpace = textWidth - naturalWidth;
+                        const letterSpacing = extraSpace / (item.str.length - 1);
+                        span.style.letterSpacing = `${letterSpacing}px`;
+                    }
+
+                    textLayerDiv.appendChild(span);
+                }
+            }
+
+            renderedPages.value.add(pageNumber);
+            lazyLoadCallback(pageIndex);
+        })();
+
+        pageRenderPromises.set(pageNumber, promise);
+
+        try {
+            await promise;
+        } finally {
+            pageRenderPromises.delete(pageNumber);
+        }
+    };
+
     // Observers
     const intersectionObserver = ref(null);
     const lazyLoadObserver = ref(null);
@@ -100,149 +242,8 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             entries.forEach(async entry => {
                 if (entry.isIntersecting) {
                     const pageNumber = parseInt(entry.target.getAttribute('data-page'));
-                    const pageIndex = pageNumber - 1;
-                    
-                    if (!pdfDoc || renderedPages.value.has(pageNumber)) return;
-    
-                    const page = await pdfDoc.getPage(pageNumber);
-
-                    // Calculate scale based on container width and device pixel ratio for sharp rendering
-                    const pixelRatio = window.devicePixelRatio || 1;
-                    const containerWidth = pdfReader.value?.clientWidth || window.innerWidth;
-                    // Ensure we render for at least 100% zoom to avoid blur when zooming in from a smaller view
-                    const zoomFactor = Math.max(zoomPercentage.value, 100) / 100;
-                    const desiredDisplayWidth = containerWidth * zoomFactor;
-                    const unscaledViewport = page.getViewport({ scale: 1 });
-                    const scale = Math.max((desiredDisplayWidth * pixelRatio) / unscaledViewport.width, 3);
-
-                    const viewport = page.getViewport({ scale });
-                    
-                    // Get canvas elements
-                    const canvas = pdfCanvases.value[pageIndex];
-                    const drawCanvas = drawingCanvases.value[pageIndex];
-                    
-                    if (!canvas || !drawCanvas) return;
-                    // Reset inline styles that might have been set in whiteboard mode
-                    canvas.style.width = '';
-                    canvas.style.height = '';
-                    drawCanvas.style.width = '';
-                    drawCanvas.style.height = '';
-                    
-                    const ctx = canvas.getContext("2d");
-                    
-                    canvas.height = viewport.height;
-                    canvas.width = viewport.width;
-                    drawCanvas.height = viewport.height;
-                    drawCanvas.width = viewport.width;
-                    
-                    // Initialize drawing context
-                    drawingContexts.value[pageIndex] = drawCanvas.getContext('2d');
-                    
-                    const renderContext = {
-                        canvasContext: ctx,
-                        viewport,
-                    };
-                    
-                    await page.render(renderContext).promise;
-                    
-                    // Render text layer for text selection
-                    const textLayerDiv = textLayerDivs.value[pageIndex];
-                    if (textLayerDiv) {
-                        // Clear any existing text content
-                        textLayerDiv.innerHTML = '';
-                        
-                        // Scale text layer to match the CSS display size of the canvas
-                        const cssWidth = canvas.offsetWidth;
-                        const cssHeight = canvas.offsetHeight;
-                        const scaleX = cssWidth / canvas.width;
-                        const scaleY = cssHeight / canvas.height;
-                        
-                        textLayerDiv.style.width = `${canvas.width}px`;
-                        textLayerDiv.style.height = `${canvas.height}px`;
-                        textLayerDiv.style.transform = `scale(${scaleX}, ${scaleY})`;
-                        
-                        const textContent = await page.getTextContent();
-                        
-                        // Render text items
-                        for (const item of textContent.items) {
-                            if (!item.str) continue;
-                            
-                            const span = document.createElement('span');
-                            span.textContent = item.str;
-                            
-                            // Get the transformed position
-                            const tx = viewport.transform;
-                            const m = item.transform;
-                            
-                            // Apply viewport transformation to get display coordinates
-                            const x = tx[0] * m[4] + tx[2] * m[5] + tx[4];
-                            const y = tx[1] * m[4] + tx[3] * m[5] + tx[5];
-                            
-                            // Calculate font height
-                            const fontHeight = Math.hypot(
-                                tx[0] * m[2] + tx[2] * m[3],
-                                tx[1] * m[2] + tx[3] * m[3]
-                            );
-                            
-                            // Calculate font width for scaling
-                            const fontWidth = Math.hypot(
-                                tx[0] * m[0] + tx[2] * m[1],
-                                tx[1] * m[0] + tx[3] * m[1]
-                            );
-                            
-                            // Calculate text width from item width and viewport scale
-                            const textWidth = item.width * viewport.scale;
-                            
-                            const fontAscent = fontHeight;
-                            
-                            // Set span styles
-                            span.style.left = `${x}px`;
-                            span.style.top = `${y - fontAscent}px`;
-                            span.style.fontSize = `${fontHeight}px`;
-                            span.style.fontFamily = item.fontName || 'sans-serif';
-                            
-                            // Calculate rotation angle
-                            const angle = Math.atan2(
-                                tx[1] * m[0] + tx[3] * m[1],
-                                tx[0] * m[0] + tx[2] * m[1]
-                            );
-                            
-                            // Apply transformations
-                            let transform = `rotate(${angle}rad)`;
-                            if (fontWidth > 0 && fontHeight > 0) {
-                                const scaleX = fontWidth / fontHeight;
-                                if (Math.abs(scaleX - 1) > 0.001) {
-                                    transform += ` scaleX(${scaleX})`;
-                                }
-                            }
-                            span.style.transform = transform;
-                            
-                            // Create a temporary element to measure natural text width
-                            const measureSpan = document.createElement('span');
-                            measureSpan.style.font = span.style.font || `${fontHeight}px ${item.fontName || 'sans-serif'}`;
-                            measureSpan.style.position = 'absolute';
-                            measureSpan.style.visibility = 'hidden';
-                            measureSpan.style.whiteSpace = 'pre';
-                            measureSpan.textContent = item.str;
-                            textLayerDiv.appendChild(measureSpan);
-                            const naturalWidth = measureSpan.offsetWidth;
-                            textLayerDiv.removeChild(measureSpan);
-                            
-                            // Calculate letter-spacing to make text fill the exact width
-                            if (textWidth > 0 && naturalWidth > 0 && item.str.length > 1) {
-                                const targetWidth = textWidth;
-                                const extraSpace = targetWidth - naturalWidth;
-                                const letterSpacing = extraSpace / (item.str.length - 1);
-                                span.style.letterSpacing = `${letterSpacing}px`;
-                            }
-                            
-                            textLayerDiv.appendChild(span);
-                        }
-                    }
-                    
-                    renderedPages.value.add(pageNumber);
-                    // Repaint saved annotations after PDF render
-                    lazyLoadCallback(pageIndex);
+                    if (!pdfDoc) return;
+                    await renderPdfPage(pageNumber);
                 }
             });
         }, options);
@@ -1071,6 +1072,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         lazyLoadObserver,
         setupIntersectionObserver,
         setupLazyLoadObserver,
+        renderPdfPage,
         scrollToPage,
         scrollToFirstPage,
         scrollToLastPage,

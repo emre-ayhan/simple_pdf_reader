@@ -87,6 +87,7 @@ const {
     openNewBlankPage,
     createImageImportHandler,
     handlePageNumberInput,
+    renderPdfPage,
 } = useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallback, fileSavedCallback);
 
 // Drag and Drop Handlers
@@ -252,8 +253,33 @@ const selectStrokeMode = () => {
     resetAllTools();
 };
 
+const renderAllPagesForPrint = async () => {
+    if (!isFileLoaded.value) return;
+
+    // Ensure refs/canvases exist
+    await nextTick();
+
+    // For PDFs, explicitly render each page sequentially so printing isn't just a viewport snapshot
+    if (!pageCount.value || typeof renderPdfPage !== 'function') return;
+
+    for (let page = 1; page <= pageCount.value; page++) {
+        if (deletedPages.value.has(page)) continue;
+        await renderPdfPage(page);
+    }
+
+    // Give the DOM a moment to apply final sizes before print
+    await nextTick();
+    await new Promise((resolve) => setTimeout(resolve, 150));
+};
+
 const printPage = async () => {
     if (!isFileLoaded.value) return;
+
+    try {
+        await renderAllPagesForPrint();
+    } catch (error) {
+        console.error('[Renderer] Pre-print render failed:', error);
+    }
 
     if (Electron.value?.print) {
         try {
