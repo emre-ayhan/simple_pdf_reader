@@ -127,7 +127,10 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     // Copy Selected Stroke
     const copySelectedStroke = () => {
         if (!selectedStroke.value) return;
-        copiedStroke.value = JSON.parse(JSON.stringify(selectedStroke.value.stroke));
+        copiedStroke.value = {
+            stroke: JSON.parse(JSON.stringify(selectedStroke.value.stroke)),
+            inserted: 0
+        }
     };
 
     // Insert Copied Stroke
@@ -164,10 +167,10 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             strokesPerPage.value[pageNumber] = [];
         }
         // Offset the copied stroke slightly for visibility
-        const newStroke = JSON.parse(JSON.stringify(copiedStroke.value));
-        copiedStroke.value = null; // Keep copied stroke for multiple pastes
+        const newStroke = JSON.parse(JSON.stringify(copiedStroke.value.stroke));
+        const insertedCount = copiedStroke.value.inserted++; // Keep copied stroke for multiple pastes
 
-        const offset = 20;
+        const offset = 20*(insertedCount + 1);
         const newId = uuid();
         const first = newStroke[0];
 
