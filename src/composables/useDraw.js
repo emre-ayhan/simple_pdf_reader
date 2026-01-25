@@ -124,6 +124,13 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     const resizeCursor = ref(null);
 
 
+    // Check Selected Stroke Type
+    const isSelectedStrokeType = (type) => {
+        if (!selectedStroke.value) return false;
+        const first = selectedStroke.value.stroke[0];
+        return first.type === type;
+    };
+
     // Copy Selected Stroke
     const copySelectedStroke = () => {
         if (!selectedStroke.value) return;
@@ -1419,7 +1426,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             
             // Change thickness for all points in the stroke
             for (let point of stroke) {
-                point.thickness = newThickness;
+                point.thickness = parseInt(newThickness, 10);
             }
             
             // Save to history
@@ -2258,5 +2265,6 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         copiedStroke,
         copySelectedStroke,
         insertCopiedStroke,
+        isSelectedStrokeType
     }
 }

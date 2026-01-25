@@ -146,6 +146,7 @@ const {
     highlightTextSelection,
     copySelectedStroke,
     insertCopiedStroke,
+    isSelectedStrokeType,
     copiedStroke,
 } = useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPage, drawingCanvases, drawingContexts, strokeChangeCallback);
 
@@ -1107,7 +1108,7 @@ defineExpose({
             <div class="stroke-menu-content">
                 <div class="stroke-menu-section">
                     <div class="stroke-menu-colors">
-                        <template v-if="selectedStroke?.stroke[0]?.type !== 'image'">
+                        <template v-if="isSelectedStrokeType('image')">
                             <button 
                                 v-for="strokeStyle in initialStrokeStyles"
                                 class="btn-color"
@@ -1125,20 +1126,20 @@ defineExpose({
                         </button>
                     </div>
                 </div>
-                <template v-if="selectedStroke?.stroke[0]?.type !== 'image'">
-                    <div v-if="selectedStroke?.stroke[0]?.type === 'text'" class="stroke-menu-section">
+                <template v-if="!isSelectedStrokeType('image')">
+                    <div v-if="isSelectedStrokeType('text')" class="stroke-menu-section">
                         <input 
                             type="text" 
                             class="form-control form-control-sm" 
                             :value="selectedStroke?.stroke[0]?.text || ''"
-                            @input="(e) => changeStrokeText(e.target.value)"
+                            @input="changeStrokeText($event.target.value)"
                             @click.stop
                             :placeholder="$t('Enter text')"
                         />
                     </div>
-                    <div class="stroke-menu-section" v-else-if="selectedStroke?.stroke[0]?.type != 'highlight-rect'">
+                    <div class="stroke-menu-section" v-else-if="!isSelectedStrokeType('highlight-rect')">
                         <div class="d-flex align-items-center gap-1">
-                            <input type="range" class="form-range" min="1" max="10" @input="(e) => changeStrokeThickness(parseInt(e.target.value))" :value="selectedStroke?.stroke[0]?.thickness || 1" />
+                            <input type="range" class="form-range" min="1" max="10" @input="changeStrokeThickness($event.target.value)" :value="selectedStroke?.stroke[0]?.thickness || 1" />
                             <input type="text" class="form-control-plaintext" min="1" max="10" :value="selectedStroke?.stroke[0]?.thickness || 1" readonly />
                         </div>
                     </div>
