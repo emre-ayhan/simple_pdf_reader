@@ -167,7 +167,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         const newStroke = JSON.parse(JSON.stringify(copiedStroke.value));
         copiedStroke.value = null; // Keep copied stroke for multiple pastes
 
-        const offset = 10;
+        const offset = 20;
         const newId = uuid();
         const first = newStroke[0];
 
