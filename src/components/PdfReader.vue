@@ -1,12 +1,11 @@
 <script setup>
 import { ref, computed, nextTick, onMounted, onUnmounted, onBeforeUnmount } from "vue";
 import { Electron } from "../composables/useElectron";
-import { useStore } from "../composables/useStore";
 import { useFile } from "../composables/useFile";
 import { useDrop } from "../composables/useDrop";
 import { useDraw } from "../composables/useDraw";
 import { useHistory } from "../composables/useHistory";
-import { fileDataCache, openNewTab } from "../composables/useTabs";
+import { fileDataCache } from "../composables/useTabs";
 import { useWindowEvents } from "../composables/useWindowEvents";
 import EmptyState from "./EmptyState.vue";
 import { enableTouchDrawing } from "../composables/useTouchDrawing";
@@ -103,19 +102,6 @@ const strokeChangeCallback = (action) => {
     addToHistory(action);
 };
 
-const captureSelectionCallback = (canvasIndex, selectedCanvas) => {
-    // Ensure strokes are finalized before capture
-    redrawAllStrokes(canvasIndex);
-
-    // Store the captured image data and open a new tab
-    fileDataCache.value = {
-        type: 'blank',
-        data: selectedCanvas.toDataURL('image/png')
-    };
-
-    openNewTab();
-}
-
 const {
     isDrawing,
     isEraser,
@@ -156,7 +142,10 @@ const {
     handleStrokeStyleButtonClick,
     clampStrokeMenuPosition,
     highlightTextSelection,
-} = useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPage, drawingCanvases, drawingContexts, strokeChangeCallback, captureSelectionCallback);
+    copySelectedStroke,
+    insertCopiedStroke,
+    copiedStroke,
+} = useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPage, drawingCanvases, drawingContexts, strokeChangeCallback);
 
 // History management
 const { 
@@ -746,6 +735,13 @@ defineExpose({
                             <i class="bi" :class="isViewLocked ? 'bi-lock-fill' : 'bi-lock'"></i>
                         </a>
                     </li>
+
+                    <!-- Insert Copied Stroke -->
+                    <li class="nav-item" v-if="copiedStroke">
+                        <a href="#" class="nav-link" @click.prevent="insertCopiedStroke" :title="$t('Insert Copied Stroke')">
+                            <i class="bi bi-clipboard-plus"></i>
+                        </a>
+                    </li>
                 </ul>
             </template>
         </nav>
@@ -815,7 +811,7 @@ defineExpose({
                  left: strokeMenuPosition.x + 'px', 
                  top: strokeMenuPosition.y + 'px'
              }">
-            <div class="stroke-menu-content" :class="{ 'image-stroke': selectedStroke?.stroke[0]?.type === 'image' }">
+            <div class="stroke-menu-content">
                 <div class="stroke-menu-section">
                     <div class="stroke-menu-colors">
                         <template v-if="selectedStroke?.stroke[0]?.type !== 'image'">
@@ -828,7 +824,10 @@ defineExpose({
                             ></button>
                             <div class="vr bg-primary"></div>
                         </template>
-                        <button class="btn btn-link link-danger btn-delete border-0 p-0" :title="$t('Delete')" @click.stop="deleteSelectedStroke()">
+                        <button type="button" class="btn btn-link link-secondary btn-stroke-menu border-0 p-0" :title="$t('Copy')" @click.stop="copySelectedStroke()">
+                            <i class="bi bi-clipboard-fill"></i>
+                        </button>
+                        <button type="button" class="btn btn-link link-secondary btn-stroke-menu border-0 p-0" :title="$t('Delete')" @click.stop="deleteSelectedStroke()">
                             <i class="bi bi-trash-fill"></i>
                         </button>
                     </div>

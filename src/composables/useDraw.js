@@ -3,7 +3,9 @@ import { uuid } from './useUuid.js';
 import { useStore } from './useStore.js';
 import { enableTouchDrawing } from './useTouchDrawing.js';
 
-export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPage, drawingCanvases, drawingContexts, strokeChangeCallback, captureSelectionCallback) {
+const copiedStroke = ref(null);
+
+export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPage, drawingCanvases, drawingContexts, strokeChangeCallback) {
     const { get: storeGet, set: storeSet } = useStore();
     
     // Image cache to prevent reloading on every redraw
@@ -120,6 +122,100 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     const resizeHandle = ref(null); // 'nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'
     const resizeStartBounds = ref(null);
     const resizeCursor = ref(null);
+
+
+    // Copy Selected Stroke
+    const copySelectedStroke = () => {
+        if (!selectedStroke.value) return;
+        copiedStroke.value = JSON.parse(JSON.stringify(selectedStroke.value.stroke));
+    };
+
+    // Insert Copied Stroke
+    const insertCopiedStroke = (pageIndex) => {
+        if (!copiedStroke.value) return;
+
+        let targetPageIndex = typeof pageIndex === 'number' ? pageIndex : -1;
+        
+        // If passed as event or invalid, try to find the visible page
+        if (targetPageIndex === -1) {
+            targetPageIndex = 0; // Default to first page
+            if (drawingCanvases.value && drawingCanvases.value.length > 0) {
+                const viewportCenterY = window.innerHeight / 2;
+                let minDistance = Infinity;
+                
+                drawingCanvases.value.forEach((canvas, index) => {
+                    if (!canvas) return;
+                    const rect = canvas.getBoundingClientRect();
+                    // Check if canvas is essentially visible
+                    if (rect.bottom > 0 && rect.top < window.innerHeight) {
+                        const canvasCenterY = rect.top + rect.height / 2;
+                        const distance = Math.abs(viewportCenterY - canvasCenterY);
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                            targetPageIndex = index;
+                        }
+                    }
+                });
+            }
+        }
+
+        const pageNumber = targetPageIndex + 1;
+        if (!strokesPerPage.value[pageNumber]) {
+            strokesPerPage.value[pageNumber] = [];
+        }
+        // Offset the copied stroke slightly for visibility
+        const newStroke = JSON.parse(JSON.stringify(copiedStroke.value));
+        copiedStroke.value = null; // Keep copied stroke for multiple pastes
+
+        const offset = 10;
+        const newId = uuid();
+        const first = newStroke[0];
+
+        if (first.type === 'image') {
+            first.id = newId;
+            first.x += offset;
+            first.y += offset;
+        } else if (first.type === 'highlight-rect') {
+            first.id = newId;
+            const rects = first.rects || [{ x: first.x, y: first.y, width: first.width, height: first.height }];
+            rects.forEach(rect => {
+                rect.x += offset;
+                rect.y += offset;
+            });
+            if (first.x !== undefined) {
+                first.x += offset;
+                first.y += offset;
+            }
+        } else if (first.type === 'text') {
+            first.id = newId;
+            first.x += offset;
+            first.y += offset;
+        } else if (first.type === 'line' || first.type === 'rectangle' || first.type === 'circle') {
+            first.id = newId;
+            first.startX += offset;
+            first.startY += offset;
+            first.endX += offset;
+            first.endY += offset;
+            if (first.x !== undefined) first.x += offset;
+            if (first.y !== undefined) first.y += offset;
+        } else {
+            newStroke.forEach(point => {
+                point.id = newId;
+                point.x += offset;
+                point.y += offset;
+            });
+        }
+
+        strokesPerPage.value[pageNumber].push(newStroke);
+        strokeChangeCallback({
+            id: newId,
+            type: 'add',
+            page: pageNumber,
+            stroke: newStroke
+        });
+
+        redrawAllStrokes(targetPageIndex);
+    };
 
 
     // Clamp when menu opens (now that refs are available)
@@ -1902,15 +1998,33 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         // Draw annotations canvas
         tempCtx.drawImage(drawCanvas, 0, 0);
         
-        // Extract selected region
-        const selectedCanvas = document.createElement('canvas');
-        selectedCanvas.width = selectedWidth;
-        selectedCanvas.height = selectedHeight;
-        const selectedCtx = selectedCanvas.getContext('2d');
-        selectedCtx.drawImage(tempCanvas, x, y, selectedWidth, selectedHeight, 0, 0, selectedWidth, selectedHeight);
-        
-        // Clear existing strokes and contexts
-        captureSelectionCallback(canvasIndex, selectedCanvas);
+        // Extract the selected region
+        try {
+            const imageData = tempCtx.getImageData(x, y, selectedWidth, selectedHeight);
+            const cropCanvas = document.createElement('canvas');
+            cropCanvas.width = selectedWidth;
+            cropCanvas.height = selectedHeight;
+            const cropCtx = cropCanvas.getContext('2d');
+            cropCtx.putImageData(imageData, 0, 0);
+            
+            const dataUrl = cropCanvas.toDataURL('image/png');
+            
+            // Set as copied stroke
+            copiedStroke.value = [{
+                id: uuid(),
+                type: 'image',
+                x: x,
+                y: y,
+                width: selectedWidth,
+                height: selectedHeight,
+                imageData: dataUrl
+            }];
+
+            // Redraw to clear the selection rectangle
+            redrawAllStrokes(canvasIndex);
+        } catch (error) {
+            console.error('Error capturing selection:', error);
+        }
     };
 
      const drawImageCanvas = async (src) => {
@@ -2140,6 +2254,9 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         handleStrokeStyleButtonClick,
         clampStrokeMenuPosition,
         createHighlightRectangle,
-        highlightTextSelection
+        highlightTextSelection,
+        copiedStroke,
+        copySelectedStroke,
+        insertCopiedStroke,
     }
 }
