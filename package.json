@@ -10,13 +10,12 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "publish": "npm run build && electron-builder --publish always",
     "electron:dev": "electron .",
     "electron:start": "vite build && electron .",
     "electron:build": "vite build && electron-builder",
-    "electron:build:win": "vite build && electron-builder --win --config.directories.output=dist-electron/windows",
-    "electron:build:mac": "vite build && electron-builder --mac --config.directories.output=dist-electron/macos",
-    "electron:build:linux": "vite build && electron-builder --linux --config.directories.output=dist-electron/linux"
+    "electron:build:win": "vite build && electron-builder --win --publish always",
+    "electron:build:mac": "vite build && electron-builder --mac --publish always",
+    "electron:build:linux": "vite build && electron-builder --linux --publish always"
   },
   "build": {
     "appId": "com.emreayhan.simplepdf",

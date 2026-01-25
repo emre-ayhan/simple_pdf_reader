@@ -30,7 +30,7 @@ const menuItems = computed(() => ({
         { label: 'Save', action: 'saveFile', icon: 'floppy', shortcut: 'Ctrl+S', disabled: !activePageHasUnsavedChanges.value },
     ],
     page: [
-        { label: 'Insert Blank After', action: 'insertBlankPage', icon: 'file-earmark-arrow-down' },
+        { label: 'Insert Page After', action: 'insertBlankPage', icon: 'file-earmark-arrow-down' },
         { label: 'First Page', action: 'scrollToFirstPage', icon: 'chevron-double-up', shortcut: 'Home' },
         { label: 'Last Page', action: 'scrollToLastPage', icon: 'chevron-double-down', shortcut: 'End' },
         { label: 'Print', action: 'printPage', icon: 'printer', shortcut: 'Ctrl+P' },
