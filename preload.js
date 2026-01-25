@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     minimize: () => ipcRenderer.invoke("window:minimize"),
     maximize: () => ipcRenderer.invoke("window:maximize"),
     close: () => ipcRenderer.invoke("window:close"),
+    print: (options) => ipcRenderer.invoke("window:print", options),
     openFile: () => ipcRenderer.invoke("file:open"),
     saveFile: (filepath, content, encoding) =>
         ipcRenderer.invoke("file:save", filepath, content, encoding),

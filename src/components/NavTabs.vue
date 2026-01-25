@@ -33,7 +33,7 @@ const menuItems = computed(() => ({
         { label: 'Insert Blank After', action: 'insertBlankPage', icon: 'file-earmark-arrow-down' },
         { label: 'First Page', action: 'scrollToFirstPage', icon: 'chevron-double-up', shortcut: 'Home' },
         { label: 'Last Page', action: 'scrollToLastPage', icon: 'chevron-double-down', shortcut: 'End' },
-        { label: 'Print', action: 'printFile', icon: 'printer', shortcut: 'Ctrl+P' },
+        { label: 'Print', action: 'printPage', icon: 'printer', shortcut: 'Ctrl+P' },
         { label: 'Delete', action: 'deletePage', icon: 'trash3' }
     ],
     pereferences: [

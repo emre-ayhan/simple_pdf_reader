@@ -252,6 +252,23 @@ const selectStrokeMode = () => {
     resetAllTools();
 };
 
+const printPage = async () => {
+    if (!isFileLoaded.value) return;
+
+    if (Electron.value?.print) {
+        try {
+            await Electron.value.print({ silent: false, printBackground: true });
+        } catch (error) {
+            console.error('[Renderer] Print failed:', error);
+        }
+        return;
+    }
+
+    if (typeof window?.print === 'function') {
+        window.print();
+    }
+};
+
 const handleInsertBlankPage = () => {
     if (!isFileLoaded.value) return;
     insertBlankPage(addToHistory);
@@ -395,6 +412,13 @@ useWindowEvents(fileId, {
                 if (isTextInputFocused.value) return;
                 event.preventDefault();
                 selectDrawingTool('circle');
+            }
+        },
+        p: {
+            actionAll: (event, ctrl) => {
+                if (!ctrl || !isFileLoaded.value) return;
+                event.preventDefault();
+                printPage();
             }
         },
         n: {
@@ -552,6 +576,7 @@ defineExpose({
     openNewBlankPage: createNewBlankPage,
     openFile: handleFileOpen,
     saveFile: handleSaveFile,
+    printPage,
     insertBlankPage: handleInsertBlankPage,
     scrollToFirstPage,
     scrollToLastPage,

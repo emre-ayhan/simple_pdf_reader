@@ -163,6 +163,27 @@ ipcMain.handle("window:close", () => {
     win.close();
 });
 
+// Print current window contents
+ipcMain.handle("window:print", async (event, options = {}) => {
+    if (!win) {
+        return {
+            success: false,
+            error: 'Window not available'
+        };
+    }
+
+    return new Promise((resolve) => {
+        try {
+            win.webContents.print({ printBackground: true, ...options }, (success, failureReason) => {
+                resolve({ success, failureReason });
+            });
+        } catch (error) {
+            console.error('[Main] Print failed:', error);
+            resolve({ success: false, error: error.message });
+        }
+    });
+});
+
 // Function to open a file in the app
 function openFileInApp(filepath) {
     if (!win) {
