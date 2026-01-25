@@ -1155,7 +1155,7 @@ defineExpose({
 
         <!-- Custom Print Modal (Electron silent printing) -->
         <div class="modal fade" tabindex="-1" ref="printModalEl" aria-hidden="true">
-            <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
                 <div class="modal-content bg-dark text-white">
                     <div class="modal-header">
                         <h5 class="modal-title">{{ $t('Print') }}</h5>
