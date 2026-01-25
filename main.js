@@ -184,6 +184,133 @@ ipcMain.handle("window:print", async (event, options = {}) => {
     });
 });
 
+// List printers for custom in-app print modal
+ipcMain.handle('print:getPrinters', async () => {
+    if (!win) return [];
+    try {
+        const printers = await win.webContents.getPrintersAsync();
+        return printers.map(p => ({
+            name: p.name,
+            displayName: p.displayName || p.name,
+            isDefault: !!p.isDefault,
+            status: p.status,
+        }));
+    } catch (error) {
+        console.error('[Main] getPrintersAsync failed:', error);
+        return [];
+    }
+});
+
+// Silently print a set of page images (PNG data URLs) without showing the OS print dialog.
+ipcMain.handle('print:printImages', async (event, payload = {}) => {
+    if (!win) {
+        return { success: false, error: 'Window not available' };
+    }
+
+    const images = Array.isArray(payload.images) ? payload.images : [];
+    const options = payload.options || {};
+    const deviceName = options.deviceName || '';
+    const copies = Number.isFinite(options.copies) ? options.copies : parseInt(options.copies || '1', 10);
+    const landscape = options.landscape === true;
+
+    if (!images.length) {
+        return { success: false, error: 'No pages to print' };
+    }
+
+    const jobId = Date.now();
+    const jobDir = join(app.getPath('temp'), `simple-pdf-reader-print-${jobId}`);
+
+    let printWin = null;
+
+    try {
+        await fs.promises.mkdir(jobDir, { recursive: true });
+
+        const imageFiles = [];
+        for (let i = 0; i < images.length; i++) {
+            const dataUrl = images[i];
+            const match = typeof dataUrl === 'string' ? dataUrl.match(/^data:image\/(png|jpeg);base64,(.+)$/) : null;
+            if (!match) continue;
+            const ext = match[1] === 'jpeg' ? 'jpg' : 'png';
+            const base64 = match[2];
+            const buffer = Buffer.from(base64, 'base64');
+            const filePath = join(jobDir, `page-${String(i + 1).padStart(4, '0')}.${ext}`);
+            await fs.promises.writeFile(filePath, buffer);
+            imageFiles.push(filePath);
+        }
+
+        if (!imageFiles.length) {
+            return { success: false, error: 'No valid images to print' };
+        }
+
+        const html = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Print</title>
+    <style>
+      @page { margin: 0; }
+      html, body { margin: 0; padding: 0; background: white; }
+      .page { page-break-after: always; break-after: page; }
+      .page:last-child { page-break-after: auto; break-after: auto; }
+      img { width: 100%; height: auto; display: block; }
+    </style>
+  </head>
+  <body>
+    ${imageFiles.map((p) => `<div class="page"><img src="file:///${p.replace(/\\/g, '/')}" /></div>`).join('')}
+  </body>
+</html>`;
+
+        const htmlPath = join(jobDir, 'index.html');
+        await fs.promises.writeFile(htmlPath, html, 'utf-8');
+
+        printWin = new BrowserWindow({
+            show: false,
+            webPreferences: {
+                sandbox: true,
+                contextIsolation: true,
+            },
+        });
+
+        await printWin.loadFile(htmlPath);
+
+        // Wait a tick for images to decode
+        await new Promise((resolve) => setTimeout(resolve, 250));
+
+        const printResult = await new Promise((resolve) => {
+            try {
+                printWin.webContents.print(
+                    {
+                        silent: true,
+                        printBackground: true,
+                        deviceName: deviceName || undefined,
+                        copies: Number.isFinite(copies) && copies > 0 ? copies : 1,
+                        landscape,
+                    },
+                    (success, failureReason) => resolve({ success, failureReason })
+                );
+            } catch (error) {
+                resolve({ success: false, error: error.message });
+            }
+        });
+
+        return printResult;
+    } catch (error) {
+        console.error('[Main] printImages failed:', error);
+        return { success: false, error: error.message };
+    } finally {
+        try {
+            if (printWin && !printWin.isDestroyed()) {
+                printWin.close();
+            }
+        } catch {}
+
+        // Best-effort cleanup
+        try {
+            await fs.promises.rm(jobDir, { recursive: true, force: true });
+        } catch {}
+    }
+});
+
 // Function to open a file in the app
 function openFileInApp(filepath) {
     if (!win) {

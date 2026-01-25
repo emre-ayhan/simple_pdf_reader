@@ -22,6 +22,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     maximize: () => ipcRenderer.invoke("window:maximize"),
     close: () => ipcRenderer.invoke("window:close"),
     print: (options) => ipcRenderer.invoke("window:print", options),
+    getPrinters: () => ipcRenderer.invoke('print:getPrinters'),
+    printImages: (images, options) => ipcRenderer.invoke('print:printImages', { images, options }),
     openFile: () => ipcRenderer.invoke("file:open"),
     saveFile: (filepath, content, encoding) =>
         ipcRenderer.invoke("file:save", filepath, content, encoding),
