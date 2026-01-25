@@ -26,6 +26,130 @@ const store = new Store({
 let win;
 let pendingFilePath = null;
 
+let autoUpdaterInitialized = false;
+let lastUpdateInfo = null;
+let updateDownloaded = false;
+let updateDownloadInProgress = false;
+
+function sendUpdateStatus(payload) {
+    try {
+        if (win && !win.isDestroyed()) {
+            win.webContents.send('update:status', payload);
+        }
+    } catch (error) {
+        console.warn('[Main] Failed to send update:status:', error);
+    }
+}
+
+function sendUpdateProgress(payload) {
+    try {
+        if (win && !win.isDestroyed()) {
+            win.webContents.send('update:download-progress', payload);
+        }
+    } catch (error) {
+        console.warn('[Main] Failed to send update:download-progress:', error);
+    }
+}
+
+function setTaskbarProgress(percent) {
+    if (!win || win.isDestroyed()) return;
+    const value = typeof percent === 'number' && Number.isFinite(percent) ? percent : -1;
+    if (value < 0) {
+        win.setProgressBar(-1);
+        return;
+    }
+    win.setProgressBar(Math.max(0, Math.min(1, value / 100)));
+}
+
+function setupAutoUpdater() {
+    if (!app.isPackaged) return;
+    if (autoUpdaterInitialized) return;
+    autoUpdaterInitialized = true;
+
+    autoUpdater.autoDownload = false;
+
+    autoUpdater.on('checking-for-update', () => {
+        sendUpdateStatus({ state: 'checking' });
+    });
+
+    autoUpdater.on('update-available', async (info) => {
+        lastUpdateInfo = info || null;
+        updateDownloaded = false;
+        sendUpdateStatus({ state: 'available', info });
+
+        const result = await dialog.showMessageBox(win, {
+            type: 'info',
+            buttons: ['Download', 'Later'],
+            defaultId: 0,
+            cancelId: 1,
+            title: 'Update available',
+            message: 'A new version of Simple PDF Reader is available.',
+            detail: info?.version ? `Version ${info.version} is available. Do you want to download it now?` : 'Do you want to download it now?',
+        });
+
+        if (result.response !== 0) {
+            sendUpdateStatus({ state: 'deferred', info });
+            return;
+        }
+
+        try {
+            updateDownloadInProgress = true;
+            sendUpdateStatus({ state: 'downloading', info });
+            setTaskbarProgress(0);
+            await autoUpdater.downloadUpdate();
+        } catch (error) {
+            console.error('[Main] downloadUpdate failed:', error);
+            sendUpdateStatus({ state: 'error', error: String(error?.message || error) });
+            setTaskbarProgress(-1);
+        } finally {
+            updateDownloadInProgress = false;
+        }
+    });
+
+    autoUpdater.on('update-not-available', (info) => {
+        lastUpdateInfo = info || null;
+        updateDownloaded = false;
+        sendUpdateStatus({ state: 'not-available', info });
+    });
+
+    autoUpdater.on('download-progress', (progressObj) => {
+        // progressObj: { percent, bytesPerSecond, transferred, total }
+        sendUpdateProgress(progressObj);
+        if (typeof progressObj?.percent === 'number') {
+            setTaskbarProgress(progressObj.percent);
+        }
+    });
+
+    autoUpdater.on('update-downloaded', async (info) => {
+        lastUpdateInfo = info || lastUpdateInfo;
+        updateDownloaded = true;
+        updateDownloadInProgress = false;
+        sendUpdateStatus({ state: 'downloaded', info });
+        setTaskbarProgress(-1);
+
+        const result = await dialog.showMessageBox(win, {
+            type: 'question',
+            buttons: ['Install and Restart', 'Later'],
+            defaultId: 0,
+            cancelId: 1,
+            title: 'Update ready',
+            message: 'Update downloaded.',
+            detail: 'The update has been downloaded. Install now to restart and apply it?',
+        });
+
+        if (result.response === 0) {
+            autoUpdater.quitAndInstall();
+        }
+    });
+
+    autoUpdater.on('error', (err) => {
+        console.error('[Main] autoUpdater error:', err);
+        updateDownloadInProgress = false;
+        sendUpdateStatus({ state: 'error', error: String(err?.message || err) });
+        setTaskbarProgress(-1);
+    });
+}
+
 // Check for file argument passed on command line (Linux)
 function getFileFromArgs() {
     console.log('[Main] process.argv:', process.argv);
@@ -81,8 +205,7 @@ function createWindow() {
         win.webContents.openDevTools({ mode: "undocked" });
     } else {
         win.loadFile(join(__dirname, "dist", "index.html"));
-        // Check for updates
-        autoUpdater.checkForUpdatesAndNotify();
+        setupAutoUpdater();
     }
 
     // Handle pending file after window loads
@@ -91,6 +214,17 @@ function createWindow() {
             console.log('[Main] Processing pendingFilePath:', pendingFilePath);
             openFileInApp(pendingFilePath);
             pendingFilePath = null;
+        }
+
+        if (app.isPackaged) {
+            // Delay slightly so the renderer can mount and subscribe to IPC events.
+            setTimeout(() => {
+                try {
+                    autoUpdater.checkForUpdates();
+                } catch (error) {
+                    console.error('[Main] checkForUpdates failed:', error);
+                }
+            }, 1500);
         }
     });
 }
@@ -161,6 +295,60 @@ ipcMain.handle("window:fullscreen", () => {
 
 ipcMain.handle("window:close", () => {
     win.close();
+});
+
+// Update handlers (used by in-app update banner)
+ipcMain.handle('update:download', async () => {
+    if (!app.isPackaged) return { ok: false, error: 'Updates are disabled in development.' };
+    setupAutoUpdater();
+
+    if (updateDownloaded) return { ok: true, state: 'downloaded' };
+    if (updateDownloadInProgress) return { ok: true, state: 'downloading' };
+
+    try {
+        updateDownloadInProgress = true;
+        sendUpdateStatus({ state: 'downloading', info: lastUpdateInfo });
+        setTaskbarProgress(0);
+        await autoUpdater.downloadUpdate();
+        return { ok: true, state: 'downloading' };
+    } catch (error) {
+        console.error('[Main] update:download failed:', error);
+        sendUpdateStatus({ state: 'error', error: String(error?.message || error) });
+        setTaskbarProgress(-1);
+        return { ok: false, error: String(error?.message || error) };
+    } finally {
+        updateDownloadInProgress = false;
+    }
+});
+
+ipcMain.handle('update:install', async () => {
+    if (!app.isPackaged) return { ok: false, error: 'Updates are disabled in development.' };
+    setupAutoUpdater();
+
+    if (!updateDownloaded) {
+        return { ok: false, error: 'Update is not downloaded yet.' };
+    }
+
+    try {
+        autoUpdater.quitAndInstall();
+        return { ok: true };
+    } catch (error) {
+        console.error('[Main] update:install failed:', error);
+        return { ok: false, error: String(error?.message || error) };
+    }
+});
+
+ipcMain.handle('update:check', async () => {
+    if (!app.isPackaged) return { ok: false, error: 'Updates are disabled in development.' };
+    setupAutoUpdater();
+    try {
+        await autoUpdater.checkForUpdates();
+        return { ok: true };
+    } catch (error) {
+        console.error('[Main] update:check failed:', error);
+        sendUpdateStatus({ state: 'error', error: String(error?.message || error) });
+        return { ok: false, error: String(error?.message || error) };
+    }
 });
 
 // Print current window contents

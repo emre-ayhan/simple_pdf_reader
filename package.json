@@ -1,6 +1,6 @@
 {
   "name": "simple_pdf_reader",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "A simple PDF reader built with Vue 3",
   "type": "module",
   "main": "main.js",
@@ -14,6 +14,7 @@
     "electron:start": "vite build && electron .",
     "electron:build": "vite build && electron-builder",
     "electron:build:win": "vite build && electron-builder --win --publish always",
+    "electron:build:win:local": "vite build && electron-builder --win --publish never",
     "electron:build:mac": "vite build && electron-builder --mac --publish always",
     "electron:build:linux": "vite build && electron-builder --linux --publish always"
   },
