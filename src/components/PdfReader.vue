@@ -552,7 +552,6 @@ const toggleZoomMode = (mode) => {
     
     if (mode === 'fit-height') {
         const pageContainer = document.querySelector(`.page-container[data-page="${pageIndex.value + 1}"]`);
-        console.log(pdfReader.value.clientHeight, pageContainer.clientHeight);
         const percentage = pdfReader.value.clientHeight * zoomPercentage.value / pageContainer.clientHeight;
         zoomPercentage.value = Math.ceil(percentage);
     } else {

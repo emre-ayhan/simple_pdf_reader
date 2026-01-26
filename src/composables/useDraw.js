@@ -2017,15 +2017,17 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             const dataUrl = cropCanvas.toDataURL('image/png');
             
             // Set as copied stroke
-            copiedStroke.value = [{
-                id: uuid(),
-                type: 'image',
-                x: x,
-                y: y,
-                width: selectedWidth,
-                height: selectedHeight,
-                imageData: dataUrl
-            }];
+            copiedStroke.value = {
+                inserted: 0,
+                stroke: [{
+                    type: 'image',
+                    x: x,
+                    y: y,
+                    width: selectedWidth,
+                    height: selectedHeight,
+                    imageData: dataUrl
+                }]
+            };
 
             // Redraw to clear the selection rectangle
             redrawAllStrokes(canvasIndex);
