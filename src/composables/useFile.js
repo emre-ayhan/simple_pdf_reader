@@ -1062,25 +1062,6 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         }
     };
 
-    // Ensure all pages are rendered before printing.
-    const renderAllPagesForPrint = async () => {
-        if (!isFileLoaded.value) return;
-
-        // Ensure refs/canvases exist
-        await nextTick();
-
-        if (!pageCount.value || typeof renderPdfPage !== 'function') return;
-
-        for (let page = 1; page <= pageCount.value; page++) {
-            if (deletedPages.value.has(page)) continue;
-            await renderPdfPage(page);
-        }
-
-        // Give the DOM a moment to apply final sizes before print
-        await nextTick();
-        await new Promise((resolve) => setTimeout(resolve, 150));
-    };
-
     return {
         fileId,
         pagesContainer,
@@ -1121,7 +1102,6 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         setupLazyLoadObserver,
         renderPdfPage,
         resyncRenderedTextLayers,
-        renderAllPagesForPrint,
         scrollToPage,
         scrollToFirstPage,
         scrollToLastPage,
