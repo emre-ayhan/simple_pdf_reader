@@ -8,8 +8,8 @@ import { useDraw } from "../composables/useDraw";
 import { useHistory } from "../composables/useHistory";
 import { fileDataCache } from "../composables/useTabs";
 import { useWindowEvents } from "../composables/useWindowEvents";
-import EmptyState from "./EmptyState.vue";
 import { enableTouchDrawing } from "../composables/useTouchDrawing";
+import EmptyState from "./EmptyState.vue";
 
 const props = defineProps({
     toolbarPosition: {
@@ -22,8 +22,8 @@ const props = defineProps({
 // Cursor Style
 const cursorStyle = computed(() => {
     if (resizeCursor.value) return resizeCursor.value;
+    if (selectedStroke.value && (isStrokeHovering.value || isDragging.value)) return 'move';
     if (isStrokeHovering.value) return 'pointer';
-    if (selectedStroke.value && isStrokeHovering.value) return 'move';
     if (isSelectionMode.value) return 'crosshair';
     if (isTextMode.value) return 'text';
     if (isDrawing.value ) {
@@ -107,6 +107,9 @@ const strokeChangeCallback = (action) => {
 };
 
 const {
+    isSelectModeActive,
+    isTextSelectionMode,
+    isTextHighlightMode,
     isDrawing,
     isEraser,
     drawMode,
@@ -120,6 +123,7 @@ const {
     isSelectionMode,
     isPenHovering,
     isStrokeHovering,
+    isDragging,
     selectedStroke,
     strokeMenu,
     showStrokeMenu,
@@ -174,8 +178,6 @@ startSession();
 
 // Toolbar Actions
 const isViewLocked = ref(false);
-const isTextSelectionMode = ref(false);
-const isTextHighlightMode = ref(false);
 
 const lockView = () => {
     if (!isFileLoaded.value) return;
@@ -184,8 +186,6 @@ const lockView = () => {
 
 const resetAllTools = () => {
     resetToolState();
-    isTextHighlightMode.value = false;
-    isTextSelectionMode.value = false;
     window.getSelection()?.removeAllRanges();
     document.removeEventListener('mouseup', handleTextSelectionMouseUp);
 };
@@ -256,6 +256,7 @@ const selectText = () => {
 const selectStrokeMode = () => {
     if (!isFileLoaded.value) return;
     resetAllTools();
+    isSelectModeActive.value = true;
 };
 
 const renderAllPagesForPrint = async () => {
@@ -950,7 +951,7 @@ defineExpose({
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="selectStrokeMode" :class="{ active: !hasActiveTool && !isTextSelectionMode }" :title="$t('Stroke Selection') + ' (P)'">
+                        <a class="nav-link" href="#" @click.prevent="selectStrokeMode" :class="{ active: isSelectModeActive }" :title="$t('Stroke Selection') + ' (P)'">
                             <i class="bi bi-cursor-fill"></i>
                         </a>
                     </li>

@@ -12,6 +12,9 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     const imageCache = new Map();
     
     // Drawing variables
+    const isSelectModeActive = ref(true);
+    const isTextSelectionMode = ref(false);
+    const isTextHighlightMode = ref(false);
     const isDrawing = ref(false);
     const isEraser = ref(false);
     const drawMode = ref('pen'); // 'pen', 'line', 'rectangle', 'circle', 'text', 'highlight'
@@ -20,6 +23,10 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     const currentStrokeId = ref(null);
     const currentStroke = ref([]); // Current stroke being drawn
     const isStrokeHovering = ref(false);
+
+    const isDrawingMode = computed(() => {
+        return !isTextSelectionMode.value && !isTextHighlightMode.value && !isSelectModeActive.value;
+    })
 
     const colors = [
         'black', 'dimgray', 'gray', 'darkgray', 'silver', 'white',
@@ -108,10 +115,6 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     const isSelecting = ref(false);
 
     // Stroke selection and dragging
-    const isDragMode = computed(() => {
-        // Drag mode is active when no other tool is active
-        return !isDrawing.value && !isEraser.value && !isTextMode.value && !isSelectionMode.value;
-    });
     const selectedStroke = ref(null); // { pageIndex, strokeIndex, stroke }
     const isDragging = ref(false);
     const dragOffset = ref({ x: 0, y: 0 });
@@ -122,7 +125,15 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     const isResizing = ref(false);
     const resizeHandle = ref(null); // 'nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'
     const resizeStartBounds = ref(null);
-    const resizeCursor = ref(null);
+    const resizeCursor = computed(() => {
+        const handle = resizeHandle.value;
+        if (!handle) return null;
+        if (handle === 'n' || handle === 's') return 'ns-resize';
+        if (handle === 'e' || handle === 'w') return 'ew-resize';
+        if (handle === 'ne' || handle === 'sw') return 'nesw-resize';
+        if (handle === 'nw' || handle === 'se') return 'nwse-resize';
+        return null;
+    })
 
 
     // Check Selected Stroke Type
@@ -562,8 +573,8 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
 
 
     const startDrawing = (e) => {
-        if (!isDrawing.value && !isEraser.value && !isSelectionMode.value && !isTextMode.value && !isDragMode.value) return;
-        
+        if (!isDrawingMode.value) return;
+
         // Track active pointer type
         activePointerType.value = e.pointerType;
         if (e.pointerType === 'pen') {
@@ -577,7 +588,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         currentStrokeId.value = uuid();
         
         // Handle drag mode
-        if (isDragMode.value) {
+        if (isStrokeHovering.value || selectedStroke.value) {
             const canvasIndex = getCanvasIndexFromEvent(e);
             if (canvasIndex === -1) return;
             
@@ -758,13 +769,13 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     };
 
     const draw = (e) => {
-        if ((!isDrawing.value && !isEraser.value && !isSelectionMode.value && !isTextMode.value && !isDragMode.value) || !isMouseDown.value) return;
-        
+        if (!isDrawingMode.value) return;
+
         // Text mode doesn't need draw event handling
         if (isTextMode.value) return;
         
         // Handle drag mode - return early to prevent any drawing
-        if (isDragMode.value) {
+        if (isStrokeHovering.value || selectedStroke.value) {
             // Handle resizing
             if (isResizing.value && selectedStroke.value && resizeHandle.value) {
                 if (e.pointerId !== activePointerId.value) return;
@@ -948,7 +959,6 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 }
                 
                 stopEvent(e);
-                resizeCursor.value = mapHandleToCursor(resizeHandle.value);
                 return;
             }
             
@@ -1142,13 +1152,13 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     };
 
     const stopDrawing = (e) => {
-        if (!isDrawing.value && !isEraser.value && !isSelectionMode.value && !isTextMode.value && !isDragMode.value) return;
-        
+        if (!isDrawingMode.value) return;
+
         // Text mode is handled by confirmText function
         if (isTextMode.value) return;
         
         // Handle drag/resize mode completion
-        if (isDragMode.value && isMouseDown.value && selectedStroke.value) {
+        if (isStrokeHovering.value && isMouseDown.value && selectedStroke.value) {
             // Only stop if it's the same pointer
             if (e && e.pointerId !== activePointerId.value) return;
             
@@ -1297,8 +1307,10 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             isPenHovering.value = true;
         }
 
+        isStrokeHovering.value = false;
+
         // Update hover state for strokes (used for cursor UI)
-        if (isDragMode.value && !isMouseDown.value) {
+        if (!isMouseDown.value) {
             const canvasIndex = getCanvasIndexFromEvent(e);
             if (canvasIndex !== -1) {
                 const canvas = drawingCanvases.value[canvasIndex];
@@ -1316,7 +1328,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         }
 
         // Update cursor when hovering handles in drag mode even before mousedown
-        if (isDragMode.value && selectedStroke.value && !isMouseDown.value) {
+        if (isStrokeHovering.value && selectedStroke.value && !isMouseDown.value) {
             const canvasIndex = getCanvasIndexFromEvent(e);
             if (canvasIndex !== -1) {
                 const canvas = drawingCanvases.value[canvasIndex];
@@ -1325,7 +1337,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 const { x, y } = pt;
                 const bounds = getStrokeBounds(selectedStroke.value.stroke, 5);
                 const handle = getResizeHandle(x, y, bounds);
-                resizeCursor.value = mapHandleToCursor(handle);
+                resizeHandle.value = handle;
             }
         }
 
@@ -1402,6 +1414,8 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
 
     const resetToolState = () => {
         cancelText();
+        isTextHighlightMode.value = false;
+        isTextSelectionMode.value = false;
         isTextMode.value = false;
         isDrawing.value = false;
         isEraser.value = false;
@@ -1412,6 +1426,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         isResizing.value = false;
         resizeHandle.value = null;
         showStrokeMenu.value = false;
+        isSelectModeActive.value = false;
     };
 
     const changeStrokeColor = (newColor) => {
@@ -1662,7 +1677,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     };
 
     const handleStrokeMenu = (e) => {
-        if (!isDragMode.value) return;
+        if (!isStrokeHovering.value) return;
         
         const canvasIndex = getCanvasIndexFromEvent(e);
         if (canvasIndex === -1) return;
@@ -1694,15 +1709,6 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         }
         
         stopEvent(e);
-    };
-
-    const mapHandleToCursor = (handle) => {
-        if (!handle) return null;
-        if (handle === 'n' || handle === 's') return 'ns-resize';
-        if (handle === 'e' || handle === 'w') return 'ew-resize';
-        if (handle === 'ne' || handle === 'sw') return 'nesw-resize';
-        if (handle === 'nw' || handle === 'se') return 'nwse-resize';
-        return null;
     };
 
     const drawSelectionHighlight = (canvasIndex, strokeIndex) => {
@@ -2241,6 +2247,9 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         currentStroke,
         drawingCanvases,
         drawingContexts,
+        isTextHighlightMode,
+        isTextSelectionMode,
+        isSelectModeActive,
         isDrawing,
         isEraser,
         drawMode,
@@ -2259,7 +2268,6 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         selectionEnd,
         isPenHovering,
         isStrokeHovering,
-        isDragMode,
         selectedStroke,
         isDragging,
         isResizing,
