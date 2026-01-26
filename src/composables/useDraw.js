@@ -25,7 +25,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     const isStrokeHovering = ref(false);
 
     const isDrawingMode = computed(() => {
-        return !isTextSelectionMode.value && !isTextHighlightMode.value && !isSelectModeActive.value;
+        return !isTextSelectionMode.value && !isTextHighlightMode.value;
     })
 
     const colors = [
@@ -659,6 +659,8 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             stopEvent(e);
             return;
         }
+
+        if (isSelectModeActive.value) return;
         
         // Handle text mode
         if (isTextMode.value) {
@@ -1056,6 +1058,9 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
 
         // Text mode doesn't need draw event handling
         if (isTextMode.value) return;
+
+        if (isSelectModeActive.value) return;
+
         
         // Handle selection rectangle
         if (isSelectionMode.value && isSelecting.value) {
@@ -1227,6 +1232,9 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
 
         // Text mode is handled by confirmText function
         if (isTextMode.value) return;
+
+        if (isSelectModeActive.value) return;
+
         
         // Handle selection complete
         if (isSelectionMode.value && isSelecting.value && selectionStart.value && selectionEnd.value) {
@@ -2066,6 +2074,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
 
             // Redraw to clear the selection rectangle
             redrawAllStrokes(canvasIndex);
+            isSelectModeActive.value = true;
         } catch (error) {
             console.error('Error capturing selection:', error);
         }
