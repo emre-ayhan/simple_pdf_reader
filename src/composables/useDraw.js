@@ -125,7 +125,9 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     const isResizing = ref(false);
     const resizeHandle = ref(null); // 'nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'
     const resizeStartBounds = ref(null);
+
     const resizeCursor = computed(() => {
+        if (!isStrokeHovering.value && !isResizing.value) return null;
         const handle = resizeHandle.value;
         if (!handle) return null;
         if (handle === 'n' || handle === 's') return 'ns-resize';
