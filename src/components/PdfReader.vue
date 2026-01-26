@@ -85,6 +85,7 @@ const {
     scrollToFirstPage,
     scrollToLastPage,
     deletedPages,
+    activePages,
     deletePage,
     insertBlankPage,
     openNewBlankPage,
@@ -281,18 +282,8 @@ let printPreviewTimer = null;
 
 const canSilentPrint = computed(() => !!Electron.value?.printImages);
 
-const getActivePages = () => {
-    const total = pageCount.value || 0;
-    const pages = [];
-    for (let p = 1; p <= total; p++) {
-        if (deletedPages.value?.has?.(p)) continue;
-        pages.push(p);
-    }
-    return pages;
-};
-
 const parsePageRange = (rangeText) => {
-    const active = new Set(getActivePages());
+    const active = new Set(activePages.value);
     const total = pageCount.value || 0;
 
     const raw = (rangeText || '').trim();
@@ -975,7 +966,7 @@ defineExpose({
                     <li class="nav-item">
                         <div class="input-group flex-nowrap">
                             <input type="text" class="form-control-plaintext" :value="pageNum" @input="handlePageNumberInput" />
-                            <div class="input-group-text bg-transparent border-0 text-secondary p-0 pe-1">/ {{ pageCount }}</div>
+                            <div class="input-group-text bg-transparent border-0 text-secondary p-0 pe-1">/ {{ pageCount - deletedPages.size }}</div>
                         </div>
                     </li>
                     
