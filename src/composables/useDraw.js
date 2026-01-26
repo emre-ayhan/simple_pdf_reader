@@ -771,9 +771,6 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     const draw = (e) => {
         if (!isDrawingMode.value) return;
 
-        // Text mode doesn't need draw event handling
-        if (isTextMode.value) return;
-        
         // Handle drag mode - return early to prevent any drawing
         if (isStrokeHovering.value || selectedStroke.value) {
             // Handle resizing
@@ -1054,6 +1051,9 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             // Always return when in drag mode to prevent any drawing
             return;
         }
+
+        // Text mode doesn't need draw event handling
+        if (isTextMode.value) return;
         
         // Handle selection rectangle
         if (isSelectionMode.value && isSelecting.value) {
@@ -1153,12 +1153,9 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
 
     const stopDrawing = (e) => {
         if (!isDrawingMode.value) return;
-
-        // Text mode is handled by confirmText function
-        if (isTextMode.value) return;
         
         // Handle drag/resize mode completion
-        if (isStrokeHovering.value && isMouseDown.value && selectedStroke.value) {
+        if ((isStrokeHovering.value || isDragging.value || isResizing.value) && isMouseDown.value && selectedStroke.value) {
             // Only stop if it's the same pointer
             if (e && e.pointerId !== activePointerId.value) return;
             
@@ -1225,6 +1222,9 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             currentCanvasIndex = -1;
             return;
         }
+
+        // Text mode is handled by confirmText function
+        if (isTextMode.value) return;
         
         // Handle selection complete
         if (isSelectionMode.value && isSelecting.value && selectionStart.value && selectionEnd.value) {
