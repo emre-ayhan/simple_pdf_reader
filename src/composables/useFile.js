@@ -781,7 +781,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         const page = activePages.value[index];
         if (!pdfDoc || !page) return;
         
-        const confirmed = await showModal(`Are you sure you want to delete page ${page}?`, true);
+        const confirmed = await showModal(`Are you sure you want to delete page \{${page}\}?`, true);
         if (!confirmed) return;
 
         deletedPages.value.add(page);

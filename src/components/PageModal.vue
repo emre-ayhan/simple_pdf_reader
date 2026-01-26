@@ -16,20 +16,22 @@ onMounted(() => {
             <div class="modal-body">
                 <h4 class="modal-title text-danger" id="pageModalLabel">
                     <i class="bi" :class="mustConfirm ? 'bi-exclamation-triangle-fill' : 'bi-info-circle-fill'"></i>
-                    {{ mustConfirm ? 'Please Confirm' : 'Notice' }}
+                    {{ $t(mustConfirm ? 'Please Confirm' : 'Notice') }}
                     <hr>
                 </h4>
                 <div class="text-center text-dark fs-5">
-                    {{ message }}
+                    {{ $t(message) }}
                 </div>
             </div>
             <div class="modal-footer border-0 p-0">
                 <div class="d-grid col m-0">
                     <div class="btn-group">
                         <button type="button" :class="`btn ${mustConfirm ? 'btn-secondary' : 'btn-danger'} rounded-0`" data-bs-dismiss="modal">
-                            {{ mustConfirm ? 'Cancel' : 'Ok' }}
+                            {{ $t(mustConfirm ? 'Cancel' : 'Ok') }}
                         </button>
-                        <button type="button" class="btn btn-danger rounded-0" @click.prevent="confirm" v-if="mustConfirm">Ok</button>
+                        <button type="button" class="btn btn-danger rounded-0" @click.prevent="confirm" v-if="mustConfirm">
+                            {{ $t('Ok') }}
+                        </button>
                     </div>
                 </div>
             </div>

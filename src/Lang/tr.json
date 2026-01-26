@@ -69,5 +69,13 @@
     "Full Stylus support & Touch Drawing mode.": "Tam Stylus desteği ve Dokunmatik Çizim modu.",
     "Customizable colors and Quick Styles.": "Özelleştirilebilir renkler ve Hızlı Stiller.",
     "Print": "Yazdır",
-    "Insert Page After": "Sayfadan Sonra Ekle"
+    "Insert Page After": "Sayfadan Sonra Ekle",
+    "Ok": "Tamam",
+    "Cancel": "İptal",
+    "Please Confirm": "Lütfen Onaylayın",
+    "Notice": "Bildirim",
+    "Unsupported file type. Please select a PDF or image.": "Desteklenmeyen dosya türü. Lütfen bir PDF veya resim seçin.",
+    "Are you sure you want to delete page :attribute?": "Sayfa :attribute silmek istediğinizden emin misiniz?",
+    "You have unsaved changes in this tab. Are you sure you want to close it?": "Bu sekmede kaydedilmemiş değişiklikleriniz var. Kapatmak istediğinizden emin misiniz?",
+    "You have unsaved changes in one or more tabs. Are you sure you want to close the application?": "Bir veya daha fazla sekmede kaydedilmemiş değişiklikleriniz var. Uygulamayı kapatmak istediğinizden emin misiniz?"
 }
