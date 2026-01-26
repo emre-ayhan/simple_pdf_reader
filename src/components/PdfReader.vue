@@ -259,6 +259,34 @@ const selectStrokeMode = () => {
     isSelectModeActive.value = true;
 };
 
+// Keep the PDF.js text layer aligned with the canvas after zoom/resize.
+// Pages are rendered once and then CSS size changes; we must update the text-layer scale.
+const resyncRenderedTextLayers = async () => {
+    if (!isFileLoaded.value) return;
+    await nextTick();
+
+    const pages = Array.from(renderedPages.value || new Set());
+    for (const pageNumber of pages) {
+        if (deletedPages.value?.has?.(pageNumber)) continue;
+        const index = pageNumber - 1;
+        const canvas = pdfCanvases.value?.[index];
+        const textLayerDiv = textLayerDivs.value?.[index];
+        if (!canvas || !textLayerDiv) continue;
+
+        const cssWidth = canvas.offsetWidth;
+        const cssHeight = canvas.offsetHeight;
+        if (!cssWidth || !cssHeight || !canvas.width || !canvas.height) continue;
+
+        const scaleX = cssWidth / canvas.width;
+        const scaleY = cssHeight / canvas.height;
+
+        textLayerDiv.style.width = `${canvas.width}px`;
+        textLayerDiv.style.height = `${canvas.height}px`;
+        textLayerDiv.style.transformOrigin = '0 0';
+        textLayerDiv.style.transform = `scale(${scaleX}, ${scaleY})`;
+    }
+};
+
 const renderAllPagesForPrint = async () => {
     if (!isFileLoaded.value) return;
 
@@ -562,8 +590,9 @@ const toggleZoomMode = (mode) => {
         zoomPercentage.value = 100; // Full width
     }
     
-    // Restore scroll position to current page after DOM updates
-    nextTick(() => {
+    // Keep text selection aligned after CSS zoom changes
+    nextTick(async () => {
+        await resyncRenderedTextLayers();
         scrollToPage(pageIndex.value);
     });
 };
@@ -580,8 +609,9 @@ const handleZoomLevel = (percentage) => {
 
     zoomPercentage.value = Math.min(Math.max(minZoom, percentage), maxZoom);
 
-    // Restore scroll position to current page after DOM updates
-    nextTick(() => {
+    // Keep text selection aligned after CSS zoom changes
+    nextTick(async () => {
+        await resyncRenderedTextLayers();
         scrollToPage(pageIndex.value);
     });
 };
@@ -618,7 +648,8 @@ useWindowEvents(fileId, {
 
             clearTimeout(resizeTimeout);
             resizeTimeout = setTimeout(() => {
-                nextTick(() => {
+                nextTick(async () => {
+                    await resyncRenderedTextLayers();
                     scrollToPage(pageIndex.value);
                 })
             });
@@ -768,7 +799,7 @@ useWindowEvents(fileId, {
             action: (event) => {
                 if (!hasActiveTool.value) return;
                 event.preventDefault();
-                resetAllTools();
+                selectStrokeMode();
             }
         },
         ArrowLeft: {
