@@ -1034,6 +1034,53 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         });
     };
 
+    // Keep the PDF.js text layer aligned with the canvas after zoom/resize.
+    // Pages are rendered once and then CSS size changes; we must update the text-layer scale.
+    const resyncRenderedTextLayers = async () => {
+        if (!isFileLoaded.value) return;
+        await nextTick();
+
+        const pages = Array.from(renderedPages.value || new Set());
+        for (const pageNumber of pages) {
+            if (deletedPages.value?.has?.(pageNumber)) continue;
+            const index = pageNumber - 1;
+            const canvas = pdfCanvases.value?.[index];
+            const textLayerDiv = textLayerDivs.value?.[index];
+            if (!canvas || !textLayerDiv) continue;
+
+            const cssWidth = canvas.offsetWidth;
+            const cssHeight = canvas.offsetHeight;
+            if (!cssWidth || !cssHeight || !canvas.width || !canvas.height) continue;
+
+            const scaleX = cssWidth / canvas.width;
+            const scaleY = cssHeight / canvas.height;
+
+            textLayerDiv.style.width = `${canvas.width}px`;
+            textLayerDiv.style.height = `${canvas.height}px`;
+            textLayerDiv.style.transformOrigin = '0 0';
+            textLayerDiv.style.transform = `scale(${scaleX}, ${scaleY})`;
+        }
+    };
+
+    // Ensure all pages are rendered before printing.
+    const renderAllPagesForPrint = async () => {
+        if (!isFileLoaded.value) return;
+
+        // Ensure refs/canvases exist
+        await nextTick();
+
+        if (!pageCount.value || typeof renderPdfPage !== 'function') return;
+
+        for (let page = 1; page <= pageCount.value; page++) {
+            if (deletedPages.value.has(page)) continue;
+            await renderPdfPage(page);
+        }
+
+        // Give the DOM a moment to apply final sizes before print
+        await nextTick();
+        await new Promise((resolve) => setTimeout(resolve, 150));
+    };
+
     return {
         fileId,
         pagesContainer,
@@ -1073,6 +1120,8 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         setupIntersectionObserver,
         setupLazyLoadObserver,
         renderPdfPage,
+        resyncRenderedTextLayers,
+        renderAllPagesForPrint,
         scrollToPage,
         scrollToFirstPage,
         scrollToLastPage,

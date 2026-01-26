@@ -91,6 +91,8 @@ const {
     createImageImportHandler,
     handlePageNumberInput,
     renderPdfPage,
+    resyncRenderedTextLayers,
+    renderAllPagesForPrint,
 } = useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallback, fileSavedCallback);
 
 // Drag and Drop Handlers
@@ -257,53 +259,6 @@ const selectStrokeMode = () => {
     if (!isFileLoaded.value) return;
     resetAllTools();
     isSelectModeActive.value = true;
-};
-
-// Keep the PDF.js text layer aligned with the canvas after zoom/resize.
-// Pages are rendered once and then CSS size changes; we must update the text-layer scale.
-const resyncRenderedTextLayers = async () => {
-    if (!isFileLoaded.value) return;
-    await nextTick();
-
-    const pages = Array.from(renderedPages.value || new Set());
-    for (const pageNumber of pages) {
-        if (deletedPages.value?.has?.(pageNumber)) continue;
-        const index = pageNumber - 1;
-        const canvas = pdfCanvases.value?.[index];
-        const textLayerDiv = textLayerDivs.value?.[index];
-        if (!canvas || !textLayerDiv) continue;
-
-        const cssWidth = canvas.offsetWidth;
-        const cssHeight = canvas.offsetHeight;
-        if (!cssWidth || !cssHeight || !canvas.width || !canvas.height) continue;
-
-        const scaleX = cssWidth / canvas.width;
-        const scaleY = cssHeight / canvas.height;
-
-        textLayerDiv.style.width = `${canvas.width}px`;
-        textLayerDiv.style.height = `${canvas.height}px`;
-        textLayerDiv.style.transformOrigin = '0 0';
-        textLayerDiv.style.transform = `scale(${scaleX}, ${scaleY})`;
-    }
-};
-
-const renderAllPagesForPrint = async () => {
-    if (!isFileLoaded.value) return;
-
-    // Ensure refs/canvases exist
-    await nextTick();
-
-    // For PDFs, explicitly render each page sequentially so printing isn't just a viewport snapshot
-    if (!pageCount.value || typeof renderPdfPage !== 'function') return;
-
-    for (let page = 1; page <= pageCount.value; page++) {
-        if (deletedPages.value.has(page)) continue;
-        await renderPdfPage(page);
-    }
-
-    // Give the DOM a moment to apply final sizes before print
-    await nextTick();
-    await new Promise((resolve) => setTimeout(resolve, 150));
 };
 
 // Custom Print Modal (Electron)
