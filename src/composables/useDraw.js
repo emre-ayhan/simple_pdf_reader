@@ -250,11 +250,11 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     });
 
     // Clamp on position changes (e.g., programmatic updates)
-    watch(() => strokeMenuPosition.value, () => {
-        if (showStrokeMenu.value) {
-            clampStrokeMenuPosition();
-        }
-    }, { deep: true });
+    // watch(() => strokeMenuPosition.value, () => {
+    //     if (showStrokeMenu.value) {
+    //         clampStrokeMenuPosition();
+    //     }
+    // }, { deep: true });
 
 
     let lastX = 0;
@@ -1199,6 +1199,8 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                         stroke: JSON.parse(JSON.stringify(stroke)),
                         previousStroke: selectedStroke.value.originalStroke
                     });
+
+                    showStrokeMenu.value = true;
                 }
             }
             
