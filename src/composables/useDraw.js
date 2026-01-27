@@ -1331,53 +1331,58 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             isPenHovering.value = true;
         }
 
-        isStrokeHovering.value = false;
-        isBoundingBoxHovering.value = false;
+        let newStrokeHovering = false;
+        let newBBoxHovering = false;
+        let newResizeHandle = null;
 
-        // Update hover state for strokes (used for cursor UI)
+        // Perform hit detection only when mouse is not down (hovering)
         if (!isMouseDown.value) {
             const canvasIndex = getCanvasIndexFromEvent(e);
             if (canvasIndex !== -1) {
                 const canvas = drawingCanvases.value[canvasIndex];
                 const pt = getCanvasPointFromEvent(canvas, e);
+                
                 if (pt) {
-                    isStrokeHovering.value = isAnyStrokeAtPoint(pt.x, pt.y, canvasIndex);
-                } else {
-                    isStrokeHovering.value = false;
-                }
-            } else {
-                isStrokeHovering.value = false;
-            }
-        } else {
-            isStrokeHovering.value = false;
-        }
+                    const { x, y } = pt;
 
-        // Hover state for selected stroke's bounding box / resize handles
-        if (selectedStroke.value && !isMouseDown.value) {
-            const canvasIndex = getCanvasIndexFromEvent(e);
-            if (canvasIndex !== -1 && canvasIndex === selectedStroke.value.pageIndex) {
-                const canvas = drawingCanvases.value[canvasIndex];
-                const pt = getCanvasPointFromEvent(canvas, e);
-                if (pt) {
-                    const bounds = getStrokeBounds(selectedStroke.value.stroke, 5);
-                    if (bounds) {
-                        const handle = getResizeHandle(pt.x, pt.y, bounds);
-                        resizeHandle.value = handle;
+                    // 1. Check stroke hover
+                    newStrokeHovering = isAnyStrokeAtPoint(x, y, canvasIndex);
 
-                        const edgeThreshold = 6;
-                        const inside = pt.x >= bounds.minX && pt.x <= bounds.maxX && pt.y >= bounds.minY && pt.y <= bounds.maxY;
-                        const nearLeft = Math.abs(pt.x - bounds.minX) <= edgeThreshold && pt.y >= bounds.minY - edgeThreshold && pt.y <= bounds.maxY + edgeThreshold;
-                        const nearRight = Math.abs(pt.x - bounds.maxX) <= edgeThreshold && pt.y >= bounds.minY - edgeThreshold && pt.y <= bounds.maxY + edgeThreshold;
-                        const nearTop = Math.abs(pt.y - bounds.minY) <= edgeThreshold && pt.x >= bounds.minX - edgeThreshold && pt.x <= bounds.maxX + edgeThreshold;
-                        const nearBottom = Math.abs(pt.y - bounds.maxY) <= edgeThreshold && pt.x >= bounds.minX - edgeThreshold && pt.x <= bounds.maxX + edgeThreshold;
-                        const nearEdge = nearLeft || nearRight || nearTop || nearBottom;
+                    // 2. Check bounding box & resize handle hover (only if selected stroke is on this page)
+                    if (selectedStroke.value && selectedStroke.value.pageIndex === canvasIndex) {
+                        const bounds = getStrokeBounds(selectedStroke.value.stroke, 5);
+                        if (bounds) {
+                            newResizeHandle = getResizeHandle(x, y, bounds);
 
-                        isBoundingBoxHovering.value = !!handle || nearEdge || inside;
+                            const inside = x >= bounds.minX && x <= bounds.maxX && y >= bounds.minY && y <= bounds.maxY;
+                            let nearEdge = false;
+                            
+                            // Optimization: Check edges only if not already inside or on a handle
+                            if (!inside && !newResizeHandle) {
+                                const edgeThreshold = 6;
+                                const nearLeft = Math.abs(x - bounds.minX) <= edgeThreshold && y >= bounds.minY - edgeThreshold && y <= bounds.maxY + edgeThreshold;
+                                const nearRight = Math.abs(x - bounds.maxX) <= edgeThreshold && y >= bounds.minY - edgeThreshold && y <= bounds.maxY + edgeThreshold;
+                                const nearTop = Math.abs(y - bounds.minY) <= edgeThreshold && x >= bounds.minX - edgeThreshold && x <= bounds.maxX + edgeThreshold;
+                                const nearBottom = Math.abs(y - bounds.maxY) <= edgeThreshold && x >= bounds.minX - edgeThreshold && x <= bounds.maxX + edgeThreshold;
+                                nearEdge = nearLeft || nearRight || nearTop || nearBottom;
+                            }
+
+                            newBBoxHovering = !!newResizeHandle || inside || nearEdge;
+                        }
                     }
                 }
-            } else {
-                resizeHandle.value = null;
             }
+        }
+
+        // Batch update reactive state
+        if (isStrokeHovering.value !== newStrokeHovering) {
+            isStrokeHovering.value = newStrokeHovering;
+        }
+        if (isBoundingBoxHovering.value !== newBBoxHovering) {
+            isBoundingBoxHovering.value = newBBoxHovering;
+        }
+        if (!isMouseDown.value && resizeHandle.value !== newResizeHandle) {
+            resizeHandle.value = newResizeHandle;
         }
 
         draw(e);
