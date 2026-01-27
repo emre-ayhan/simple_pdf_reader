@@ -249,7 +249,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         showStrokeMenu.value = true;
 
         redrawAllStrokes(targetPageIndex);
-        drawSelectionHighlight(targetPageIndex, strokeIndex);
+        drawSelectionBoundingBox(targetPageIndex, strokeIndex);
     };
 
 
@@ -664,7 +664,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 
                 // Redraw with highlight
                 redrawAllStrokes(canvasIndex);
-                drawSelectionHighlight(canvasIndex, found.strokeIndex);
+                drawSelectionBoundingBox(canvasIndex, found.strokeIndex);
             }
 
             stopEvent(e);
@@ -966,7 +966,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                     
                     // Redraw to show the resize preview
                     redrawAllStrokes(currentCanvasIndex);
-                    drawSelectionHighlight(currentCanvasIndex, selectedStroke.value.strokeIndex);
+                    drawSelectionBoundingBox(currentCanvasIndex, selectedStroke.value.strokeIndex);
                     showStrokeMenu.value = false;
                 }
                 
@@ -1031,7 +1031,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                     
                     // Redraw to show the drag preview
                     redrawAllStrokes(currentCanvasIndex);
-                    drawSelectionHighlight(currentCanvasIndex, selectedStroke.value.strokeIndex);
+                    drawSelectionBoundingBox(currentCanvasIndex, selectedStroke.value.strokeIndex);
                 }
                 
                 lastX = currentX;
@@ -1224,7 +1224,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                     selectedStroke.value.stroke = JSON.parse(JSON.stringify(stroke));
                     selectedStroke.value.originalStroke = JSON.parse(JSON.stringify(stroke));
                     
-                    drawSelectionHighlight(currentCanvasIndex, selectedStroke.value.strokeIndex);
+                    drawSelectionBoundingBox(currentCanvasIndex, selectedStroke.value.strokeIndex);
                 }
             }
             
@@ -1479,7 +1479,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             
             // Redraw
             redrawAllStrokes(selectedStroke.value.pageIndex);
-            drawSelectionHighlight(selectedStroke.value.pageIndex, selectedStroke.value.strokeIndex);
+            drawSelectionBoundingBox(selectedStroke.value.pageIndex, selectedStroke.value.strokeIndex);
         }
     };
 
@@ -1510,7 +1510,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             
             // Redraw
             redrawAllStrokes(selectedStroke.value.pageIndex);
-            drawSelectionHighlight(selectedStroke.value.pageIndex, selectedStroke.value.strokeIndex);
+            drawSelectionBoundingBox(selectedStroke.value.pageIndex, selectedStroke.value.strokeIndex);
         }
     };
 
@@ -1539,7 +1539,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             
             // Redraw
             redrawAllStrokes(selectedStroke.value.pageIndex);
-            drawSelectionHighlight(selectedStroke.value.pageIndex, selectedStroke.value.strokeIndex);
+            drawSelectionBoundingBox(selectedStroke.value.pageIndex, selectedStroke.value.strokeIndex);
         }
     };
 
@@ -1728,13 +1728,13 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             
             // Redraw with highlight
             redrawAllStrokes(canvasIndex);
-            drawSelectionHighlight(canvasIndex, found.strokeIndex);
+            drawSelectionBoundingBox(canvasIndex, found.strokeIndex);
         }
         
         stopEvent(e);
     };
 
-    const drawSelectionHighlight = (canvasIndex, strokeIndex) => {
+    const drawSelectionBoundingBox = (canvasIndex, strokeIndex) => {
         const canvas = drawingCanvases.value[canvasIndex];
         const ctx = drawingContexts.value[canvasIndex];
         if (!canvas || !ctx) return;
@@ -1953,14 +1953,18 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         
         // Wait for any new images to load, then render
         Promise.all(imagePromises).then(() => {
-            strokes.forEach((stroke, index) => {
-                if (stroke.length === 0) return;
-                
+            const selectedIndex = (selectedStroke.value && selectedStroke.value.pageIndex === pageIndex)
+                ? selectedStroke.value.strokeIndex
+                : -1;
+
+            const renderStroke = (stroke, index) => {
+                if (!stroke || stroke.length === 0) return;
+
                 const first = stroke[0];
-                
+
                 // Save canvas state before drawing each stroke
                 drawingContext.save();
-                
+
                 // Check if it's an image
                 if (first.type === 'image') {
                     const img = imageMap.get(index);
@@ -1970,7 +1974,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                     drawingContext.restore();
                     return;
                 }
-                
+
                 // Check if it's a highlight rectangle
                 if (first.type === 'highlight-rect') {
                     drawingContext.fillStyle = first.color;
@@ -1985,7 +1989,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                     drawingContext.restore(); // This resets globalAlpha
                     return;
                 }
-                
+
                 // Check if it's text
                 if (first.type === 'text') {
                     drawingContext.font = `${first.fontSize}px Arial`;
@@ -1995,33 +1999,49 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                     drawingContext.restore();
                     return;
                 }
-                
+
                 // Check if it's a shape
                 if (first.type === 'line' || first.type === 'rectangle' || first.type === 'circle') {
                     drawingContext.strokeStyle = first.color;
                     drawingContext.lineWidth = first.thickness;
                     drawingContext.lineCap = 'round';
                     drawingContext.lineJoin = 'round';
-                    drawShape(drawingContext, first.type, first.startX, first.startY, first.endX, first.endY, first)
+                    drawShape(drawingContext, first.type, first.startX, first.startY, first.endX, first.endY, first);
                 } else {
                     // It's a pen stroke
                     drawingContext.beginPath();
                     drawingContext.moveTo(stroke[0].x, stroke[0].y);
-                    
+
                     for (let i = 1; i < stroke.length; i++) {
                         drawingContext.lineTo(stroke[i].x, stroke[i].y);
                     }
-                    
+
                     drawingContext.strokeStyle = stroke[0].color;
                     drawingContext.lineWidth = stroke[0].thickness;
                     drawingContext.lineCap = 'round';
                     drawingContext.lineJoin = 'round';
                     drawingContext.stroke();
                 }
-                
+
                 // Restore canvas state after drawing
                 drawingContext.restore();
+            };
+
+            // Draw all non-selected strokes first
+            strokes.forEach((stroke, index) => {
+                if (index === selectedIndex) return;
+                renderStroke(stroke, index);
             });
+
+            // Draw selected stroke last so it's always on top
+            if (selectedIndex >= 0 && strokes[selectedIndex]) {
+                renderStroke(strokes[selectedIndex], selectedIndex);
+            }
+
+            // Always draw selection overlay last so it stays on top.
+            if (selectedIndex >= 0) {
+                drawSelectionBoundingBox(pageIndex, selectedIndex);
+            }
         });
     };
 
