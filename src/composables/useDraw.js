@@ -137,7 +137,6 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         return null;
     })
 
-
     // Check Selected Stroke Type
     const isSelectedStrokeType = (type) => {
         if (!selectedStroke.value) return false;
@@ -238,7 +237,19 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             stroke: newStroke
         });
 
+        const strokeIndex = strokesPerPage.value[pageNumber].length - 1;
+
+        selectedStroke.value = {
+            pageIndex: targetPageIndex,
+            strokeIndex,
+            stroke: newStroke,
+            originalStroke: JSON.parse(JSON.stringify(newStroke))
+        };
+
+        showStrokeMenu.value = true;
+
         redrawAllStrokes(targetPageIndex);
+        drawSelectionHighlight(targetPageIndex, strokeIndex);
     };
 
 
