@@ -26,7 +26,7 @@
     .nav-link {
         border-top-left-radius: $border-radius-lg !important;
         border-top-right-radius: $border-radius-lg !important;
-        color: var(--bs-secondary);
+        color: $secondary;
         padding: .25rem .75rem;
         margin-right: 4px !important;
         height: 32px !important;
@@ -40,12 +40,12 @@
 
         &:hover,
         &:active {
-            color: $primary !important;
+            color: $light !important;
         }
 
         &.active {
             background-color: transparent !important;
-            color: $primary !important;
+            color: $light !important;
             background-color: $dark-bg-accent !important;
         }
 

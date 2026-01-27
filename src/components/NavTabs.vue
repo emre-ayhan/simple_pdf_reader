@@ -48,6 +48,10 @@ const menuItems = computed(() => ({
     ]
 }));
 
+const showDivider = (index) => {
+    return activeTabIndex.value !== index && activeTabIndex.value !== index - 1 && index;
+};
+
 const electronButtons = [
     { action: 'fullscreen', icon: 'arrows-fullscreen', title: 'Fullscreen' },
     { action: 'minimize', icon: 'dash-lg', title: 'Minimize' },
@@ -125,18 +129,22 @@ onBeforeUnmount(() => {
                 </ul>
         </li>
         <template v-for="(tab, index) in tabs" :key="tab">
-            <li class="nav-item" role="presentation" v-if="!tab.closed">
-                <button class="nav-link" :class="{ active: index === activeTabIndex }" type="button" role="tab" @click="onTabClick(tab, index)">
-                    <div class="d-flex align-items-center">
-                        <div class="text-truncate flex-fill">
-                            <span class="align-top fs-5 lh-1" v-if="fileHasUnsavedChanges(tab.id)">*</span>
-                            {{ $t(tab.filename) }}
+            <template v-if="!tab.closed">
+                <li class="vr bg-secondary" v-if="showDivider(index)"></li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" :class="{ active: index === activeTabIndex }" type="button" role="tab" @click="onTabClick(tab, index)">
+                        <div class="d-flex align-items-center">
+                            <div class="text-truncate flex-fill">
+                                <span class="align-top fs-5 lh-1" v-if="fileHasUnsavedChanges(tab.id)">*</span>
+                                {{ $t(tab.filename) }}
+                            </div>
+                            <i class="bi bi-x-lg" v-if="(index === activeTabIndex && !isLastTabOnEmptyState) || openTabs.length > 1" @click.stop.prevent="closeTab(index)" :title="$t('Close')"></i>
                         </div>
-                        <i class="bi bi-x-lg" v-if="(index === activeTabIndex && !isLastTabOnEmptyState) || openTabs.length > 1" @click.stop.prevent="closeTab(index)" :title="$t('Close')"></i>
-                    </div>
-                </button>
-            </li>
+                    </button>
+                </li>
+            </template>
         </template>
+        <li class="vr bg-secondary" v-if="activeTabIndex !== tabs.length - 1"></li>
         <li class="nav-item" role="presentation">
             <button class="nav-link nav-add" id="add-tab" type="button" role="tab" aria-selected="false" :disabled="isLastTabOnEmptyState" @click="openNewTab" :title="$t('New Tab')">
                 <i class="bi bi-plus-lg"></i>

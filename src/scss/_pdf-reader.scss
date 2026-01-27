@@ -4,6 +4,8 @@
 }
 
 .navbar {
+    background: $dark-bg-accent !important;
+
     &.fixed-top {
         top: $navtabsHeight !important;
     }
@@ -12,7 +14,6 @@
         bottom: $navtabsHeight !important;
     }
 
-    background: $dark-bg-accent !important;
 
     .dropdown-menu-dark {
         .form-range {

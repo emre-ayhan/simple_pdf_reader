@@ -1,12 +1,13 @@
 // Colors
 $primary: #7dd3fc;
 $primary-hover: #38bdf8;
-$dark: #0f172a;
-$secondary: #6c757d; // Bootstrap secondary default, or use var(--bs-secondary)
-$dark-bg-gradient: linear-gradient(145deg, #0f172a 0%, #0a1b2b 55%, #0b2538 100%);
-$dark-bg-gradient-reverse: linear-gradient(145deg, #0b2538 0%, #0a1b2b 45%, #0f172a 100%);
-$dark-bg-subtle: #121b2c;
-$dark-bg-accent: #1e2a3b;
+$dark: #091a32;
+$darkLight: #092244;
+$darkLighter: #0a264e;
+
+$dark-bg-gradient: linear-gradient(145deg, $dark 0%, $darkLight 55%, $darkLighter 100%);
+$dark-bg-gradient-reverse: linear-gradient(145deg, $darkLighter 0%, $darkLight 45%, $dark 100%);
+$dark-bg-accent: #1a355b;
 $border-color: rgba(255, 255, 255, 0.08);
 
 // Text Colors
