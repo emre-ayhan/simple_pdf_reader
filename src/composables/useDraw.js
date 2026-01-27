@@ -261,11 +261,11 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     });
 
     // Clamp on position changes (e.g., programmatic updates)
-    // watch(() => strokeMenuPosition.value, () => {
-    //     if (showStrokeMenu.value) {
-    //         clampStrokeMenuPosition();
-    //     }
-    // }, { deep: true });
+    watch(() => strokeMenuPosition.value, () => {
+        if (showStrokeMenu.value) {
+            clampStrokeMenuPosition();
+        }
+    }, { deep: true });
 
 
     let lastX = 0;
@@ -1711,6 +1711,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         const { x, y, clientX, clientY } = pt;
         
         const found = findStrokeAtPoint(x, y, canvasIndex);
+
         if (found) {
             selectedStroke.value = {
                 ...found,
@@ -1723,7 +1724,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 x: clientX,
                 y: clientY
             };
-            
+
             currentCanvasIndex = canvasIndex;
             
             // Redraw with highlight
