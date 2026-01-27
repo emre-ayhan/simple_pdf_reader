@@ -23,6 +23,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     const currentStrokeId = ref(null);
     const currentStroke = ref([]); // Current stroke being drawn
     const isStrokeHovering = ref(false);
+    const isBoundingBoxHovering = ref(false);
 
     const isDrawingMode = computed(() => {
         return !isTextSelectionMode.value && !isTextHighlightMode.value;
@@ -127,7 +128,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     const resizeStartBounds = ref(null);
 
     const resizeCursor = computed(() => {
-        if (!isStrokeHovering.value && !isResizing.value) return null;
+        if ((!isBoundingBoxHovering.value) && !isResizing.value) return null;
         const handle = resizeHandle.value;
         if (!handle) return null;
         if (handle === 'n' || handle === 's') return 'ns-resize';
@@ -1331,6 +1332,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         }
 
         isStrokeHovering.value = false;
+        isBoundingBoxHovering.value = false;
 
         // Update hover state for strokes (used for cursor UI)
         if (!isMouseDown.value) {
@@ -1350,17 +1352,31 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             isStrokeHovering.value = false;
         }
 
-        // Update cursor when hovering handles in drag mode even before mousedown
-        if (isStrokeHovering.value && selectedStroke.value && !isMouseDown.value) {
+        // Hover state for selected stroke's bounding box / resize handles
+        if (selectedStroke.value && !isMouseDown.value) {
             const canvasIndex = getCanvasIndexFromEvent(e);
-            if (canvasIndex !== -1) {
+            if (canvasIndex !== -1 && canvasIndex === selectedStroke.value.pageIndex) {
                 const canvas = drawingCanvases.value[canvasIndex];
                 const pt = getCanvasPointFromEvent(canvas, e);
-                if (!pt) return;
-                const { x, y } = pt;
-                const bounds = getStrokeBounds(selectedStroke.value.stroke, 5);
-                const handle = getResizeHandle(x, y, bounds);
-                resizeHandle.value = handle;
+                if (pt) {
+                    const bounds = getStrokeBounds(selectedStroke.value.stroke, 5);
+                    if (bounds) {
+                        const handle = getResizeHandle(pt.x, pt.y, bounds);
+                        resizeHandle.value = handle;
+
+                        const edgeThreshold = 6;
+                        const inside = pt.x >= bounds.minX && pt.x <= bounds.maxX && pt.y >= bounds.minY && pt.y <= bounds.maxY;
+                        const nearLeft = Math.abs(pt.x - bounds.minX) <= edgeThreshold && pt.y >= bounds.minY - edgeThreshold && pt.y <= bounds.maxY + edgeThreshold;
+                        const nearRight = Math.abs(pt.x - bounds.maxX) <= edgeThreshold && pt.y >= bounds.minY - edgeThreshold && pt.y <= bounds.maxY + edgeThreshold;
+                        const nearTop = Math.abs(pt.y - bounds.minY) <= edgeThreshold && pt.x >= bounds.minX - edgeThreshold && pt.x <= bounds.maxX + edgeThreshold;
+                        const nearBottom = Math.abs(pt.y - bounds.maxY) <= edgeThreshold && pt.x >= bounds.minX - edgeThreshold && pt.x <= bounds.maxX + edgeThreshold;
+                        const nearEdge = nearLeft || nearRight || nearTop || nearBottom;
+
+                        isBoundingBoxHovering.value = !!handle || nearEdge || inside;
+                    }
+                }
+            } else {
+                resizeHandle.value = null;
             }
         }
 
@@ -1371,7 +1387,9 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         if (e.pointerType === 'pen') {
             isPenHovering.value = false;
         }
+        
         isStrokeHovering.value = false;
+        isBoundingBoxHovering.value = false;
         stopDrawing(e);
     };
 
@@ -2313,6 +2331,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         selectionEnd,
         isPenHovering,
         isStrokeHovering,
+        isBoundingBoxHovering,
         selectedStroke,
         isDragging,
         isResizing,
