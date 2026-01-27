@@ -77,7 +77,7 @@ onUnmounted(() => {
             <div class="small text-capitalize">{{ updateState.statusText }}</div>
             <div class="small text-nowrap" v-if="updateState.percent">{{ Math.round(updateState.percent) }}%</div>
         </div>
-        <div class="progress mt-2" style="height: 6px;">
+        <div class="progress mt-2" style="height: 6px;" v-if="updateState.percent">
             <div class="progress-bar" role="progressbar" :style="updateBarStyle"></div>
         </div>
         <!-- <div class="d-flex justify-content-end gap-2 mt-2" v-if="showUpdateActions">
