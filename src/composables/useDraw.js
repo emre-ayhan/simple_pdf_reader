@@ -1233,7 +1233,6 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             isResizing.value = false;
             resizeHandle.value = null;
             resizeStartBounds.value = null;
-            resizeCursor.value = null;
             isMouseDown.value = false;
             activePointerId.value = null;
             activePointerType.value = null;
@@ -1281,7 +1280,6 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         isMouseDown.value = false;
         activePointerId.value = null;
         activePointerType.value = null;
-        resizeCursor.value = null;
         
         const pageIndex = currentCanvasIndex + 1;
         
