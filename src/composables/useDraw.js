@@ -1174,7 +1174,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         if (!isDrawingMode.value) return;
         
         // Handle drag/resize mode completion
-        if ((isStrokeHovering.value || isDragging.value || isResizing.value) && isMouseDown.value && selectedStroke.value) {
+        if (isMouseDown.value && selectedStroke.value) {
             // Only stop if it's the same pointer
             if (e && e.pointerId !== activePointerId.value) return;
             
