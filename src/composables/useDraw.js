@@ -25,8 +25,8 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     const isStrokeHovering = ref(false);
     const isBoundingBoxHovering = ref(false);
 
-    const isDrawingMode = computed(() => {
-        return !isTextSelectionMode.value && !isTextHighlightMode.value;
+    const textModesActive = computed(() => {
+        return isTextSelectionMode.value && isTextHighlightMode.value;
     })
 
     const colors = [
@@ -587,10 +587,11 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
 
 
     const startDrawing = (e) => {
-        if (!isDrawingMode.value) return;
+        if (textModesActive.value) return;
 
         // Track active pointer type
         activePointerType.value = e.pointerType;
+
         if (e.pointerType === 'pen') {
             isPenHovering.value = true;
         }
@@ -600,33 +601,62 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
 
         // Generate a new stroke ID
         currentStrokeId.value = uuid();
-        
-        // Handle drag mode
-        if (isStrokeHovering.value || selectedStroke.value) {
-            const canvasIndex = getCanvasIndexFromEvent(e);
-            if (canvasIndex === -1) return;
-            
-            const canvas = drawingCanvases.value[canvasIndex];
-            const pt = getCanvasPointFromEvent(canvas, e);
-            if (!pt) return;
-            const { x, y } = pt;
-            
-            // Check if clicking on a resize handle of already selected stroke
-            if (selectedStroke.value && selectedStroke.value.pageIndex === canvasIndex) {
-                const handlePadding = 5;
-                const bounds = getStrokeBounds(selectedStroke.value.stroke, handlePadding);
-                const handle = getResizeHandle(x, y, bounds);
+
+        // Handle select mode
+        if (isSelectModeActive.value) {
+            // Handle drag mode
+            if (isStrokeHovering.value || selectedStroke.value) {
+                const canvasIndex = getCanvasIndexFromEvent(e);
+                if (canvasIndex === -1) return;
                 
-                if (handle) {
-                    // Start resizing
-                    isResizing.value = true;
-                    resizeHandle.value = handle;
-                    dragStartPos.value = { x, y };
-                    resizeStartBounds.value = {
-                        padded: { ...bounds },
-                        raw: getStrokeBounds(selectedStroke.value.originalStroke || selectedStroke.value.stroke, 0),
-                        padding: handlePadding
+                const canvas = drawingCanvases.value[canvasIndex];
+                const pt = getCanvasPointFromEvent(canvas, e);
+                if (!pt) return;
+                const { x, y } = pt;
+                
+                // Check if clicking on a resize handle of already selected stroke
+                if (selectedStroke.value && selectedStroke.value.pageIndex === canvasIndex) {
+                    const handlePadding = 5;
+                    const bounds = getStrokeBounds(selectedStroke.value.stroke, handlePadding);
+                    const handle = getResizeHandle(x, y, bounds);
+                    
+                    if (handle) {
+                        // Start resizing
+                        isResizing.value = true;
+                        resizeHandle.value = handle;
+                        dragStartPos.value = { x, y };
+                        resizeStartBounds.value = {
+                            padded: { ...bounds },
+                            raw: getStrokeBounds(selectedStroke.value.originalStroke || selectedStroke.value.stroke, 0),
+                            padding: handlePadding
+                        };
+                        
+                        isMouseDown.value = true;
+                        currentCanvasIndex = canvasIndex;
+                        
+                        if (canvas && e.pointerId !== undefined) {
+                            canvas.setPointerCapture(e.pointerId);
+                        }
+                        activePointerId.value = e.pointerId;
+    
+                        stopEvent(e);
+                        return;
+                    }
+                }
+                
+                const found = findStrokeAtPoint(x, y, canvasIndex);
+    
+                if (found) {
+                    selectedStroke.value = {
+                        ...found,
+                        originalStroke: JSON.parse(JSON.stringify(found.stroke)) // Deep clone original
                     };
+                    
+                    // Prepare for potential dragging (left-click only)
+                    isDragging.value = false; // Don't start dragging immediately
+                    dragStartPos.value = { x, y };
+                    lastX = x;
+                    lastY = y;
                     
                     isMouseDown.value = true;
                     currentCanvasIndex = canvasIndex;
@@ -635,44 +665,18 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                         canvas.setPointerCapture(e.pointerId);
                     }
                     activePointerId.value = e.pointerId;
-
-                    stopEvent(e);
-                    return;
+                    
+                    // Redraw with highlight
+                    redrawAllStrokes(canvasIndex);
+                    drawSelectionBoundingBox(canvasIndex, found.strokeIndex);
                 }
-            }
-            
-            const found = findStrokeAtPoint(x, y, canvasIndex);
-
-            if (found) {
-                selectedStroke.value = {
-                    ...found,
-                    originalStroke: JSON.parse(JSON.stringify(found.stroke)) // Deep clone original
-                };
-                
-                // Prepare for potential dragging (left-click only)
-                isDragging.value = false; // Don't start dragging immediately
-                dragStartPos.value = { x, y };
-                lastX = x;
-                lastY = y;
-                
-                isMouseDown.value = true;
-                currentCanvasIndex = canvasIndex;
-                
-                if (canvas && e.pointerId !== undefined) {
-                    canvas.setPointerCapture(e.pointerId);
-                }
-                activePointerId.value = e.pointerId;
-                
-                // Redraw with highlight
-                redrawAllStrokes(canvasIndex);
-                drawSelectionBoundingBox(canvasIndex, found.strokeIndex);
+    
+                stopEvent(e);
+                return;
             }
 
-            stopEvent(e);
-            return;
-        }
-
-        if (isSelectModeActive.value) return;
+            return
+        };
         
         // Handle text mode
         if (isTextMode.value) {
@@ -785,10 +789,12 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     };
 
     const draw = (e) => {
-        if (!isDrawingMode.value) return;
+        if (textModesActive.value) return;
 
-        // Handle drag mode - return early to prevent any drawing
-        if (isStrokeHovering.value || selectedStroke.value) {
+        // Text mode doesn't need draw event handling
+        if (isTextMode.value) return;
+
+        if (isSelectModeActive.value && (isStrokeHovering.value || selectedStroke.value)) {
             // Handle resizing
             if (isResizing.value && selectedStroke.value && resizeHandle.value) {
                 if (e.pointerId !== activePointerId.value) return;
@@ -1066,12 +1072,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             
             // Always return when in drag mode to prevent any drawing
             return;
-        }
-
-        // Text mode doesn't need draw event handling
-        if (isTextMode.value) return;
-
-        if (isSelectModeActive.value) return;
+        };
 
         
         // Handle selection rectangle
@@ -1171,10 +1172,12 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     };
 
     const stopDrawing = (e) => {
-        if (!isDrawingMode.value) return;
+        if (textModesActive.value) return;
         
-        // Handle drag/resize mode completion
-        if (isMouseDown.value && selectedStroke.value) {
+        // Text mode is handled by confirmText function
+        if (isTextMode.value) return;
+
+        if (isSelectModeActive.value && (isStrokeHovering.value || isDragging.value || isResizing.value) && isMouseDown.value && selectedStroke.value) {
             // Only stop if it's the same pointer
             if (e && e.pointerId !== activePointerId.value) return;
             
@@ -1241,12 +1244,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             stopEvent(e);
             currentCanvasIndex = -1;
             return;
-        }
-
-        // Text mode is handled by confirmText function
-        if (isTextMode.value) return;
-
-        if (isSelectModeActive.value) return;
+        };
 
         
         // Handle selection complete
@@ -1329,58 +1327,60 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             isPenHovering.value = true;
         }
 
-        let newStrokeHovering = false;
-        let newBBoxHovering = false;
-        let newResizeHandle = null;
-
-        // Perform hit detection only when mouse is not down (hovering)
-        if (!isMouseDown.value) {
-            const canvasIndex = getCanvasIndexFromEvent(e);
-            if (canvasIndex !== -1) {
-                const canvas = drawingCanvases.value[canvasIndex];
-                const pt = getCanvasPointFromEvent(canvas, e);
-                
-                if (pt) {
-                    const { x, y } = pt;
-
-                    // 1. Check stroke hover
-                    newStrokeHovering = isAnyStrokeAtPoint(x, y, canvasIndex);
-
-                    // 2. Check bounding box & resize handle hover (only if selected stroke is on this page)
-                    if (selectedStroke.value && selectedStroke.value.pageIndex === canvasIndex) {
-                        const bounds = getStrokeBounds(selectedStroke.value.stroke, 5);
-                        if (bounds) {
-                            newResizeHandle = getResizeHandle(x, y, bounds);
-
-                            const inside = x >= bounds.minX && x <= bounds.maxX && y >= bounds.minY && y <= bounds.maxY;
-                            let nearEdge = false;
-                            
-                            // Optimization: Check edges only if not already inside or on a handle
-                            if (!inside && !newResizeHandle) {
-                                const edgeThreshold = 6;
-                                const nearLeft = Math.abs(x - bounds.minX) <= edgeThreshold && y >= bounds.minY - edgeThreshold && y <= bounds.maxY + edgeThreshold;
-                                const nearRight = Math.abs(x - bounds.maxX) <= edgeThreshold && y >= bounds.minY - edgeThreshold && y <= bounds.maxY + edgeThreshold;
-                                const nearTop = Math.abs(y - bounds.minY) <= edgeThreshold && x >= bounds.minX - edgeThreshold && x <= bounds.maxX + edgeThreshold;
-                                const nearBottom = Math.abs(y - bounds.maxY) <= edgeThreshold && x >= bounds.minX - edgeThreshold && x <= bounds.maxX + edgeThreshold;
-                                nearEdge = nearLeft || nearRight || nearTop || nearBottom;
+        if (isSelectModeActive.value) {
+            let newStrokeHovering = false;
+            let newBBoxHovering = false;
+            let newResizeHandle = null;
+    
+            // Perform hit detection only when mouse is not down (hovering)
+            if (!isMouseDown.value) {
+                const canvasIndex = getCanvasIndexFromEvent(e);
+                if (canvasIndex !== -1) {
+                    const canvas = drawingCanvases.value[canvasIndex];
+                    const pt = getCanvasPointFromEvent(canvas, e);
+                    
+                    if (pt) {
+                        const { x, y } = pt;
+    
+                        // 1. Check stroke hover
+                        newStrokeHovering = isAnyStrokeAtPoint(x, y, canvasIndex);
+    
+                        // 2. Check bounding box & resize handle hover (only if selected stroke is on this page)
+                        if (selectedStroke.value && selectedStroke.value.pageIndex === canvasIndex) {
+                            const bounds = getStrokeBounds(selectedStroke.value.stroke, 5);
+                            if (bounds) {
+                                newResizeHandle = getResizeHandle(x, y, bounds);
+    
+                                const inside = x >= bounds.minX && x <= bounds.maxX && y >= bounds.minY && y <= bounds.maxY;
+                                let nearEdge = false;
+                                
+                                // Optimization: Check edges only if not already inside or on a handle
+                                if (!inside && !newResizeHandle) {
+                                    const edgeThreshold = 6;
+                                    const nearLeft = Math.abs(x - bounds.minX) <= edgeThreshold && y >= bounds.minY - edgeThreshold && y <= bounds.maxY + edgeThreshold;
+                                    const nearRight = Math.abs(x - bounds.maxX) <= edgeThreshold && y >= bounds.minY - edgeThreshold && y <= bounds.maxY + edgeThreshold;
+                                    const nearTop = Math.abs(y - bounds.minY) <= edgeThreshold && x >= bounds.minX - edgeThreshold && x <= bounds.maxX + edgeThreshold;
+                                    const nearBottom = Math.abs(y - bounds.maxY) <= edgeThreshold && x >= bounds.minX - edgeThreshold && x <= bounds.maxX + edgeThreshold;
+                                    nearEdge = nearLeft || nearRight || nearTop || nearBottom;
+                                }
+    
+                                newBBoxHovering = !!newResizeHandle || inside || nearEdge;
                             }
-
-                            newBBoxHovering = !!newResizeHandle || inside || nearEdge;
                         }
                     }
                 }
             }
-        }
-
-        // Batch update reactive state
-        if (isStrokeHovering.value !== newStrokeHovering) {
-            isStrokeHovering.value = newStrokeHovering;
-        }
-        if (isBoundingBoxHovering.value !== newBBoxHovering) {
-            isBoundingBoxHovering.value = newBBoxHovering;
-        }
-        if (!isMouseDown.value && resizeHandle.value !== newResizeHandle) {
-            resizeHandle.value = newResizeHandle;
+    
+            // Batch update reactive state
+            if (isStrokeHovering.value !== newStrokeHovering) {
+                isStrokeHovering.value = newStrokeHovering;
+            }
+            if (isBoundingBoxHovering.value !== newBBoxHovering) {
+                isBoundingBoxHovering.value = newBBoxHovering;
+            }
+            if (!isMouseDown.value && resizeHandle.value !== newResizeHandle) {
+                resizeHandle.value = newResizeHandle;
+            }
         }
 
         draw(e);

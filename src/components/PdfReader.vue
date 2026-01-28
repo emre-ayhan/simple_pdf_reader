@@ -23,7 +23,7 @@ const props = defineProps({
 const cursorStyle = computed(() => {
     if (resizeCursor.value) return resizeCursor.value;
     if (selectedStroke.value && (isStrokeHovering.value || isDragging.value)) return 'move';
-    if (isStrokeHovering.value) return 'pointer';
+    if (isSelectModeActive.value && isStrokeHovering.value) return 'pointer';
     if (isSelectionMode.value) return 'crosshair';
     if (isTextMode.value) return 'text';
     if (isDrawing.value ) {
