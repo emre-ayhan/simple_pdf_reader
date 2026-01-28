@@ -30,6 +30,7 @@ const menuItems = computed(() => ({
         { label: 'Save', action: 'saveFile', icon: 'floppy', shortcut: 'Ctrl+S', disabled: !activePageHasUnsavedChanges.value },
     ],
     page: [
+        { label: 'Import From Clipboard', action: 'insertFromClipboard', icon: 'clipboard-plus' },
         { label: 'Insert Page After', action: 'insertBlankPage', icon: 'file-earmark-arrow-down' },
         { label: 'First Page', action: 'scrollToFirstPage', icon: 'chevron-double-up', shortcut: 'Home' },
         { label: 'Last Page', action: 'scrollToLastPage', icon: 'chevron-double-down', shortcut: 'End' },

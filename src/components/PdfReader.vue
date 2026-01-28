@@ -591,6 +591,7 @@ defineExpose({
         deletePage(pageIndex.value, addToHistory);
     },
     resetAllTools,
+    insertFromClipboard,
 })
 </script>
 <template>
