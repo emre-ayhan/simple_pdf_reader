@@ -182,11 +182,21 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     const isResizing = ref(false);
     const resizeHandle = ref(null); // 'nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'
     const resizeStartBounds = ref(null);
+    const isRotating = ref(false);
+    const rotateStartCenter = ref(null);
+    const rotateStartAngle = ref(0);
 
     const resizeCursor = computed(() => {
-        if ((!isBoundingBoxHovering.value) && !isResizing.value) return null;
+        if ((!isBoundingBoxHovering.value) && !isResizing.value && !isRotating.value) return null;
         const handle = resizeHandle.value;
         if (!handle) return null;
+        if (handle === 'rotate') {
+            // Simple rotation cursor using a circular arrow SVG
+            const svg = encodeURIComponent(
+                `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="#0066ff"><path d="M8 3a5 5 0 1 1-3.535 8.535.75.75 0 1 0-1.06 1.06A6.5 6.5 0 1 0 8 1.5v1.75a.75.75 0 0 0 1.28.53l2.5-2.5A.75.75 0 0 0 11.5.5h-4a.75.75 0 0 0-.75.75V3A5 5 0 0 1 8 3z"/></svg>`
+            );
+            return `url("data:image/svg+xml;utf8,${svg}") 8 8, auto`;
+        }
         if (handle === 'n' || handle === 's') return 'ns-resize';
         if (handle === 'e' || handle === 'w') return 'ew-resize';
         if (handle === 'ne' || handle === 'sw') return 'nesw-resize';
@@ -536,13 +546,31 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         if (!stroke || stroke.length === 0) return false;
         
         const first = stroke[0];
+
+        // If rotated, inverse-rotate the test point around the stroke center
+        let testX = x, testY = y;
+        const angle = first.rotation || 0;
+        if (angle) {
+            const b = getStrokeBounds(stroke, 0);
+            if (b) {
+                const cx = (b.minX + b.maxX) / 2;
+                const cy = (b.minY + b.maxY) / 2;
+                const cosA = Math.cos(-angle);
+                const sinA = Math.sin(-angle);
+                const dx = x - cx;
+                const dy = y - cy;
+                testX = cx + dx * cosA - dy * sinA;
+                testY = cy + dx * sinA + dy * cosA;
+            }
+        }
         
         // Check image strokes
         if (first.type === 'image') {
-            return x >= first.x - threshold && 
-                   x <= first.x + first.width + threshold && 
-                   y >= first.y - threshold && 
-                   y <= first.y + first.height + threshold;
+            const halfW = first.width / 2;
+            const halfH = first.height / 2;
+            const cx = first.x + halfW;
+            const cy = first.y + halfH;
+            return testX >= cx - halfW - threshold && testX <= cx + halfW + threshold && testY >= cy - halfH - threshold && testY <= cy + halfH + threshold;
         }
         
         // Check highlight-rect strokes
@@ -562,17 +590,17 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         
         // Check text strokes
         if (first.type === 'text') {
-            const ctx = drawingContexts.value[0];
+                 const ctx = drawingContexts.value[0];
             if (!ctx) return false;
             ctx.font = `${first.fontSize}px Arial`;
             const metrics = ctx.measureText(first.text);
             const textWidth = metrics.width;
             const textHeight = first.fontSize;
             
-            return x >= first.x - threshold && 
-                   x <= first.x + textWidth + threshold && 
-                   y >= first.y - threshold && 
-                   y <= first.y + textHeight + threshold;
+                 return testX >= first.x - threshold && 
+                     testX <= first.x + textWidth + threshold && 
+                     testY >= first.y - threshold && 
+                     testY <= first.y + textHeight + threshold;
         }
         
         // Check shape strokes
@@ -582,10 +610,10 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             const length = Math.sqrt(dx * dx + dy * dy);
             if (length === 0) return false;
             
-            const t = Math.max(0, Math.min(1, ((x - first.startX) * dx + (y - first.startY) * dy) / (length * length)));
+            const t = Math.max(0, Math.min(1, ((testX - first.startX) * dx + (testY - first.startY) * dy) / (length * length)));
             const projX = first.startX + t * dx;
             const projY = first.startY + t * dy;
-            const distance = Math.sqrt((x - projX) ** 2 + (y - projY) ** 2);
+            const distance = Math.sqrt((testX - projX) ** 2 + (testY - projY) ** 2);
             return distance < threshold;
         }
         
@@ -595,10 +623,10 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             const minY = Math.min(first.startY, first.endY);
             const maxY = Math.max(first.startY, first.endY);
             
-            return x >= minX - threshold && x <= maxX + threshold && 
-                   y >= minY - threshold && y <= maxY + threshold &&
-                   (x <= minX + threshold || x >= maxX - threshold || 
-                    y <= minY + threshold || y >= maxY - threshold);
+                 return testX >= minX - threshold && testX <= maxX + threshold && 
+                     testY >= minY - threshold && testY <= maxY + threshold &&
+                     (testX <= minX + threshold || testX >= maxX - threshold || 
+                      testY <= minY + threshold || testY >= maxY - threshold);
         }
         
         if (first.type === 'circle') {
@@ -619,13 +647,13 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 return Math.abs(value - 1) < epsilon * 2; // Loose check
             }
             const radius = Math.sqrt((first.endX - first.startX) ** 2 + (first.endY - first.startY) ** 2);
-            const distance = Math.sqrt((x - first.startX) ** 2 + (y - first.startY) ** 2);
+            const distance = Math.sqrt((testX - first.startX) ** 2 + (testY - first.startY) ** 2);
             return Math.abs(distance - radius) < threshold;
         }
         
         // Check pen strokes (point-based)
         for (let point of stroke) {
-            const distance = Math.sqrt((point.x - x) ** 2 + (point.y - y) ** 2);
+            const distance = Math.sqrt((point.x - testX) ** 2 + (point.y - testY) ** 2);
             if (distance < threshold) {
                 return true;
             }
@@ -667,76 +695,166 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         const pad = Math.max(0, padding);
         
         if (first.type === 'image') {
-            return {
-                minX: first.x - pad,
-                minY: first.y - pad,
-                maxX: first.x + first.width + pad,
-                maxY: first.y + first.height + pad
-            };
+            const angle = first.rotation || 0;
+            const cx = first.x + first.width / 2;
+            const cy = first.y + first.height / 2;
+            const corners = [
+                { x: first.x, y: first.y },
+                { x: first.x + first.width, y: first.y },
+                { x: first.x + first.width, y: first.y + first.height },
+                { x: first.x, y: first.y + first.height }
+            ];
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            const cosA = Math.cos(angle);
+            const sinA = Math.sin(angle);
+            corners.forEach(p => {
+                const dx = p.x - cx;
+                const dy = p.y - cy;
+                const rx = cx + dx * cosA - dy * sinA;
+                const ry = cy + dx * sinA + dy * cosA;
+                minX = Math.min(minX, rx);
+                minY = Math.min(minY, ry);
+                maxX = Math.max(maxX, rx);
+                maxY = Math.max(maxY, ry);
+            });
+            return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
         } else if (first.type === 'highlight-rect') {
             const rects = first.rects || [{ x: first.x, y: first.y, width: first.width, height: first.height }];
+            const angle = first.rotation || 0;
+            // Center by union pre-rotation
+            let uMinX = Infinity, uMinY = Infinity, uMaxX = -Infinity, uMaxY = -Infinity;
+            rects.forEach(rect => {
+                uMinX = Math.min(uMinX, rect.x);
+                uMinY = Math.min(uMinY, rect.y);
+                uMaxX = Math.max(uMaxX, rect.x + rect.width);
+                uMaxY = Math.max(uMaxY, rect.y + rect.height);
+            });
+            const cx = (uMinX + uMaxX) / 2;
+            const cy = (uMinY + uMaxY) / 2;
+            const cosA = Math.cos(angle);
+            const sinA = Math.sin(angle);
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
             rects.forEach(rect => {
-                minX = Math.min(minX, rect.x);
-                minY = Math.min(minY, rect.y);
-                maxX = Math.max(maxX, rect.x + rect.width);
-                maxY = Math.max(maxY, rect.y + rect.height);
+                const corners = [
+                    { x: rect.x, y: rect.y },
+                    { x: rect.x + rect.width, y: rect.y },
+                    { x: rect.x + rect.width, y: rect.y + rect.height },
+                    { x: rect.x, y: rect.y + rect.height }
+                ];
+                corners.forEach(p => {
+                    const dx = p.x - cx, dy = p.y - cy;
+                    const rx = cx + dx * cosA - dy * sinA;
+                    const ry = cy + dx * sinA + dy * cosA;
+                    minX = Math.min(minX, rx);
+                    minY = Math.min(minY, ry);
+                    maxX = Math.max(maxX, rx);
+                    maxY = Math.max(maxY, ry);
+                });
             });
-            return {
-                minX: minX - pad,
-                minY: minY - pad,
-                maxX: maxX + pad,
-                maxY: maxY + pad
-            };
+            return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
         } else if (first.type === 'text') {
             const ctx = drawingContexts.value[0];
             if (!ctx) return null;
             ctx.font = `${first.fontSize}px Arial`;
             const metrics = ctx.measureText(first.text);
-            return {
-                minX: first.x - pad,
-                minY: first.y - pad,
-                maxX: first.x + metrics.width + pad,
-                maxY: first.y + first.fontSize + pad
-            };
+            const angle = first.rotation || 0;
+            const cx = first.x + metrics.width / 2;
+            const cy = first.y + first.fontSize / 2;
+            const corners = [
+                { x: first.x, y: first.y },
+                { x: first.x + metrics.width, y: first.y },
+                { x: first.x + metrics.width, y: first.y + first.fontSize },
+                { x: first.x, y: first.y + first.fontSize }
+            ];
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            const cosA = Math.cos(angle);
+            const sinA = Math.sin(angle);
+            corners.forEach(p => {
+                const dx = p.x - cx, dy = p.y - cy;
+                const rx = cx + dx * cosA - dy * sinA;
+                const ry = cy + dx * sinA + dy * cosA;
+                minX = Math.min(minX, rx);
+                minY = Math.min(minY, ry);
+                maxX = Math.max(maxX, rx);
+                maxY = Math.max(maxY, ry);
+            });
+            return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
         } else if (first.type === 'line' || first.type === 'rectangle' || first.type === 'circle') {
-            if (first.type === 'circle') {
+            const angle = first.rotation || 0;
+            let points = [];
+            if (first.type === 'line') {
+                points = [ { x: first.startX, y: first.startY }, { x: first.endX, y: first.endY } ];
+            } else if (first.type === 'rectangle') {
+                points = [
+                    { x: first.startX, y: first.startY },
+                    { x: first.endX, y: first.startY },
+                    { x: first.endX, y: first.endY },
+                    { x: first.startX, y: first.endY }
+                ];
+            } else if (first.type === 'circle') {
+                // Use bounding box of ellipse or circle
                 let rx, ry;
                 if (first.radiusX !== undefined || first.radiusY !== undefined) {
                     rx = first.radiusX !== undefined ? first.radiusX : Math.abs(first.endX - first.startX);
                     ry = first.radiusY !== undefined ? first.radiusY : Math.abs(first.endY - first.startY);
                 } else {
                     const radius = Math.sqrt((first.endX - first.startX) ** 2 + (first.endY - first.startY) ** 2);
-                    rx = radius;
-                    ry = radius;
+                    rx = radius; ry = radius;
                 }
-                return {
-                    minX: first.startX - rx - pad,
-                    minY: first.startY - ry - pad,
-                    maxX: first.startX + rx + pad,
-                    maxY: first.startY + ry + pad
-                };
+                points = [
+                    { x: first.startX - rx, y: first.startY - ry },
+                    { x: first.startX + rx, y: first.startY - ry },
+                    { x: first.startX + rx, y: first.startY + ry },
+                    { x: first.startX - rx, y: first.startY + ry }
+                ];
             }
-            return {
-                minX: Math.min(first.startX, first.endX) - pad,
-                minY: Math.min(first.startY, first.endY) - pad,
-                maxX: Math.max(first.startX, first.endX) + pad,
-                maxY: Math.max(first.startY, first.endY) + pad
-            };
-        } else {
+            // Center by unrotated bounds
+            let uMinX = Infinity, uMinY = Infinity, uMaxX = -Infinity, uMaxY = -Infinity;
+            points.forEach(p => { uMinX = Math.min(uMinX, p.x); uMinY = Math.min(uMinY, p.y); uMaxX = Math.max(uMaxX, p.x); uMaxY = Math.max(uMaxY, p.y); });
+            const cx = (uMinX + uMaxX) / 2;
+            const cy = (uMinY + uMaxY) / 2;
+            const cosA = Math.cos(angle);
+            const sinA = Math.sin(angle);
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            for (let point of stroke) {
-                minX = Math.min(minX, point.x);
-                minY = Math.min(minY, point.y);
-                maxX = Math.max(maxX, point.x);
-                maxY = Math.max(maxY, point.y);
+            points.forEach(p => {
+                const dx = p.x - cx, dy = p.y - cy;
+                const rx = cx + dx * cosA - dy * sinA;
+                const ry = cy + dx * sinA + dy * cosA;
+                minX = Math.min(minX, rx);
+                minY = Math.min(minY, ry);
+                maxX = Math.max(maxX, rx);
+                maxY = Math.max(maxY, ry);
+            });
+            return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
+        } else {
+            // Pen strokes: rotate points if needed and compute AABB
+            const angle = first.rotation || 0;
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            let cx = 0, cy = 0;
+            if (angle) {
+                // compute center from unrotated bounds
+                let uMinX = Infinity, uMinY = Infinity, uMaxX = -Infinity, uMaxY = -Infinity;
+                for (let p of stroke) { uMinX = Math.min(uMinX, p.x); uMinY = Math.min(uMinY, p.y); uMaxX = Math.max(uMaxX, p.x); uMaxY = Math.max(uMaxY, p.y); }
+                cx = (uMinX + uMaxX) / 2; cy = (uMinY + uMaxY) / 2;
+                const cosA = Math.cos(angle), sinA = Math.sin(angle);
+                for (let p of stroke) {
+                    const dx = p.x - cx, dy = p.y - cy;
+                    const rx = cx + dx * cosA - dy * sinA;
+                    const ry = cy + dx * sinA + dy * cosA;
+                    minX = Math.min(minX, rx);
+                    minY = Math.min(minY, ry);
+                    maxX = Math.max(maxX, rx);
+                    maxY = Math.max(maxY, ry);
+                }
+            } else {
+                for (let p of stroke) {
+                    minX = Math.min(minX, p.x);
+                    minY = Math.min(minY, p.y);
+                    maxX = Math.max(maxX, p.x);
+                    maxY = Math.max(maxY, p.y);
+                }
             }
-            return {
-                minX: minX - pad,
-                minY: minY - pad,
-                maxX: maxX + pad,
-                maxY: maxY + pad
-            };
+            return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
         }
     };
 
@@ -858,30 +976,49 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 // Disable resizing when multiple selection is active
                 if (selectedStrokes.value.length <= 1 && selectedStroke.value && selectedStroke.value.pageIndex === canvasIndex) {
                     const handlePadding = 5;
-                    const bounds = getStrokeBounds(selectedStroke.value.stroke, handlePadding);
-                    const handle = getResizeHandle(x, y, bounds);
+                            const bounds = getStrokeBounds(selectedStroke.value.stroke, handlePadding);
+                            let handle = getResizeHandle(x, y, bounds);
+                            // Treat top-right corner as rotation handle for all strokes (single selection)
+                            if (handle === 'ne') {
+                                const multiActive = Array.isArray(selectedStrokes.value) && selectedStrokes.value.filter(s => s.pageIndex === canvasIndex).length > 1;
+                                if (!multiActive) handle = 'rotate';
+                            }
                     
                     if (handle) {
-                        // Start resizing
-                        isResizing.value = true;
-                        resizeHandle.value = handle;
-                        dragStartPos.value = { x, y };
-                        resizeStartBounds.value = {
-                            padded: { ...bounds },
-                            raw: getStrokeBounds(selectedStroke.value.originalStroke || selectedStroke.value.stroke, 0),
-                            padding: handlePadding
-                        };
-                        
-                        isMouseDown.value = true;
-                        currentCanvasIndex = canvasIndex;
-                        
-                        if (canvas && e.pointerId !== undefined) {
-                            canvas.setPointerCapture(e.pointerId);
+                        const firstSel = selectedStroke.value.stroke[0];
+                        if (handle === 'rotate' || (handle === 'ne')) {
+                            isRotating.value = true;
+                            resizeHandle.value = handle;
+                            dragStartPos.value = { x, y };
+                            const b = getStrokeBounds(selectedStroke.value.stroke, 0);
+                            rotateStartCenter.value = { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 };
+                            rotateStartAngle.value = Math.atan2(y - rotateStartCenter.value.y, x - rotateStartCenter.value.x);
+                            isMouseDown.value = true;
+                            currentCanvasIndex = canvasIndex;
+                            if (canvas && e.pointerId !== undefined) {
+                                canvas.setPointerCapture(e.pointerId);
+                            }
+                            activePointerId.value = e.pointerId;
+                            stopEvent(e);
+                            return;
+                        } else {
+                            isResizing.value = true;
+                            resizeHandle.value = handle;
+                            dragStartPos.value = { x, y };
+                            resizeStartBounds.value = {
+                                padded: { ...bounds },
+                                raw: getStrokeBounds(selectedStroke.value.originalStroke || selectedStroke.value.stroke, 0),
+                                padding: handlePadding
+                            };
+                            isMouseDown.value = true;
+                            currentCanvasIndex = canvasIndex;
+                            if (canvas && e.pointerId !== undefined) {
+                                canvas.setPointerCapture(e.pointerId);
+                            }
+                            activePointerId.value = e.pointerId;
+                            stopEvent(e);
+                            return;
                         }
-                        activePointerId.value = e.pointerId;
-    
-                        stopEvent(e);
-                        return;
                     }
                 }
                 
@@ -1069,6 +1206,30 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         if (isTextInputMode.value) return;
 
         if (isSelectModeActive.value && (isStrokeHovering.value || selectedStroke.value)) {
+            // Handle rotation
+            if (isRotating.value && selectedStroke.value && (resizeHandle.value === 'rotate' || resizeHandle.value === 'ne')) {
+                if (e.pointerId !== activePointerId.value) return;
+                const canvas = drawingCanvases.value[currentCanvasIndex];
+                const pt = getCanvasPointFromEvent(canvas, e);
+                if (!pt) return;
+                const currentX = pt.x;
+                const currentY = pt.y;
+                const pageNumber = currentCanvasIndex + 1;
+                const strokes = strokesPerPage.value[pageNumber];
+                const stroke = strokes[selectedStroke.value.strokeIndex];
+                const first = stroke[0];
+                const origFirst = selectedStroke.value.originalStroke[0];
+                const center = rotateStartCenter.value || { x: (first.x + (first.x + first.width)) / 2, y: (first.y + (first.y + first.height)) / 2 };
+                const currentAngle = Math.atan2(currentY - center.y, currentX - center.x);
+                const delta = currentAngle - rotateStartAngle.value;
+                first.rotation = (origFirst.rotation || 0) + delta;
+                redrawAllStrokes(currentCanvasIndex);
+                drawSelectionBoundingBox(currentCanvasIndex, selectedStroke.value.strokeIndex);
+                showStrokeMenu.value = false;
+                stopEvent(e);
+                return;
+            }
+
             // Handle resizing
             if (isResizing.value && selectedStroke.value && resizeHandle.value) {
                 if (e.pointerId !== activePointerId.value) return;
@@ -1423,7 +1584,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         // Text mode is handled by confirmText function
         if (isTextInputMode.value) return;
 
-        if (isSelectModeActive.value && (isStrokeHovering.value || isDragging.value || isResizing.value) && isMouseDown.value && selectedStroke.value) {
+        if (isSelectModeActive.value && (isStrokeHovering.value || isDragging.value || isResizing.value || isRotating.value) && isMouseDown.value && selectedStroke.value) {
             // Only stop if it's the same pointer
             if (e && e.pointerId !== activePointerId.value) return;
             
@@ -1439,8 +1600,8 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             const pageNumber = currentCanvasIndex + 1;
             const stroke = strokesPerPage.value[pageNumber][selectedStroke.value.strokeIndex];
             
-            // Save to history if resized or dragged
-            if (isResizing.value || isDragging.value) {
+            // Save to history if resized, dragged, or rotated
+            if (isResizing.value || isDragging.value || isRotating.value) {
                 const canvas = drawingCanvases.value[currentCanvasIndex];
                 const pt = getCanvasPointFromEvent(canvas, e);
                 if (!pt) return;
@@ -1469,10 +1630,10 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                         // Keep style menu visible for multi-selection after move
                         showStrokeMenu.value = true;
                     } else {
-                        // Save to history with previous state (single)
+                        const changeType = isRotating.value ? 'rotate' : (isResizing.value ? 'resize' : 'move');
                         strokeChangeCallback({
                             id: stroke[0].id,
-                            type: isResizing.value ? 'resize' : 'move',
+                            type: changeType,
                             page: pageNumber,
                             strokeIndex: selectedStroke.value.strokeIndex,
                             stroke: JSON.parse(JSON.stringify(stroke)),
@@ -1510,6 +1671,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
 
             isDragging.value = false;
             isResizing.value = false;
+            isRotating.value = false;
             resizeHandle.value = null;
             resizeStartBounds.value = null;
             isMouseDown.value = false;
@@ -1653,8 +1815,15 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             if (isBoundingBoxHovering.value !== newBBoxHovering) {
                 isBoundingBoxHovering.value = newBBoxHovering;
             }
-            if (!isMouseDown.value && resizeHandle.value !== newResizeHandle) {
-                resizeHandle.value = newResizeHandle;
+            if (!isMouseDown.value) {
+                // Map NE to rotate for single-selected strokes
+                if (newResizeHandle === 'ne') {
+                    const multiActive = Array.isArray(selectedStrokes.value) && selectedStrokes.value.filter(s => s.pageIndex === getCanvasIndexFromEvent(e)).length > 1;
+                    if (!multiActive) newResizeHandle = 'rotate';
+                }
+                if (resizeHandle.value !== newResizeHandle) {
+                    resizeHandle.value = newResizeHandle;
+                }
             }
         }
 
@@ -2152,65 +2321,13 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             shouldDrawBorder = true;
         } 
         
-        else if (first.type === 'image') {
-            minX = first.x;
-            minY = first.y;
-            maxX = first.x + first.width;
-            maxY = first.y + first.height;
-        } else if (first.type === 'highlight-rect') {
-            // Calculate bounding box for all rectangles
-            const rects = first.rects || [{ x: first.x, y: first.y, width: first.width, height: first.height }];
-            minX = Infinity;
-            minY = Infinity;
-            maxX = -Infinity;
-            maxY = -Infinity;
-            rects.forEach(rect => {
-                minX = Math.min(minX, rect.x);
-                minY = Math.min(minY, rect.y);
-                maxX = Math.max(maxX, rect.x + rect.width);
-                maxY = Math.max(maxY, rect.y + rect.height);
-            });
-        } else if (first.type === 'text') {
-            ctx.font = `${first.fontSize}px Arial`;
-            const metrics = ctx.measureText(first.text);
-            minX = first.x;
-            minY = first.y;
-            maxX = first.x + metrics.width;
-            maxY = first.y + first.fontSize;
-        } else if (first.type === 'line' || first.type === 'rectangle' || first.type === 'circle') {
-            if (first.type === 'circle') {
-                let rx, ry;
-                if (first.radiusX !== undefined || first.radiusY !== undefined) {
-                    rx = first.radiusX !== undefined ? first.radiusX : Math.abs(first.endX - first.startX);
-                    ry = first.radiusY !== undefined ? first.radiusY : Math.abs(first.endY - first.startY);
-                } else {
-                    const radius = Math.sqrt((first.endX - first.startX) ** 2 + (first.endY - first.startY) ** 2);
-                    rx = radius;
-                    ry = radius;
-                }
-                minX = first.startX - rx;
-                maxX = first.startX + rx;
-                minY = first.startY - ry;
-                maxY = first.startY + ry;
-            } else {
-                minX = Math.min(first.startX, first.endX);
-                maxX = Math.max(first.startX, first.endX);
-                minY = Math.min(first.startY, first.endY);
-                maxY = Math.max(first.startY, first.endY);
-                if (first.type === 'rectangle') shouldDrawBorder = false; // Rectangle already has border
-            }
-        } else {
-            // Pen stroke - draw bounding box
-            minX = Infinity;
-            minY = Infinity;
-            maxX = -Infinity;
-            maxY = -Infinity;
-            for (let point of stroke) {
-                minX = Math.min(minX, point.x);
-                minY = Math.min(minY, point.y);
-                maxX = Math.max(maxX, point.x);
-                maxY = Math.max(maxY, point.y);
-            }
+        else {
+            const b = getStrokeBounds(stroke, 0);
+            if (!b) { ctx.restore(); return; }
+            minX = b.minX;
+            minY = b.minY;
+            maxX = b.maxX;
+            maxY = b.maxY;
         }
 
         minX -= padding;
@@ -2222,7 +2339,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             ctx.strokeRect(minX, minY, maxX - minX, maxY - minY);
         }
         
-        // Draw resize handles only for single selection
+            // Draw resize handles only for single selection
         if (!multi) {
             ctx.setLineDash([]);
             ctx.fillStyle = '#0066ff';
@@ -2368,7 +2485,16 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 if (first.type === 'image') {
                     const img = imageMap.get(index);
                     if (img) {
-                        drawingContext.drawImage(img, first.x, first.y, first.width, first.height);
+                        const angle = first.rotation || 0;
+                        if (angle) {
+                            const cx = first.x + first.width / 2;
+                            const cy = first.y + first.height / 2;
+                            drawingContext.translate(cx, cy);
+                            drawingContext.rotate(angle);
+                            drawingContext.drawImage(img, -first.width / 2, -first.height / 2, first.width, first.height);
+                        } else {
+                            drawingContext.drawImage(img, first.x, first.y, first.width, first.height);
+                        }
                     }
                     drawingContext.restore();
                     return;
@@ -2399,22 +2525,78 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                     return;
                 }
 
+                // Apply rotation transform for non-image strokes if present
+                const angle = first.rotation || 0;
+                if (angle) {
+                    const b = getStrokeBounds(stroke, 0);
+                    const cx = (b.minX + b.maxX) / 2;
+                    const cy = (b.minY + b.maxY) / 2;
+                    drawingContext.translate(cx, cy);
+                    drawingContext.rotate(angle);
+                }
+
                 // Check if it's a shape
                 if (first.type === 'line' || first.type === 'rectangle' || first.type === 'circle') {
                     drawingContext.strokeStyle = first.color;
                     drawingContext.lineWidth = first.thickness;
                     drawingContext.lineCap = 'round';
                     drawingContext.lineJoin = 'round';
-                    drawShape(drawingContext, first.type, first.startX, first.startY, first.endX, first.endY, first);
+                    // Draw with coordinates relative to center when rotated
+                    if (angle) {
+                        const b = getStrokeBounds(stroke, 0);
+                        const cx = (b.minX + b.maxX) / 2;
+                        const cy = (b.minY + b.maxY) / 2;
+                        drawShape(drawingContext, first.type, first.startX - cx, first.startY - cy, first.endX - cx, first.endY - cy, first);
+                    } else {
+                        drawShape(drawingContext, first.type, first.startX, first.startY, first.endX, first.endY, first);
+                    }
+                } else if (first.type === 'highlight-rect') {
+                    drawingContext.fillStyle = first.color;
+                    drawingContext.globalAlpha = 0.3;
+                    drawingContext.beginPath();
+                    const rects = first.rects || [{ x: first.x, y: first.y, width: first.width, height: first.height }];
+                    if (angle) {
+                        const b = getStrokeBounds(stroke, 0);
+                        const cx = (b.minX + b.maxX) / 2;
+                        const cy = (b.minY + b.maxY) / 2;
+                        rects.forEach(rect => {
+                            drawingContext.rect(rect.x - cx, rect.y - cy, rect.width, rect.height);
+                        });
+                    } else {
+                        rects.forEach(rect => {
+                            drawingContext.rect(rect.x, rect.y, rect.width, rect.height);
+                        });
+                    }
+                    drawingContext.fill();
+                } else if (first.type === 'text') {
+                    drawingContext.font = `${first.fontSize}px Arial`;
+                    drawingContext.fillStyle = first.color;
+                    drawingContext.textBaseline = 'top';
+                    if (angle) {
+                        const b = getStrokeBounds(stroke, 0);
+                        const cx = (b.minX + b.maxX) / 2;
+                        const cy = (b.minY + b.maxY) / 2;
+                        drawingContext.fillText(first.text, first.x - cx, first.y - cy);
+                    } else {
+                        drawingContext.fillText(first.text, first.x, first.y);
+                    }
                 } else {
                     // It's a pen stroke
                     drawingContext.beginPath();
-                    drawingContext.moveTo(stroke[0].x, stroke[0].y);
-
-                    for (let i = 1; i < stroke.length; i++) {
-                        drawingContext.lineTo(stroke[i].x, stroke[i].y);
+                    if (angle) {
+                        const b = getStrokeBounds(stroke, 0);
+                        const cx = (b.minX + b.maxX) / 2;
+                        const cy = (b.minY + b.maxY) / 2;
+                        drawingContext.moveTo(stroke[0].x - cx, stroke[0].y - cy);
+                        for (let i = 1; i < stroke.length; i++) {
+                            drawingContext.lineTo(stroke[i].x - cx, stroke[i].y - cy);
+                        }
+                    } else {
+                        drawingContext.moveTo(stroke[0].x, stroke[0].y);
+                        for (let i = 1; i < stroke.length; i++) {
+                            drawingContext.lineTo(stroke[i].x, stroke[i].y);
+                        }
                     }
-
                     drawingContext.strokeStyle = stroke[0].color;
                     drawingContext.lineWidth = stroke[0].thickness;
                     drawingContext.lineCap = 'round';
@@ -2581,10 +2763,10 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 let minX, minY, maxX, maxY;
 
                 if (first.type === 'image') {
-                    minX = first.x;
-                    minY = first.y;
-                    maxX = first.x + first.width;
-                    maxY = first.y + first.height;
+                    const b = getStrokeBounds(stroke, 0);
+                    if (b) {
+                        minX = b.minX; minY = b.minY; maxX = b.maxX; maxY = b.maxY;
+                    }
                 } else if (first.type === 'highlight-rect') {
                     // Calculate bounding box for all rectangles
                     const rects = first.rects || [{ x: first.x, y: first.y, width: first.width, height: first.height }];
