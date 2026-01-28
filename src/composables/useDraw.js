@@ -101,7 +101,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
 
 
     // Text mode variables
-    const isTextMode = ref(false);
+    const isTextInputMode = ref(false);
     const textInput = ref('');
     const textInputField = ref(null);
     const textPosition = ref(null);
@@ -679,7 +679,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         };
         
         // Handle text mode
-        if (isTextMode.value) {
+        if (isTextInputMode.value) {
             if (textInput.value) {
                 confirmText();
                 return;
@@ -792,7 +792,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         if (textModesActive.value) return;
 
         // Text mode doesn't need draw event handling
-        if (isTextMode.value) return;
+        if (isTextInputMode.value) return;
 
         if (isSelectModeActive.value && (isStrokeHovering.value || selectedStroke.value)) {
             // Handle resizing
@@ -1175,7 +1175,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         if (textModesActive.value) return;
         
         // Text mode is handled by confirmText function
-        if (isTextMode.value) return;
+        if (isTextInputMode.value) return;
 
         if (isSelectModeActive.value && (isStrokeHovering.value || isDragging.value || isResizing.value) && isMouseDown.value && selectedStroke.value) {
             // Only stop if it's the same pointer
@@ -1460,7 +1460,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         cancelText();
         isTextHighlightMode.value = false;
         isTextSelectionMode.value = false;
-        isTextMode.value = false;
+        isTextInputMode.value = false;
         isDrawing.value = false;
         isEraser.value = false;
         isSelectionMode.value = false;
@@ -2322,7 +2322,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         drawColor,
         drawThickness,
         colors,
-        isTextMode,
+        isTextInputMode,
         textInput,
         textInputField,
         textPosition,

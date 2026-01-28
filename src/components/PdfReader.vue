@@ -25,7 +25,7 @@ const cursorStyle = computed(() => {
     if (selectedStroke.value && (isStrokeHovering.value || isDragging.value)) return 'move';
     if (isSelectModeActive.value && isStrokeHovering.value) return 'pointer';
     if (isSelectionMode.value) return 'crosshair';
-    if (isTextMode.value) return 'text';
+    if (isTextInputMode.value) return 'text';
     if (isDrawing.value ) {
         if(drawMode.value == 'pen') return `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="${drawColor.value}" class="bi bi-pencil-fill" viewBox="0 0 16 16"><path d="M12.854.146a.5.5 0 0 0-.707 0L10.5 1.793 14.207 5.5l1.647-1.646a.5.5 0 0 0 0-.708zm.646 6.061L9.793 2.5 3.293 9H3.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.207zm-7.468 7.468A.5.5 0 0 1 6 13.5V13h-.5a.5.5 0 0 1-.5-.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.5-.5V10h-.5a.5.5 0 0 1-.175-.032l-.179.178a.5.5 0 0 0-.11.168l-2 5a.5.5 0 0 0 .65.65l5-2a.5.5 0 0 0 .168-.11z"/></svg>') 8 8, auto`;
         if(drawMode.value == 'highlight') return 'text';
@@ -117,7 +117,7 @@ const {
     drawMode,
     drawColor,
     colors,
-    isTextMode,
+    isTextInputMode,
     textInput,
     textInputField,
     fontSize,
@@ -250,9 +250,9 @@ const selectEraser = () => {
 
 const selectText = () => {
     if (!isFileLoaded.value) return;
-    const wasActive = isTextMode.value;
+    const wasActive = isTextInputMode.value;
     resetAllTools();
-    isTextMode.value = !wasActive;
+    isTextInputMode.value = !wasActive;
 };
 
 const selectStrokeMode = () => {
@@ -332,13 +332,13 @@ const zoom = (direction) => {
 }
 
 const hasActiveTool = computed(() => {
-    return isDrawing.value || isEraser.value || isTextMode.value || isSelectionMode.value || isTextHighlightMode.value;
+    return isDrawing.value || isEraser.value || isTextInputMode.value || isSelectionMode.value || isTextHighlightMode.value;
 });
 
 let resizeTimeout = null;
 
 const isTextInputFocused = computed(() => {
-    return isTextMode.value || selectedStroke.value?.stroke[0]?.type === 'text';
+    return isTextInputMode.value || selectedStroke.value?.stroke[0]?.type === 'text';
 });
 
 const printModal = ref(null);
@@ -592,7 +592,7 @@ defineExpose({
                 <!-- Toolbar -->
                 <ul ref="toolbar" class="navbar-nav mx-auto flex-wrap justify-content-center">
                     <!-- Drawing -->
-                    <template v-if="isDrawing || isTextMode || isTextHighlightMode">
+                    <template v-if="isDrawing || isTextInputMode || isTextHighlightMode">
                         <li class="nav-item" v-for="(strokeStyle, index) in initialStrokeStyles">
                             <a class="nav-link" href="#" @click.prevent="handleStrokeStyleButtonClick(index)" :class="{ active: strokeStyle.color === drawColor }">
                                 <i class="bi bi-circle-fill" :style="{ color: strokeStyle.color }"></i>
@@ -668,7 +668,7 @@ defineExpose({
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="selectText" :class="{ active: isTextMode }" :title="$t('Add Text') + ' (T)'">
+                        <a href="#" class="nav-link" @click.prevent="selectText" :class="{ active: isTextInputMode }" :title="$t('Add Text') + ' (T)'">
                             <i class="bi bi-textarea-t"></i>
                         </a>
                     </li>
@@ -803,7 +803,7 @@ defineExpose({
         <input ref="fileInput" type="file"  accept="application/pdf,image/*" class="d-none" @change="loadFile" />
         <input ref="imageInput" type="file" accept="image/*" class="d-none" @change="handleImageImport" />
 
-        <div v-if="isTextMode && textboxPosition" 
+        <div v-if="isTextInputMode && textboxPosition" 
              class="text-input-box" 
              :style="{ 
                  left: textboxPosition.x + 'px', 
