@@ -311,7 +311,11 @@ const handleZoomLevel = (percentage) => {
         return;
     }
 
-    if (!zoomLevels.value.includes(percentage)) return;
+    if (!zoomLevels.value.includes(percentage)) {
+        percentage = zoomLevels.value.reduce((prev, curr) => {
+            return (Math.abs(curr - percentage) < Math.abs(prev - percentage) ? curr : prev);
+        });
+    }
 
     zoomPercentage.value = Math.min(Math.max(minZoom, percentage), maxZoom);
 
@@ -329,7 +333,8 @@ const onZoomLevelChange = (event) => {
 
 const zoom = (direction) => {
     if (!isFileLoaded.value) return;
-    handleZoomLevel(zoomPercentage.value + (direction * 25));
+    const newZoom = zoomPercentage.value + (direction * 25);
+    handleZoomLevel(newZoom);
 }
 
 const hasActiveTool = computed(() => {

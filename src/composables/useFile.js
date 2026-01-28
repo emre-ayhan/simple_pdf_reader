@@ -838,8 +838,8 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         const pdfLibDoc = await PDFDocument.create();
         
         // Use standard letter size
-        const width = 612; // 8.5 inches * 72 points/inch
-        const height = 792; // 11 inches * 72 points/inch
+        const width = 595; // 8.3 inches * 72 points/inch
+        const height = 842; // 11.7 inches * 72 points/inch
         
         const blankPage = pdfLibDoc.addPage([width, height]);
         
