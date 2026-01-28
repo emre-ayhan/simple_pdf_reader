@@ -77,5 +77,6 @@
     "Unsupported file type. Please select a PDF or image.": "Desteklenmeyen dosya türü. Lütfen bir PDF veya resim seçin.",
     "Are you sure you want to delete page :attribute?": "Sayfa :attribute silmek istediğinizden emin misiniz?",
     "You have unsaved changes in this tab. Are you sure you want to close it?": "Bu sekmede kaydedilmemiş değişiklikleriniz var. Kapatmak istediğinizden emin misiniz?",
-    "You have unsaved changes in one or more tabs. Are you sure you want to close the application?": "Bir veya daha fazla sekmede kaydedilmemiş değişiklikleriniz var. Uygulamayı kapatmak istediğinizden emin misiniz?"
+    "You have unsaved changes in one or more tabs. Are you sure you want to close the application?": "Bir veya daha fazla sekmede kaydedilmemiş değişiklikleriniz var. Uygulamayı kapatmak istediğinizden emin misiniz?",
+    "Import From Clipboard": "Panodan İçe Aktar"
 }

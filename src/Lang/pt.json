@@ -77,5 +77,6 @@
     "Unsupported file type. Please select a PDF or image.": "Tipo de arquivo não suportado. Por favor, selecione um PDF ou imagem.",
     "Are you sure you want to delete page :attribute?": "Tem certeza de que deseja excluir a página :attribute?",
     "You have unsaved changes in this tab. Are you sure you want to close it?": "Você tem alterações não salvas nesta aba. Tem certeza de que deseja fechá-la?",
-    "You have unsaved changes in one or more tabs. Are you sure you want to close the application?": "Você tem alterações não salvas em uma ou mais abas. Tem certeza de que deseja fechar o aplicativo?"
+    "You have unsaved changes in one or more tabs. Are you sure you want to close the application?": "Você tem alterações não salvas em uma ou mais abas. Tem certeza de que deseja fechar o aplicativo?",
+    "Import From Clipboard": "Importar da Área de Transferência"
 }
