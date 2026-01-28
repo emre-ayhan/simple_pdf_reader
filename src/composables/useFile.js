@@ -633,6 +633,25 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
                             borderWidth: thickness,
                             opacity: 0
                         });
+                    } else if (first.type === 'highlight-rect') {
+                        const rects = first.rects || [{ x: first.x, y: first.y, width: first.width, height: first.height }];
+                        
+                        for (const rect of rects) {
+                            const x = rect.x * scaleX;
+                            const h = rect.height * scaleY;
+                            const y = height - (rect.y * scaleY) - h;
+                            const w = rect.width * scaleX;
+
+                            page.drawRectangle({
+                                x: x,
+                                y: y,
+                                width: w,
+                                height: h,
+                                color: color,
+                                opacity: 0.3,
+                                borderWidth: 0
+                            });
+                        }
                     } else if (first.type === 'pen') {
                         // Draw pen strokes as connected lines
                         for (let i = 0; i < stroke.length - 1; i++) {
