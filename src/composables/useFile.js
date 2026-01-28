@@ -1017,9 +1017,9 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
                 height *= ratio;
             }
             
-            // Center the image in the canvas
-            const x = Math.max(0, (canvas.width - width) / 2);
-            const y = Math.max(0, (canvas.height - height) / 2);
+            // Center the image in the visible viewport on the canvas
+            const x = Math.max(0, Math.min(canvas.width - width, viewportCenterX - width / 2));
+            const y = Math.max(0, Math.min(canvas.height - height, viewportCenterY - height / 2));
             
             const imageStroke = [{
                 type: 'image',

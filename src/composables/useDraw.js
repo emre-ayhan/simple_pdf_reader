@@ -287,6 +287,57 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             }
         }
 
+        // Determine the visible center in canvas coordinates for placement
+        const getVisibleCenterOnCanvas = (canvasIdx) => {
+            const canvas = drawingCanvases.value[canvasIdx];
+            if (!canvas) return { cx: 0, cy: 0 };
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+
+            const viewportW = window.innerWidth || document.documentElement.clientWidth;
+            const viewportH = window.innerHeight || document.documentElement.clientHeight;
+
+            const visibleLeft = Math.max(rect.left, 0);
+            const visibleRight = Math.min(rect.right, viewportW);
+            const visibleTop = Math.max(rect.top, 0);
+            const visibleBottom = Math.min(rect.bottom, viewportH);
+
+            const centerClientX = (visibleLeft + visibleRight) / 2;
+            const centerClientY = (visibleTop + visibleBottom) / 2;
+
+            const cx = (centerClientX - rect.left) * scaleX;
+            const cy = (centerClientY - rect.top) * scaleY;
+            return { cx, cy };
+        };
+
+        // Translate stroke by dx, dy according to its type
+        const translateStroke = (stroke, dx, dy) => {
+            const first = stroke[0];
+            if (first.type === 'image') {
+                first.x += dx;
+                first.y += dy;
+            } else if (first.type === 'highlight-rect') {
+                const rects = first.rects || [{ x: first.x, y: first.y, width: first.width, height: first.height }];
+                rects.forEach(rect => { rect.x += dx; rect.y += dy; });
+                if (first.x !== undefined) { first.x += dx; first.y += dy; }
+            } else if (first.type === 'text') {
+                first.x += dx;
+                first.y += dy;
+            } else if (first.type === 'line' || first.type === 'rectangle' || first.type === 'circle') {
+                first.startX += dx;
+                first.startY += dy;
+                first.endX += dx;
+                first.endY += dy;
+                first.x = first.startX;
+                first.y = first.startY;
+            } else {
+                for (let point of stroke) { point.x += dx; point.y += dy; }
+            }
+        };
+
+        const { cx: visibleCX, cy: visibleCY } = getVisibleCenterOnCanvas(targetPageIndex);
+
         const pageNumber = targetPageIndex + 1;
         if (!strokesPerPage.value[pageNumber]) {
             strokesPerPage.value[pageNumber] = [];
@@ -298,45 +349,29 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             const offset = 20 * (insertedCount + 1);
             const newSelections = [];
 
+            // Compute combined group bounds center
+            let gMinX = Infinity, gMinY = Infinity, gMaxX = -Infinity, gMaxY = -Infinity;
+            group.forEach(s => {
+                const b = getStrokeBounds(s, 0);
+                if (!b) return;
+                gMinX = Math.min(gMinX, b.minX);
+                gMinY = Math.min(gMinY, b.minY);
+                gMaxX = Math.max(gMaxX, b.maxX);
+                gMaxY = Math.max(gMaxY, b.maxY);
+            });
+            const gCenterX = (gMinX + gMaxX) / 2;
+            const gCenterY = (gMinY + gMaxY) / 2;
+            const baseDX = (visibleCX - gCenterX) + offset;
+            const baseDY = (visibleCY - gCenterY) + offset;
+
             group.forEach(orig => {
                 const newStroke = JSON.parse(JSON.stringify(orig));
                 const newId = uuid();
-                const first = newStroke[0];
+                // assign id to all points consistently
+                if (newStroke[0]) newStroke[0].id = newId;
+                if (newStroke.length > 1) newStroke.forEach(p => { p.id = newId; });
 
-                if (first.type === 'image') {
-                    first.id = newId;
-                    first.x += offset;
-                    first.y += offset;
-                } else if (first.type === 'highlight-rect') {
-                    first.id = newId;
-                    const rects = first.rects || [{ x: first.x, y: first.y, width: first.width, height: first.height }];
-                    rects.forEach(rect => {
-                        rect.x += offset;
-                        rect.y += offset;
-                    });
-                    if (first.x !== undefined) {
-                        first.x += offset;
-                        first.y += offset;
-                    }
-                } else if (first.type === 'text') {
-                    first.id = newId;
-                    first.x += offset;
-                    first.y += offset;
-                } else if (first.type === 'line' || first.type === 'rectangle' || first.type === 'circle') {
-                    first.id = newId;
-                    first.startX += offset;
-                    first.startY += offset;
-                    first.endX += offset;
-                    first.endY += offset;
-                    if (first.x !== undefined) first.x += offset;
-                    if (first.y !== undefined) first.y += offset;
-                } else {
-                    newStroke.forEach(point => {
-                        point.id = newId;
-                        point.x += offset;
-                        point.y += offset;
-                    });
-                }
+                translateStroke(newStroke, baseDX, baseDY);
 
                 strokesPerPage.value[pageNumber].push(newStroke);
                 strokeChangeCallback({ id: newId, type: 'add', page: pageNumber, stroke: newStroke });
@@ -361,41 +396,20 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
 
         const offset = 20*(insertedCount + 1);
         const newId = uuid();
-        const first = newStroke[0];
+        if (newStroke[0]) newStroke[0].id = newId;
+        if (newStroke.length > 1) newStroke.forEach(p => { p.id = newId; });
 
-        if (first.type === 'image') {
-            first.id = newId;
-            first.x += offset;
-            first.y += offset;
-        } else if (first.type === 'highlight-rect') {
-            first.id = newId;
-            const rects = first.rects || [{ x: first.x, y: first.y, width: first.width, height: first.height }];
-            rects.forEach(rect => {
-                rect.x += offset;
-                rect.y += offset;
-            });
-            if (first.x !== undefined) {
-                first.x += offset;
-                first.y += offset;
-            }
-        } else if (first.type === 'text') {
-            first.id = newId;
-            first.x += offset;
-            first.y += offset;
-        } else if (first.type === 'line' || first.type === 'rectangle' || first.type === 'circle') {
-            first.id = newId;
-            first.startX += offset;
-            first.startY += offset;
-            first.endX += offset;
-            first.endY += offset;
-            if (first.x !== undefined) first.x += offset;
-            if (first.y !== undefined) first.y += offset;
+        // Center the stroke within the visible area, then apply slight offset
+        const b = getStrokeBounds(newStroke, 0);
+        if (b) {
+            const cX = (b.minX + b.maxX) / 2;
+            const cY = (b.minY + b.maxY) / 2;
+            const dx = (visibleCX - cX) + offset;
+            const dy = (visibleCY - cY) + offset;
+            translateStroke(newStroke, dx, dy);
         } else {
-            newStroke.forEach(point => {
-                point.id = newId;
-                point.x += offset;
-                point.y += offset;
-            });
+            // Fallback: just apply offset
+            translateStroke(newStroke, offset, offset);
         }
 
         strokesPerPage.value[pageNumber].push(newStroke);
@@ -2114,7 +2128,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         ctx.strokeStyle = '#0066ff';
         ctx.lineWidth = 2;
         
-        let minX, minY, maxX, maxY, padding = 5;
+        let minX, minY, maxX, maxY, padding = 10;
         let shouldDrawBorder = true;
 
         if (multi) {

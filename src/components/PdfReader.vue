@@ -127,7 +127,6 @@ const {
     isStrokeHovering,
     isDragging,
     selectedStroke,
-    selectedStrokes,
     strokeMenu,
     showStrokeMenu,
     strokeMenuPosition,
@@ -775,9 +774,9 @@ defineExpose({
                         </a>
                     </li>
 
-                    <!-- Insert Copied Stroke -->
+                    <!-- Insert Last Copied Stroke -->
                     <li class="nav-item" v-if="copiedStroke">
-                        <a href="#" class="nav-link" @click.prevent="insertCopiedStroke" :title="$t('Insert Copied Stroke')">
+                        <a href="#" class="nav-link" @click.prevent="insertCopiedStroke" :title="$t('Insert Last Copied Stroke')">
                             <i class="bi bi-clipboard-plus"></i>
                         </a>
                     </li>
