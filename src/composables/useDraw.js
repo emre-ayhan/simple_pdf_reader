@@ -580,7 +580,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 return h.handle;
             }
         }
-        
+
         return null;
     };
 
@@ -714,6 +714,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                     textInputField.value.select();
                 }
             });
+
             return;
         }
         
