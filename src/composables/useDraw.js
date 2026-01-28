@@ -154,6 +154,42 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         }
     };
 
+    const insertFromClipboard = async () => {
+        try {
+            const clipboardItems = await navigator.clipboard.read();
+            for (const item of clipboardItems) {
+                const imageType = item.types.find(type => type.startsWith('image/'));
+                if (imageType) {
+                    const blob = await item.getType(imageType);
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const dataUrl = e.target.result;
+                        const img = new Image();
+                        img.onload = () => {
+                            copiedStroke.value = {
+                                inserted: 0,
+                                stroke: [{
+                                    type: 'image',
+                                    x: 0,
+                                    y: 0,
+                                    width: img.width,
+                                    height: img.height,
+                                    imageData: dataUrl
+                                }]
+                            };
+                            insertCopiedStroke(-1); 
+                        };
+                        img.src = dataUrl;
+                    };
+                    reader.readAsDataURL(blob);
+                    return;
+                }
+            }
+        } catch (err) {
+            console.error('Failed to insert from clipboard:', err);
+        }
+    }
+
     // Insert Copied Stroke
     const insertCopiedStroke = (pageIndex) => {
         if (!copiedStroke.value) return;
@@ -2380,6 +2416,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         copiedStroke,
         copySelectedStroke,
         insertCopiedStroke,
+        insertFromClipboard,
         isSelectedStrokeType
     }
 }

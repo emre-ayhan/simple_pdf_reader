@@ -155,6 +155,7 @@ const {
     highlightTextSelection,
     copySelectedStroke,
     insertCopiedStroke,
+    insertFromClipboard,
     isSelectedStrokeType,
     copiedStroke,
 } = useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPage, drawingCanvases, drawingContexts, strokeChangeCallback);
@@ -478,6 +479,13 @@ useWindowEvents(fileId, {
             ctrl: true,
             action: () => {
                 captureSelection();
+            }
+        },
+        v: {
+            ctrl: true,
+            action: () => {
+                if (isTextInputFocused.value) return;
+                insertFromClipboard();
             }
         },
         Delete: {

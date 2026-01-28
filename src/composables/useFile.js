@@ -547,8 +547,8 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
                 const scaleY = height / canvas.height;
 
                 // Draw each stroke on the PDF
-                strokes.forEach(stroke => {
-                    if (stroke.length === 0) return;
+                for (const stroke of strokes) {
+                    if (stroke.length === 0) continue;
 
                     const first = stroke[0];
 
@@ -652,8 +652,32 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
                                 opacity: 1
                             });
                         }
+                    } else if (first.type === 'image' && first.imageData) {
+                        try {
+                            const dataUrl = first.imageData;
+                            const base64Data = dataUrl.split(',')[1];
+                            
+                            let image;
+                            if (dataUrl.startsWith('data:image/jpeg') || dataUrl.startsWith('data:image/jpg')) {
+                                image = await pdfLibDoc.embedJpg(base64Data);
+                            } else {
+                                image = await pdfLibDoc.embedPng(base64Data);
+                            }
+
+                            const imageWidth = first.width * scaleX;
+                            const imageHeight = first.height * scaleY;
+                            
+                            page.drawImage(image, {
+                                x: first.x * scaleX,
+                                y: height - (first.y * scaleY) - imageHeight,
+                                width: imageWidth,
+                                height: imageHeight,
+                            });
+                        } catch (err) {
+                            console.error('Error embedding image stroke:', err);
+                        }
                     }
-                });
+                }
             }
 
             // Remove any pages that were deleted by the user before saving
