@@ -115,6 +115,61 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     const selectionEnd = ref(null);
     const isSelecting = ref(false);
 
+    const handleSelectionStart = (e) => {
+        const rect = e.target.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        selectionStart.value = { x, y, canvasIndex: getCanvasIndexFromEvent(e) };
+        selectionEnd.value = { x, y };
+        isSelecting.value = true;
+        stopEvent(e);
+    }
+
+    const handleSelectionRectangle = (e) => {
+        const rect = e.target.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        selectionEnd.value = { x, y };
+        
+        // Draw selection rectangle
+        const canvas = drawingCanvases.value[selectionStart.value.canvasIndex];
+        const ctx = drawingContexts.value[selectionStart.value.canvasIndex];
+        if (canvas && ctx) {
+            // Scale coordinates to canvas size
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            
+            redrawAllStrokes(selectionStart.value.canvasIndex);
+            ctx.strokeStyle = '#ff0000';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 5]);
+            
+            const startX = selectionStart.value.x * scaleX;
+            const startY = selectionStart.value.y * scaleY;
+            const width = (x - selectionStart.value.x) * scaleX;
+            const height = (y - selectionStart.value.y) * scaleY;
+            
+            ctx.strokeRect(startX, startY, width, height);
+            ctx.setLineDash([]);
+        }
+        stopEvent(e);
+    }
+
+    const handleSelectionEnd = (e) => {
+        if (isSelectionMode.value) {
+            captureSelection();
+        } else if (isSelectModeActive.value) {
+            selectStrokeInSelectionBox();
+        }
+
+        isSelecting.value = false;
+        selectionStart.value = null;
+        selectionEnd.value = null;
+        isSelectionMode.value = false;
+        stopEvent(e);
+        isMouseDown.value = false;
+    }
+
     // Stroke selection and dragging
     const selectedStroke = ref(null); // { pageIndex, strokeIndex, stroke }
     const isDragging = ref(false);
@@ -620,7 +675,52 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         return null;
     };
 
+    const selectStrokeInSelectionBox = () => {
+        if (!selectionStart.value || !selectionEnd.value) return;
 
+        const canvasIndex = selectionStart.value.canvasIndex;
+        const pageNumber = canvasIndex + 1;
+        const strokes = strokesPerPage.value[pageNumber] || [];
+
+        // Convert selection box from screen (CSS) coords to canvas coords
+        const canvas = drawingCanvases.value[canvasIndex];
+        if (!canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+
+        const sx = Math.min(selectionStart.value.x, selectionEnd.value.x) * scaleX;
+        const sy = Math.min(selectionStart.value.y, selectionEnd.value.y) * scaleY;
+        const ex = Math.max(selectionStart.value.x, selectionEnd.value.x) * scaleX;
+        const ey = Math.max(selectionStart.value.y, selectionEnd.value.y) * scaleY;
+
+        // Find topmost stroke that intersects the selection box
+        for (let i = strokes.length - 1; i >= 0; i--) {
+            const stroke = strokes[i];
+            const bounds = getStrokeBounds(stroke, 0);
+            if (!bounds) continue;
+
+            // Intersection test (AABB)
+            if (bounds.minX < ex && bounds.maxX > sx &&
+                bounds.minY < ey && bounds.maxY > sy) {
+                selectedStroke.value = {
+                    pageIndex: canvasIndex,
+                    strokeIndex: i,
+                    stroke: stroke,
+                    originalStroke: JSON.parse(JSON.stringify(stroke))
+                };
+
+                showStrokeMenu.value = true;
+                redrawAllStrokes(canvasIndex);
+                drawSelectionBoundingBox(canvasIndex, i);
+                return;
+            }
+        }
+
+        showStrokeMenu.value = false;
+        selectedStroke.value = null;
+        redrawAllStrokes(canvasIndex);
+    };
 
     const startDrawing = (e) => {
         if (textModesActive.value) return;
@@ -705,14 +805,20 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                     // Redraw with highlight
                     redrawAllStrokes(canvasIndex);
                     drawSelectionBoundingBox(canvasIndex, found.strokeIndex);
+
+                    stopEvent(e);
+                    return;
                 }
     
-                stopEvent(e);
-                return;
+                // stopEvent(e);
+                // return;
             }
 
-            return
-        };
+            // Start new selection rectangle
+            handleSelectionStart(e);
+
+            return;
+        }
         
         // Handle text mode
         if (isTextInputMode.value) {
@@ -756,15 +862,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         
         // Handle selection mode
         if (isSelectionMode.value) {
-            const rect = e.target.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            selectionStart.value = { x, y, canvasIndex: getCanvasIndexFromEvent(e) };
-            selectionEnd.value = { x, y };
-            isSelecting.value = true;
-            isMouseDown.value = true;
-            e.preventDefault();
-            e.stopPropagation();
+            handleSelectionStart(e);
             return;
         }
         
@@ -1107,41 +1205,13 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 }
             }
             
-            // Always return when in drag mode to prevent any drawing
             return;
         };
 
         
         // Handle selection rectangle
-        if (isSelectionMode.value && isSelecting.value) {
-            const rect = e.target.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            selectionEnd.value = { x, y };
-            
-            // Draw selection rectangle
-            const canvas = drawingCanvases.value[selectionStart.value.canvasIndex];
-            const ctx = drawingContexts.value[selectionStart.value.canvasIndex];
-            if (canvas && ctx) {
-                // Scale coordinates to canvas size
-                const scaleX = canvas.width / rect.width;
-                const scaleY = canvas.height / rect.height;
-                
-                redrawAllStrokes(selectionStart.value.canvasIndex);
-                ctx.strokeStyle = '#ff0000';
-                ctx.lineWidth = 1;
-                ctx.setLineDash([5, 5]);
-                
-                const startX = selectionStart.value.x * scaleX;
-                const startY = selectionStart.value.y * scaleY;
-                const width = (x - selectionStart.value.x) * scaleX;
-                const height = (y - selectionStart.value.y) * scaleY;
-                
-                ctx.strokeRect(startX, startY, width, height);
-                ctx.setLineDash([]);
-            }
-            e.preventDefault();
-            e.stopPropagation();
+        if ((isSelectionMode.value || isSelectModeActive.value) && isSelecting.value) {
+            handleSelectionRectangle(e);
             return;
         }
         
@@ -1155,8 +1225,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         const isPenSecondaryButton = e.pointerType === 'pen' && (e.buttons === 2 || e.buttons === 32 || e.button === 5);
         const shouldErase = isEraser.value || isPenSecondaryButton;
         
-        e.preventDefault();
-        e.stopPropagation();
+        stopEvent(e);
         
         if (currentCanvasIndex === -1) return;
         
@@ -1268,7 +1337,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                     drawSelectionBoundingBox(currentCanvasIndex, selectedStroke.value.strokeIndex);
                 }
             }
-            
+
             isDragging.value = false;
             isResizing.value = false;
             resizeHandle.value = null;
@@ -1277,23 +1346,13 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             activePointerId.value = null;
             activePointerType.value = null;
             dragStartPos.value = null;
-            
-            stopEvent(e);
             currentCanvasIndex = -1;
             return;
         };
 
-        
         // Handle selection complete
-        if (isSelectionMode.value && isSelecting.value && selectionStart.value && selectionEnd.value) {
-            captureSelection();
-            isSelecting.value = false;
-            selectionStart.value = null;
-            selectionEnd.value = null;
-            isSelectionMode.value = false;
-            e.preventDefault();
-            e.stopPropagation();
-            isMouseDown.value = false;
+        if ((isSelectionMode.value || isSelectModeActive.value) && isSelecting.value && selectionStart.value && selectionEnd.value) {
+            handleSelectionEnd(e);
             return;
         }
         
