@@ -2321,7 +2321,6 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             // Draw resize handles only for single selection
         if (!multi) {
             ctx.setLineDash([]);
-            ctx.fillStyle = '#0066ff';
             const handleSize = 8;
             const handles = [
                 { x: minX, y: minY, handle: 'nw' },
@@ -2333,8 +2332,30 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 { x: minX, y: (minY + maxY) / 2, handle: 'w' },
                 { x: maxX, y: (minY + maxY) / 2, handle: 'e' }
             ];
+
+            // Rotation availability: single selection and not highlight-rect
+            let rotationAvailable = false;
+            try {
+                const pageNumber = canvasIndex + 1;
+                const strokes = strokesPerPage.value[pageNumber] || [];
+                const s = strokes[selectedIndex];
+                const type = s && s[0] ? s[0].type : (stroke && stroke[0] ? stroke[0].type : null);
+                rotationAvailable = type && type !== 'highlight-rect';
+            } catch (e) {
+                rotationAvailable = stroke && stroke[0] && stroke[0].type && stroke[0].type !== 'highlight-rect';
+            }
+
             handles.forEach(h => {
-                ctx.fillRect(h.x - handleSize / 2, h.y - handleSize / 2, handleSize, handleSize);
+                // NE: use circular marker when rotation is available
+                if (h.handle === 'ne' && rotationAvailable) {
+                    ctx.fillStyle = '#ff6600';
+                    ctx.beginPath();
+                    ctx.arc(h.x, h.y, handleSize * 0.8, 0, Math.PI * 2);
+                    ctx.fill();
+                } else {
+                    ctx.fillStyle = '#0066ff';
+                    ctx.fillRect(h.x - handleSize / 2, h.y - handleSize / 2, handleSize, handleSize);
+                }
             });
         }
         
