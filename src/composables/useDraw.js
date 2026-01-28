@@ -1284,23 +1284,32 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         
         let newStroke = null;
         if (isDrawing.value && drawMode.value !== 'pen' && canvasSnapshot) {
-            // Save shape as a stroke
-            const shape = {
-                id: currentStrokeId.value,
-                type: drawMode.value,
-                startX,
-                startY,
-                endX: lastX,
-                endY: lastY,
-                color: drawColor.value,
-                thickness: drawThickness.value
-            };
-            newStroke = [shape];
-            strokesPerPage.value[pageIndex].push(newStroke);
+            // Check if shape has any dimension
+            if (startX !== lastX || startY !== lastY) {
+                // Save shape as a stroke
+                const shape = {
+                    id: currentStrokeId.value,
+                    type: drawMode.value,
+                    startX,
+                    startY,
+                    endX: lastX,
+                    endY: lastY,
+                    color: drawColor.value,
+                    thickness: drawThickness.value
+                };
+                newStroke = [shape];
+                strokesPerPage.value[pageIndex].push(newStroke);
+            } else {
+                const ctx = drawingContexts.value[currentCanvasIndex];
+                if (ctx) ctx.putImageData(canvasSnapshot, 0, 0);
+            }
             canvasSnapshot = null;
-        } else if (isDrawing.value && currentStroke.value.length > 0) {
+        } else if (isDrawing.value && currentStroke.value.length > 1) {
             newStroke = [...currentStroke.value];
             strokesPerPage.value[pageIndex].push(newStroke);
+            currentStroke.value = [];
+        } else {
+            // Discard single point pen strokes or empty shapes
             currentStroke.value = [];
         }
 
