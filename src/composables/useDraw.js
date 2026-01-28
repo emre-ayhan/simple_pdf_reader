@@ -719,37 +719,14 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             });
             return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
         } else if (first.type === 'highlight-rect') {
+            // Do NOT support rotation for highlight rectangles; compute simple union bounds
             const rects = first.rects || [{ x: first.x, y: first.y, width: first.width, height: first.height }];
-            const angle = first.rotation || 0;
-            // Center by union pre-rotation
-            let uMinX = Infinity, uMinY = Infinity, uMaxX = -Infinity, uMaxY = -Infinity;
-            rects.forEach(rect => {
-                uMinX = Math.min(uMinX, rect.x);
-                uMinY = Math.min(uMinY, rect.y);
-                uMaxX = Math.max(uMaxX, rect.x + rect.width);
-                uMaxY = Math.max(uMaxY, rect.y + rect.height);
-            });
-            const cx = (uMinX + uMaxX) / 2;
-            const cy = (uMinY + uMaxY) / 2;
-            const cosA = Math.cos(angle);
-            const sinA = Math.sin(angle);
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
             rects.forEach(rect => {
-                const corners = [
-                    { x: rect.x, y: rect.y },
-                    { x: rect.x + rect.width, y: rect.y },
-                    { x: rect.x + rect.width, y: rect.y + rect.height },
-                    { x: rect.x, y: rect.y + rect.height }
-                ];
-                corners.forEach(p => {
-                    const dx = p.x - cx, dy = p.y - cy;
-                    const rx = cx + dx * cosA - dy * sinA;
-                    const ry = cy + dx * sinA + dy * cosA;
-                    minX = Math.min(minX, rx);
-                    minY = Math.min(minY, ry);
-                    maxX = Math.max(maxX, rx);
-                    maxY = Math.max(maxY, ry);
-                });
+                minX = Math.min(minX, rect.x);
+                minY = Math.min(minY, rect.y);
+                maxX = Math.max(maxX, rect.x + rect.width);
+                maxY = Math.max(maxY, rect.y + rect.height);
             });
             return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
         } else if (first.type === 'text') {
@@ -978,15 +955,16 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                     const handlePadding = 5;
                             const bounds = getStrokeBounds(selectedStroke.value.stroke, handlePadding);
                             let handle = getResizeHandle(x, y, bounds);
-                            // Treat top-right corner as rotation handle for all strokes (single selection)
+                            // Treat top-right corner as rotation handle for all strokes (single selection), except highlight-rect
                             if (handle === 'ne') {
                                 const multiActive = Array.isArray(selectedStrokes.value) && selectedStrokes.value.filter(s => s.pageIndex === canvasIndex).length > 1;
-                                if (!multiActive) handle = 'rotate';
+                                const type = selectedStroke.value.stroke[0]?.type;
+                                if (!multiActive && type !== 'highlight-rect') handle = 'rotate';
                             }
                     
                     if (handle) {
                         const firstSel = selectedStroke.value.stroke[0];
-                        if (handle === 'rotate' || (handle === 'ne')) {
+                        if ((handle === 'rotate' || handle === 'ne') && firstSel.type !== 'highlight-rect') {
                             isRotating.value = true;
                             resizeHandle.value = handle;
                             dragStartPos.value = { x, y };
@@ -1816,10 +1794,11 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 isBoundingBoxHovering.value = newBBoxHovering;
             }
             if (!isMouseDown.value) {
-                // Map NE to rotate for single-selected strokes
-                if (newResizeHandle === 'ne') {
+                // Map NE to rotate for single-selected strokes (except highlight-rect)
+                if (newResizeHandle === 'ne' && selectedStroke.value) {
                     const multiActive = Array.isArray(selectedStrokes.value) && selectedStrokes.value.filter(s => s.pageIndex === getCanvasIndexFromEvent(e)).length > 1;
-                    if (!multiActive) newResizeHandle = 'rotate';
+                    const type = selectedStroke.value.stroke[0]?.type;
+                    if (!multiActive && type !== 'highlight-rect') newResizeHandle = 'rotate';
                 }
                 if (resizeHandle.value !== newResizeHandle) {
                     resizeHandle.value = newResizeHandle;
@@ -2500,7 +2479,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                     return;
                 }
 
-                // Check if it's a highlight rectangle
+                // Check if it's a highlight rectangle (no rotation support)
                 if (first.type === 'highlight-rect') {
                     drawingContext.fillStyle = first.color;
                     drawingContext.globalAlpha = 0.3;
@@ -2515,15 +2494,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                     return;
                 }
 
-                // Check if it's text
-                if (first.type === 'text') {
-                    drawingContext.font = `${first.fontSize}px Arial`;
-                    drawingContext.fillStyle = first.color;
-                    drawingContext.textBaseline = 'top';
-                    drawingContext.fillText(first.text, first.x, first.y);
-                    drawingContext.restore();
-                    return;
-                }
+                // Do not early-return for text; allow rotation/general path below
 
                 // Apply rotation transform for non-image strokes if present
                 const angle = first.rotation || 0;
