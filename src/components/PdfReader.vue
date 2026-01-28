@@ -127,6 +127,7 @@ const {
     isStrokeHovering,
     isDragging,
     selectedStroke,
+    selectedStrokes,
     strokeMenu,
     showStrokeMenu,
     strokeMenuPosition,

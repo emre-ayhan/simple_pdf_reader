@@ -171,6 +171,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     }
 
     // Stroke selection and dragging
+    const selectedStrokes = ref([]); // For multi-selection
     const selectedStroke = ref(null); // { pageIndex, strokeIndex, stroke }
     const isDragging = ref(false);
     const dragOffset = ref({ x: 0, y: 0 });
@@ -203,9 +204,21 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     // Copy Selected Stroke
     const copySelectedStroke = () => {
         if (!selectedStroke.value) return;
-        copiedStroke.value = {
-            stroke: JSON.parse(JSON.stringify(selectedStroke.value.stroke)),
-            inserted: 0
+        const isMulti = Array.isArray(selectedStrokes.value) && selectedStrokes.value.length > 1;
+        if (isMulti) {
+            const pageIndex = selectedStroke.value.pageIndex;
+            const group = selectedStrokes.value
+                .filter(sel => sel.pageIndex === pageIndex)
+                .map(sel => JSON.parse(JSON.stringify(sel.stroke)));
+            copiedStroke.value = {
+                strokes: group,
+                inserted: 0
+            };
+        } else {
+            copiedStroke.value = {
+                stroke: JSON.parse(JSON.stringify(selectedStroke.value.stroke)),
+                inserted: 0
+            };
         }
     };
 
@@ -278,9 +291,73 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         if (!strokesPerPage.value[pageNumber]) {
             strokesPerPage.value[pageNumber] = [];
         }
-        // Offset the copied stroke slightly for visibility
+        // Determine if we copied a group or a single stroke
+        const group = copiedStroke.value.strokes;
+        if (Array.isArray(group)) {
+            const insertedCount = copiedStroke.value.inserted++;
+            const offset = 20 * (insertedCount + 1);
+            const newSelections = [];
+
+            group.forEach(orig => {
+                const newStroke = JSON.parse(JSON.stringify(orig));
+                const newId = uuid();
+                const first = newStroke[0];
+
+                if (first.type === 'image') {
+                    first.id = newId;
+                    first.x += offset;
+                    first.y += offset;
+                } else if (first.type === 'highlight-rect') {
+                    first.id = newId;
+                    const rects = first.rects || [{ x: first.x, y: first.y, width: first.width, height: first.height }];
+                    rects.forEach(rect => {
+                        rect.x += offset;
+                        rect.y += offset;
+                    });
+                    if (first.x !== undefined) {
+                        first.x += offset;
+                        first.y += offset;
+                    }
+                } else if (first.type === 'text') {
+                    first.id = newId;
+                    first.x += offset;
+                    first.y += offset;
+                } else if (first.type === 'line' || first.type === 'rectangle' || first.type === 'circle') {
+                    first.id = newId;
+                    first.startX += offset;
+                    first.startY += offset;
+                    first.endX += offset;
+                    first.endY += offset;
+                    if (first.x !== undefined) first.x += offset;
+                    if (first.y !== undefined) first.y += offset;
+                } else {
+                    newStroke.forEach(point => {
+                        point.id = newId;
+                        point.x += offset;
+                        point.y += offset;
+                    });
+                }
+
+                strokesPerPage.value[pageNumber].push(newStroke);
+                strokeChangeCallback({ id: newId, type: 'add', page: pageNumber, stroke: newStroke });
+                const strokeIndex = strokesPerPage.value[pageNumber].length - 1;
+                newSelections.push({ pageIndex: targetPageIndex, strokeIndex, stroke: newStroke });
+            });
+
+            selectedStrokes.value = newSelections;
+            const last = newSelections[newSelections.length - 1];
+            selectedStroke.value = last ? { ...last, originalStroke: JSON.parse(JSON.stringify(last.stroke)) } : null;
+            showStrokeMenu.value = true;
+            redrawAllStrokes(targetPageIndex);
+            if (selectedStroke.value) {
+                drawSelectionBoundingBox(targetPageIndex, selectedStroke.value.strokeIndex);
+            }
+            return;
+        }
+
+        // Offset the copied stroke slightly for visibility (single)
         const newStroke = JSON.parse(JSON.stringify(copiedStroke.value.stroke));
-        const insertedCount = copiedStroke.value.inserted++; // Keep copied stroke for multiple pastes
+        const insertedCount = copiedStroke.value.inserted++;
 
         const offset = 20*(insertedCount + 1);
         const newId = uuid();
@@ -694,7 +771,10 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         const ex = Math.max(selectionStart.value.x, selectionEnd.value.x) * scaleX;
         const ey = Math.max(selectionStart.value.y, selectionEnd.value.y) * scaleY;
 
-        // Find topmost stroke that intersects the selection box
+        const selections = [];
+        let topmostIndex = -1;
+
+        // Collect all strokes intersecting the selection box (search top-down)
         for (let i = strokes.length - 1; i >= 0; i--) {
             const stroke = strokes[i];
             const bounds = getStrokeBounds(stroke, 0);
@@ -703,23 +783,33 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             // Intersection test (AABB)
             if (bounds.minX < ex && bounds.maxX > sx &&
                 bounds.minY < ey && bounds.maxY > sy) {
-                selectedStroke.value = {
+                selections.push({
                     pageIndex: canvasIndex,
                     strokeIndex: i,
-                    stroke: stroke,
-                    originalStroke: JSON.parse(JSON.stringify(stroke))
-                };
-
-                showStrokeMenu.value = true;
-                redrawAllStrokes(canvasIndex);
-                drawSelectionBoundingBox(canvasIndex, i);
-                return;
+                    stroke
+                });
+                if (topmostIndex === -1) topmostIndex = i; // first match in reverse loop is topmost
             }
         }
 
-        showStrokeMenu.value = false;
-        selectedStroke.value = null;
-        redrawAllStrokes(canvasIndex);
+        selectedStrokes.value = selections;
+
+        if (topmostIndex !== -1) {
+            const stroke = strokes[topmostIndex];
+            selectedStroke.value = {
+                pageIndex: canvasIndex,
+                strokeIndex: topmostIndex,
+                stroke,
+                originalStroke: JSON.parse(JSON.stringify(stroke))
+            };
+            showStrokeMenu.value = true;
+            redrawAllStrokes(canvasIndex);
+            drawSelectionBoundingBox(canvasIndex, topmostIndex);
+        } else {
+            showStrokeMenu.value = false;
+            selectedStroke.value = null;
+            redrawAllStrokes(canvasIndex);
+        }
     };
 
     const startDrawing = (e) => {
@@ -751,7 +841,8 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 const { x, y } = pt;
                 
                 // Check if clicking on a resize handle of already selected stroke
-                if (selectedStroke.value && selectedStroke.value.pageIndex === canvasIndex) {
+                // Disable resizing when multiple selection is active
+                if (selectedStrokes.value.length <= 1 && selectedStroke.value && selectedStroke.value.pageIndex === canvasIndex) {
                     const handlePadding = 5;
                     const bounds = getStrokeBounds(selectedStroke.value.stroke, handlePadding);
                     const handle = getResizeHandle(x, y, bounds);
@@ -783,10 +874,44 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 const found = findStrokeAtPoint(x, y, canvasIndex);
     
                 if (found) {
-                    selectedStroke.value = {
-                        ...found,
-                        originalStroke: JSON.parse(JSON.stringify(found.stroke)) // Deep clone original
+                    const ctrl = !!e.ctrlKey;
+
+                    const newSelection = {
+                        pageIndex: canvasIndex,
+                        strokeIndex: found.strokeIndex,
+                        stroke: found.stroke,
+                        originalStroke: JSON.parse(JSON.stringify(found.stroke))
                     };
+
+                    if (ctrl) {
+                        // Toggle multi-selection
+                        const idx = selectedStrokes.value.findIndex(s => s.pageIndex === canvasIndex && s.strokeIndex === found.strokeIndex);
+                        if (idx === -1) {
+                            selectedStrokes.value.push({ pageIndex: canvasIndex, strokeIndex: found.strokeIndex, stroke: found.stroke });
+                        } else {
+                            selectedStrokes.value.splice(idx, 1);
+                        }
+
+                        selectedStroke.value = newSelection; // latest selection
+
+                        // Redraw highlight on latest
+                        redrawAllStrokes(canvasIndex);
+                        drawSelectionBoundingBox(canvasIndex, found.strokeIndex);
+                        showStrokeMenu.value = true;
+
+                        stopEvent(e);
+                        return;
+                    }
+
+                    // Non-ctrl click: if multi-selection is active and clicking a member, keep multi-selection
+                    const isMemberOfSelection = Array.isArray(selectedStrokes.value)
+                        && selectedStrokes.value.some(s => s.pageIndex === canvasIndex && s.strokeIndex === found.strokeIndex);
+                    const multiActive = Array.isArray(selectedStrokes.value) && selectedStrokes.value.length > 1;
+                    if (!(multiActive && isMemberOfSelection)) {
+                        // Collapse to single selection only when clicking outside current multi-selection
+                        selectedStrokes.value = [{ pageIndex: canvasIndex, strokeIndex: found.strokeIndex, stroke: found.stroke }];
+                    }
+                    selectedStroke.value = newSelection;
                     
                     // Prepare for potential dragging (left-click only)
                     isDragging.value = false; // Don't start dragging immediately
@@ -802,7 +927,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                     }
                     activePointerId.value = e.pointerId;
                     
-                    // Redraw with highlight
+                    // Redraw with highlight (will show combined bbox if multi)
                     redrawAllStrokes(canvasIndex);
                     drawSelectionBoundingBox(canvasIndex, found.strokeIndex);
 
@@ -1130,29 +1255,18 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 const dx = currentX - lastX;
                 const dy = currentY - lastY;
                 
-                // Move the stroke
                 const pageNumber = currentCanvasIndex + 1;
                 const strokes = strokesPerPage.value[pageNumber];
-                const stroke = strokes[selectedStroke.value.strokeIndex];
-                
-                if (stroke) {
-                    const first = stroke[0];
-                    
-                    // Update stroke positions based on type
+
+                const moveStrokeBy = (s) => {
+                    const first = s[0];
                     if (first.type === 'image') {
                         first.x += dx;
                         first.y += dy;
                     } else if (first.type === 'highlight-rect') {
                         const rects = first.rects || [{ x: first.x, y: first.y, width: first.width, height: first.height }];
-                        rects.forEach(rect => {
-                            rect.x += dx;
-                            rect.y += dy;
-                        });
-                        // Also update old format if present
-                        if (first.x !== undefined) {
-                            first.x += dx;
-                            first.y += dy;
-                        }
+                        rects.forEach(rect => { rect.x += dx; rect.y += dy; });
+                        if (first.x !== undefined) { first.x += dx; first.y += dy; }
                     } else if (first.type === 'text') {
                         first.x += dx;
                         first.y += dy;
@@ -1164,17 +1278,29 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                         first.x = first.startX;
                         first.y = first.startY;
                     } else {
-                        // Pen stroke - move all points
-                        for (let point of stroke) {
-                            point.x += dx;
-                            point.y += dy;
-                        }
+                        for (let point of s) { point.x += dx; point.y += dy; }
                     }
-                    
-                    // Redraw to show the drag preview
-                    redrawAllStrokes(currentCanvasIndex);
-                    drawSelectionBoundingBox(currentCanvasIndex, selectedStroke.value.strokeIndex);
+                };
+
+                if (Array.isArray(selectedStrokes.value) && selectedStrokes.value.length > 1) {
+                    selectedStrokes.value.forEach(sel => {
+                        if (sel.pageIndex !== currentCanvasIndex) return;
+                        const s = strokes[sel.strokeIndex];
+                        if (s) moveStrokeBy(s);
+                    });
+                    // Keep selectedStrokes linked to live stroke references so bbox updates during drag
+                    selectedStrokes.value.forEach(sel => {
+                        if (sel.pageIndex !== currentCanvasIndex) return;
+                        sel.stroke = strokes[sel.strokeIndex];
+                    });
+                } else {
+                    const s = strokes[selectedStroke.value.strokeIndex];
+                    if (s) moveStrokeBy(s);
                 }
+
+                // Redraw to show the drag preview (combined bbox if multi)
+                redrawAllStrokes(currentCanvasIndex);
+                drawSelectionBoundingBox(currentCanvasIndex, selectedStroke.value.strokeIndex);
                 
                 lastX = currentX;
                 lastY = currentY;
@@ -1311,17 +1437,35 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                                 Math.abs(currentY - dragStartPos.value.y) > 1;
                 
                 if (hasMoved) {
-                    // Save to history with previous state
-                    strokeChangeCallback({
-                        id: stroke[0].id,
-                        type: isResizing.value ? 'resize' : 'move',
-                        page: pageNumber,
-                        strokeIndex: selectedStroke.value.strokeIndex,
-                        stroke: JSON.parse(JSON.stringify(stroke)),
-                        previousStroke: selectedStroke.value.originalStroke
-                    });
-
-                    showStrokeMenu.value = true;
+                    if (Array.isArray(selectedStrokes.value) && selectedStrokes.value.length > 1) {
+                        // Emit history for each moved stroke on this canvas
+                        selectedStrokes.value.forEach(sel => {
+                            if (sel.pageIndex !== currentCanvasIndex) return;
+                            const s = strokesPerPage.value[pageNumber][sel.strokeIndex];
+                            if (!s) return;
+                            strokeChangeCallback({
+                                id: s[0].id,
+                                type: 'move',
+                                page: pageNumber,
+                                strokeIndex: sel.strokeIndex,
+                                stroke: JSON.parse(JSON.stringify(s)),
+                                previousStroke: sel.originalStroke || JSON.parse(JSON.stringify(s))
+                            });
+                        });
+                        // Keep style menu visible for multi-selection after move
+                        showStrokeMenu.value = true;
+                    } else {
+                        // Save to history with previous state (single)
+                        strokeChangeCallback({
+                            id: stroke[0].id,
+                            type: isResizing.value ? 'resize' : 'move',
+                            page: pageNumber,
+                            strokeIndex: selectedStroke.value.strokeIndex,
+                            stroke: JSON.parse(JSON.stringify(stroke)),
+                            previousStroke: selectedStroke.value.originalStroke
+                        });
+                        showStrokeMenu.value = true;
+                    }
                 }
             }
             
@@ -1330,10 +1474,22 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 redrawAllStrokes(currentCanvasIndex);
                 // Redraw highlight to show final position
                 if (selectedStroke.value) {
-                    // Update originalStroke to reflect the new state so subsequent edits are based on this
-                    selectedStroke.value.stroke = JSON.parse(JSON.stringify(stroke));
-                    selectedStroke.value.originalStroke = JSON.parse(JSON.stringify(stroke));
-                    
+                    if (Array.isArray(selectedStrokes.value) && selectedStrokes.value.length > 1) {
+                        // Update originals for all selections on this canvas
+                        selectedStrokes.value.forEach(sel => {
+                            if (sel.pageIndex !== currentCanvasIndex) return;
+                            const s = strokesPerPage.value[currentCanvasIndex + 1][sel.strokeIndex];
+                            if (s) {
+                                // Keep live reference for stroke, snapshot original for future operations
+                                sel.stroke = s;
+                                sel.originalStroke = JSON.parse(JSON.stringify(s));
+                            }
+                        });
+                    } else {
+                        // Update originalStroke to reflect the new state so subsequent edits are based on this
+                        selectedStroke.value.stroke = JSON.parse(JSON.stringify(stroke));
+                        selectedStroke.value.originalStroke = JSON.parse(JSON.stringify(stroke));
+                    }
                     drawSelectionBoundingBox(currentCanvasIndex, selectedStroke.value.strokeIndex);
                 }
             }
@@ -1570,6 +1726,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         isEraser.value = false;
         isSelectionMode.value = false;
         isStrokeHovering.value = false;
+        selectedStrokes.value = [];
         selectedStroke.value = null;
         isDragging.value = false;
         isResizing.value = false;
@@ -1580,118 +1737,193 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
 
     const changeStrokeColor = (newColor) => {
         if (!selectedStroke.value) return;
-        
-        const pageNumber = selectedStroke.value.pageIndex + 1;
+        const pageIndex = selectedStroke.value.pageIndex;
+        const pageNumber = pageIndex + 1;
         const strokes = strokesPerPage.value[pageNumber];
-        const stroke = strokes[selectedStroke.value.strokeIndex];
-        
-        if (stroke) {
-            const originalStroke = JSON.parse(JSON.stringify(stroke));
-            
-            // Change color for all points in the stroke
-            for (let point of stroke) {
-                point.color = newColor;
-            }
-            
-            // Save to history
-            strokeChangeCallback({
-                id: stroke[0].id,
-                type: 'color-change',
-                page: pageNumber,
-                strokeIndex: selectedStroke.value.strokeIndex,
-                stroke: JSON.parse(JSON.stringify(stroke)),
-                previousStroke: originalStroke
+
+        const isMulti = Array.isArray(selectedStrokes.value) && selectedStrokes.value.length > 1;
+        if (isMulti) {
+            // Apply color to all selected strokes on the same page
+            selectedStrokes.value.forEach(sel => {
+                if (sel.pageIndex !== pageIndex) return;
+                const s = strokes[sel.strokeIndex];
+                if (!s) return;
+                const originalStroke = JSON.parse(JSON.stringify(s));
+                for (let point of s) {
+                    point.color = newColor;
+                }
+                strokeChangeCallback({
+                    id: s[0].id,
+                    type: 'color-change',
+                    page: pageNumber,
+                    strokeIndex: sel.strokeIndex,
+                    stroke: JSON.parse(JSON.stringify(s)),
+                    previousStroke: originalStroke
+                });
             });
-            
-            // Redraw
-            redrawAllStrokes(selectedStroke.value.pageIndex);
-            drawSelectionBoundingBox(selectedStroke.value.pageIndex, selectedStroke.value.strokeIndex);
+        } else {
+            const stroke = strokes[selectedStroke.value.strokeIndex];
+            if (stroke) {
+                const originalStroke = JSON.parse(JSON.stringify(stroke));
+                for (let point of stroke) {
+                    point.color = newColor;
+                }
+                strokeChangeCallback({
+                    id: stroke[0].id,
+                    type: 'color-change',
+                    page: pageNumber,
+                    strokeIndex: selectedStroke.value.strokeIndex,
+                    stroke: JSON.parse(JSON.stringify(stroke)),
+                    previousStroke: originalStroke
+                });
+            }
         }
+
+        // Redraw and bbox reflect multi or single
+        redrawAllStrokes(pageIndex);
+        drawSelectionBoundingBox(pageIndex, selectedStroke.value.strokeIndex);
     };
 
     const changeStrokeThickness = (newThickness) => {
         if (!selectedStroke.value) return;
-        
-        const pageNumber = selectedStroke.value.pageIndex + 1;
+        const pageIndex = selectedStroke.value.pageIndex;
+        const pageNumber = pageIndex + 1;
         const strokes = strokesPerPage.value[pageNumber];
-        const stroke = strokes[selectedStroke.value.strokeIndex];
-        
-        if (stroke) {
-            const originalStroke = JSON.parse(JSON.stringify(stroke));
-            
-            // Change thickness for all points in the stroke
-            for (let point of stroke) {
-                point.thickness = parseInt(newThickness, 10);
-            }
-            
-            // Save to history
-            strokeChangeCallback({
-                id: stroke[0].id,
-                type: 'thickness-change',
-                page: pageNumber,
-                strokeIndex: selectedStroke.value.strokeIndex,
-                stroke: JSON.parse(JSON.stringify(stroke)),
-                previousStroke: originalStroke
+        const thicknessVal = parseInt(newThickness, 10);
+
+        const isMulti = Array.isArray(selectedStrokes.value) && selectedStrokes.value.length > 1;
+        if (isMulti) {
+            selectedStrokes.value.forEach(sel => {
+                if (sel.pageIndex !== pageIndex) return;
+                const s = strokes[sel.strokeIndex];
+                if (!s) return;
+                const originalStroke = JSON.parse(JSON.stringify(s));
+                for (let point of s) {
+                    point.thickness = thicknessVal;
+                }
+                strokeChangeCallback({
+                    id: s[0].id,
+                    type: 'thickness-change',
+                    page: pageNumber,
+                    strokeIndex: sel.strokeIndex,
+                    stroke: JSON.parse(JSON.stringify(s)),
+                    previousStroke: originalStroke
+                });
             });
-            
-            // Redraw
-            redrawAllStrokes(selectedStroke.value.pageIndex);
-            drawSelectionBoundingBox(selectedStroke.value.pageIndex, selectedStroke.value.strokeIndex);
+        } else {
+            const stroke = strokes[selectedStroke.value.strokeIndex];
+            if (stroke) {
+                const originalStroke = JSON.parse(JSON.stringify(stroke));
+                for (let point of stroke) {
+                    point.thickness = thicknessVal;
+                }
+                strokeChangeCallback({
+                    id: stroke[0].id,
+                    type: 'thickness-change',
+                    page: pageNumber,
+                    strokeIndex: selectedStroke.value.strokeIndex,
+                    stroke: JSON.parse(JSON.stringify(stroke)),
+                    previousStroke: originalStroke
+                });
+            }
         }
+
+        redrawAllStrokes(pageIndex);
+        drawSelectionBoundingBox(pageIndex, selectedStroke.value.strokeIndex);
     };
 
     const changeStrokeText = (newText) => {
         if (!selectedStroke.value) return;
-        
-        const pageNumber = selectedStroke.value.pageIndex + 1;
+        const pageIndex = selectedStroke.value.pageIndex;
+        const pageNumber = pageIndex + 1;
         const strokes = strokesPerPage.value[pageNumber];
-        const stroke = strokes[selectedStroke.value.strokeIndex];
-        
-        if (stroke && stroke[0].type === 'text') {
-            const originalStroke = JSON.parse(JSON.stringify(stroke));
-            
-            // Change text content
-            stroke[0].text = newText;
-            
-            // Save to history
-            strokeChangeCallback({
-                id: stroke[0].id,
-                type: 'text-change',
-                page: pageNumber,
-                strokeIndex: selectedStroke.value.strokeIndex,
-                stroke: JSON.parse(JSON.stringify(stroke)),
-                previousStroke: originalStroke
+
+        const isMulti = Array.isArray(selectedStrokes.value) && selectedStrokes.value.length > 1;
+        if (isMulti) {
+            selectedStrokes.value.forEach(sel => {
+                if (sel.pageIndex !== pageIndex) return;
+                const s = strokes[sel.strokeIndex];
+                if (!s || s[0].type !== 'text') return;
+                const originalStroke = JSON.parse(JSON.stringify(s));
+                s[0].text = newText;
+                strokeChangeCallback({
+                    id: s[0].id,
+                    type: 'text-change',
+                    page: pageNumber,
+                    strokeIndex: sel.strokeIndex,
+                    stroke: JSON.parse(JSON.stringify(s)),
+                    previousStroke: originalStroke
+                });
             });
-            
-            // Redraw
-            redrawAllStrokes(selectedStroke.value.pageIndex);
-            drawSelectionBoundingBox(selectedStroke.value.pageIndex, selectedStroke.value.strokeIndex);
+        } else {
+            const stroke = strokes[selectedStroke.value.strokeIndex];
+            if (stroke && stroke[0].type === 'text') {
+                const originalStroke = JSON.parse(JSON.stringify(stroke));
+                stroke[0].text = newText;
+                strokeChangeCallback({
+                    id: stroke[0].id,
+                    type: 'text-change',
+                    page: pageNumber,
+                    strokeIndex: selectedStroke.value.strokeIndex,
+                    stroke: JSON.parse(JSON.stringify(stroke)),
+                    previousStroke: originalStroke
+                });
+            }
         }
+
+        redrawAllStrokes(pageIndex);
+        drawSelectionBoundingBox(pageIndex, selectedStroke.value.strokeIndex);
     };
 
     const deleteSelectedStroke = () => {
         if (!selectedStroke.value) return;
-        
+
+        const isMulti = Array.isArray(selectedStrokes.value) && selectedStrokes.value.length > 1;
+        if (isMulti) {
+            // Group deletions by page, remove descending by index
+            const pages = new Map();
+            selectedStrokes.value.forEach(sel => {
+                const arr = pages.get(sel.pageIndex) || [];
+                arr.push(sel.strokeIndex);
+                pages.set(sel.pageIndex, arr);
+            });
+
+            pages.forEach((indices, pageIdx) => {
+                const pageNumber = pageIdx + 1;
+                const strokes = strokesPerPage.value[pageNumber];
+                const sorted = [...indices].sort((a, b) => b - a);
+                const removals = sorted.map(index => ({ index, data: strokes[index] }));
+                // Splice descending to avoid reindexing issues
+                sorted.forEach(index => { strokes.splice(index, 1); });
+                strokeChangeCallback({
+                    id: removals[0]?.data?.[0]?.id,
+                    type: 'erase',
+                    page: pageNumber,
+                    strokes: removals
+                });
+                redrawAllStrokes(pageIdx);
+            });
+
+            selectedStrokes.value = [];
+            selectedStroke.value = null;
+            showStrokeMenu.value = false;
+            return;
+        }
+
+        // Single deletion
         const pageNumber = selectedStroke.value.pageIndex + 1;
         const strokes = strokesPerPage.value[pageNumber];
         const stroke = strokes[selectedStroke.value.strokeIndex];
-        
         if (stroke) {
-            // Remove the stroke
             strokes.splice(selectedStroke.value.strokeIndex, 1);
-            
-            // Save to history
             strokeChangeCallback({
                 id: stroke[0].id,
                 type: 'erase',
                 page: pageNumber,
                 strokes: [{ index: selectedStroke.value.strokeIndex, data: stroke }]
             });
-            
-            // Redraw
             redrawAllStrokes(selectedStroke.value.pageIndex);
         }
-        
         selectedStroke.value = null;
         showStrokeMenu.value = false;
     };
@@ -1868,9 +2100,13 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         
         const pageNumber = canvasIndex + 1;
         const strokes = strokesPerPage.value[pageNumber] || [];
+        const multi = Array.isArray(selectedStrokes.value) && selectedStrokes.value.filter(s => s.pageIndex === canvasIndex).length > 1;
         const stroke = strokes[strokeIndex];
         
-        if (!stroke || stroke.length === 0) return;
+        if (!stroke || stroke.length === 0) {
+            // If multi-selection is active, continue to compute combined bounds
+            if (!multi) return;
+        }
         
         const first = stroke[0];
         
@@ -1880,8 +2116,29 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         
         let minX, minY, maxX, maxY, padding = 5;
         let shouldDrawBorder = true;
+
+        if (multi) {
+            // Compute union bounds across all selected strokes on this canvas
+            minX = Infinity;
+            minY = Infinity;
+            maxX = -Infinity;
+            maxY = -Infinity;
+            selectedStrokes.value.forEach(sel => {
+                if (sel.pageIndex !== canvasIndex) return;
+                const b = getStrokeBounds(sel.stroke, 0);
+                if (!b) return;
+                minX = Math.min(minX, b.minX);
+                minY = Math.min(minY, b.minY);
+                maxX = Math.max(maxX, b.maxX);
+                maxY = Math.max(maxY, b.maxY);
+            });
+
+            if (!isFinite(minX) || !isFinite(minY) || !isFinite(maxX) || !isFinite(maxY)) return;
+            // For multi-selection, do not draw resize handles
+            shouldDrawBorder = true;
+        } 
         
-        if (first.type === 'image') {
+        else if (first.type === 'image') {
             minX = first.x;
             minY = first.y;
             maxX = first.x + first.width;
@@ -1951,24 +2208,25 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             ctx.strokeRect(minX, minY, maxX - minX, maxY - minY);
         }
         
-        // Draw resize handles
-        ctx.setLineDash([]);
-        ctx.fillStyle = '#0066ff';
-        const handleSize = 8;
-        const handles = [
-            { x: minX, y: minY, handle: 'nw' },
-            { x: maxX, y: minY, handle: 'ne' },
-            { x: minX, y: maxY, handle: 'sw' },
-            { x: maxX, y: maxY, handle: 'se' },
-            { x: (minX + maxX) / 2, y: minY, handle: 'n' },
-            { x: (minX + maxX) / 2, y: maxY, handle: 's' },
-            { x: minX, y: (minY + maxY) / 2, handle: 'w' },
-            { x: maxX, y: (minY + maxY) / 2, handle: 'e' }
-        ];
-        
-        handles.forEach(h => {
-            ctx.fillRect(h.x - handleSize / 2, h.y - handleSize / 2, handleSize, handleSize);
-        });
+        // Draw resize handles only for single selection
+        if (!multi) {
+            ctx.setLineDash([]);
+            ctx.fillStyle = '#0066ff';
+            const handleSize = 8;
+            const handles = [
+                { x: minX, y: minY, handle: 'nw' },
+                { x: maxX, y: minY, handle: 'ne' },
+                { x: minX, y: maxY, handle: 'sw' },
+                { x: maxX, y: maxY, handle: 'se' },
+                { x: (minX + maxX) / 2, y: minY, handle: 'n' },
+                { x: (minX + maxX) / 2, y: maxY, handle: 's' },
+                { x: minX, y: (minY + maxY) / 2, handle: 'w' },
+                { x: maxX, y: (minY + maxY) / 2, handle: 'e' }
+            ];
+            handles.forEach(h => {
+                ctx.fillRect(h.x - handleSize / 2, h.y - handleSize / 2, handleSize, handleSize);
+            });
+        }
         
         ctx.restore();
     };
@@ -2441,6 +2699,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         isStrokeHovering,
         isBoundingBoxHovering,
         selectedStroke,
+        selectedStrokes,
         isDragging,
         isResizing,
         strokeMenu,
@@ -2477,5 +2736,5 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         insertCopiedStroke,
         insertFromClipboard,
         isSelectedStrokeType
-    }
+    };
 }
