@@ -2438,7 +2438,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                         if (h.handle === 'ne') {
                             ctx.fillStyle = '#ff6600';
                             ctx.beginPath();
-                            ctx.arc(h.x, h.y, handleSize * 0.8, 0, Math.PI * 2);
+                            ctx.arc(h.x, h.y, handleSize / 2, 0, Math.PI * 2);
                             ctx.fill();
                         } else {
                             ctx.fillStyle = '#0066ff';
