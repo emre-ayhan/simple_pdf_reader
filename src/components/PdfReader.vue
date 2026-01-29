@@ -843,6 +843,7 @@ defineExpose({
             />
         </div>
 
+        <!-- Stroke Menu -->
         <div v-if="showStrokeMenu && selectedStroke" 
              ref="strokeMenu"
              class="stroke-menu" 
@@ -852,15 +853,24 @@ defineExpose({
              }">
             <div class="stroke-menu-content">
                 <div class="stroke-menu-section">
-                    <div class="stroke-menu-colors">
+                    <div class="stroke-menu-colors dropdown-center">
                         <template v-if="!isSelectedStrokeType('image')">
-                            <button 
-                                v-for="strokeStyle in initialStrokeStyles"
+                            <button
+                                type="button"
                                 class="btn-color"
-                                :style="{ backgroundColor: strokeStyle.color }"
-                                :title="strokeStyle.color"
-                                @click.stop="changeStrokeColor(strokeStyle.color)"
+                                data-bs-toggle="dropdown"
+                                aria-expanded="false"
+                                :style="{ backgroundColor: selectedStroke?.stroke[0]?.color || 'transparent' }"
                             ></button>
+                            <div class="dropdown-menu dropdown-menu-dark color-menu px-2">
+                                <button 
+                                    v-for="strokeStyle in initialStrokeStyles"
+                                    class="btn-color dropdown-item mb-1"
+                                    :style="{ backgroundColor: strokeStyle.color }"
+                                    :title="strokeStyle.color"
+                                    @click="changeStrokeColor(strokeStyle.color)"
+                                ></button>
+                            </div>
                             <div class="vr bg-primary"></div>
                         </template>
                         <button type="button" class="btn btn-link link-secondary btn-stroke-menu border-0 p-0" :title="$t('Copy')" @click.stop="copySelectedStroke()">
@@ -882,12 +892,12 @@ defineExpose({
                             :placeholder="$t('Enter text')"
                         />
                     </div>
-                    <div class="stroke-menu-section" v-else-if="!isSelectedStrokeType('highlight-rect')">
+                    <!-- <div class="stroke-menu-section" v-else-if="!isSelectedStrokeType('highlight-rect')">
                         <div class="d-flex align-items-center gap-1">
                             <input type="range" class="form-range" min="1" max="10" @input="changeStrokeThickness($event.target.value)" :value="selectedStroke?.stroke[0]?.thickness || 1" />
                             <input type="text" class="form-control-plaintext" min="1" max="10" :value="selectedStroke?.stroke[0]?.thickness || 1" readonly />
                         </div>
-                    </div>
+                    </div> -->
                 </template>
             </div>
         </div>

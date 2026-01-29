@@ -298,12 +298,16 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 4px;
+        gap: 8px;
         flex-wrap: wrap;
     }
 
     .stroke-menu-section:not(:last-child) {
         margin-bottom: 8px;
+    }
+
+    .color-menu {
+        min-width: unset !important;
     }
 
     .btn-color {
