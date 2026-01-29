@@ -56,7 +56,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             drawCanvas.height = viewport.height;
             drawCanvas.width = viewport.width;
 
-            drawingContexts.value[pageIndex] = drawCanvas.getContext('2d');
+            drawingContexts.value[pageIndex] = drawCanvas.getContext('2d', { willReadFrequently: true });
 
             const renderContext = {
                 canvasContext: ctx,

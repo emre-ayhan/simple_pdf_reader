@@ -1265,7 +1265,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             drawingContext.moveTo(lastX, lastY);
         } else {
             // For shapes, save canvas state
-            canvasSnapshot = drawingContext.getImageData(0, 0, canvas.width, canvas.height, { willReadFrequently: true } );
+            canvasSnapshot = drawingContext.getImageData(0, 0, canvas.width, canvas.height);
         }
     };
 
@@ -2781,7 +2781,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = pdfCanvas.width;
         tempCanvas.height = pdfCanvas.height;
-        const tempCtx = tempCanvas.getContext('2d');
+        const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
         
         // Draw PDF canvas
         tempCtx.drawImage(pdfCanvas, 0, 0);
@@ -2794,7 +2794,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             const cropCanvas = document.createElement('canvas');
             cropCanvas.width = selectedWidth;
             cropCanvas.height = selectedHeight;
-            const cropCtx = cropCanvas.getContext('2d');
+            const cropCtx = cropCanvas.getContext('2d', { willReadFrequently: true });
             cropCtx.putImageData(imageData, 0, 0);
             
             const dataUrl = cropCanvas.toDataURL('image/png');
@@ -2846,11 +2846,11 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 drawCanvas.style.width = `${canvasWidth}px`;
                 drawCanvas.style.height = `${canvasHeight}px`;
 
-                const ctx = canvas.getContext('2d');
+                const ctx = canvas.getContext('2d', { willReadFrequently: true });
                 ctx.clearRect(0, 0, canvasWidth * pixelRatio, canvasHeight * pixelRatio);
                 ctx.drawImage(img, 0, 0, canvasWidth * pixelRatio, canvasHeight * pixelRatio);
 
-                drawingContexts.value[0] = drawCanvas.getContext('2d');
+                drawingContexts.value[0] = drawCanvas.getContext('2d', { willReadFrequently: true });
                 redrawAllStrokes(0);
                 renderedPages.value.add(1);
             };
