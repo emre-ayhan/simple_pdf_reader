@@ -2387,9 +2387,21 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 maxY = Math.max(maxY, b.maxY);
             });
 
-            if (!isFinite(minX) || !isFinite(minY) || !isFinite(maxX) || !isFinite(maxY)) return;
-            // For multi-selection, do not draw resize handles
-            shouldDrawBorder = true;
+            if (!isFinite(minX) || !isFinite(minY) || !isFinite(maxX) || !isFinite(maxY)) {
+                ctx.restore();
+                return;
+            }
+            
+            // Add padding to multi-selection bounds
+            minX -= padding;
+            minY -= padding;
+            maxX += padding;
+            maxY += padding;
+            
+            // Draw bounding box for multi-selection (no resize handles)
+            if (shouldDrawBorder) {
+                ctx.strokeRect(minX, minY, maxX - minX, maxY - minY);
+            }
         } 
         
         else {
