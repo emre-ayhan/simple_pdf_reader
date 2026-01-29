@@ -2885,7 +2885,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
 
         // Account for CSS transform: translate(-50%, 10px)
         const halfW = rect.width / 2;
-        const offsetY = 10; // matches SCSS transform Y
+        const offsetY = 0; // matches SCSS transform Y
         const margin = 8;   // keep a small margin from edges
 
         // Prefer placing menu to the right of the stroke if it fits, else left
