@@ -1023,9 +1023,6 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             isPenHovering.value = true;
         }
 
-        // Allow touch only when enableTouchDrawing is true
-        if (e.pointerType === 'touch' && !enableTouchDrawing.value) return;
-
         // Generate a new stroke ID
         currentStrokeId.value = uuid();
 
@@ -1165,6 +1162,15 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
 
             return;
         }
+
+        // Handle selection mode
+        if (isSelectionMode.value) {
+            handleSelectionStart(e);
+            return;
+        }
+
+        // Allow touch only when enableTouchDrawing is true
+        if (e.pointerType === 'touch' && !enableTouchDrawing.value) return;
         
         // Handle text mode
         if (isTextInputMode.value) {
@@ -1203,12 +1209,6 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 }
             });
 
-            return;
-        }
-        
-        // Handle selection mode
-        if (isSelectionMode.value) {
-            handleSelectionStart(e);
             return;
         }
         

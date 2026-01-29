@@ -804,7 +804,7 @@ defineExpose({
                                 :style="{
                                     cursor: cursorStyle,
                                     pointerEvents: 'auto',
-                                    touchAction: (isViewLocked || isPenHovering || (enableTouchDrawing && hasActiveTool)) ? 'none' : 'pan-y pan-x',
+                                    touchAction: (isViewLocked || isPenHovering || isSelectModeActive || isSelectionMode || (enableTouchDrawing && hasActiveTool)) ? 'none' : 'pan-y pan-x',
                                     zIndex: isTextSelectionMode ? 1 : 3
                                 }"
                                 :data-color="drawColor"
