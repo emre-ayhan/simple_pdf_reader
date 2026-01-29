@@ -688,6 +688,8 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         return false;
     };
 
+    const SELECTION_PADDING = 10;
+
     const getStrokeBounds = (stroke, padding = 5) => {
         if (!stroke || stroke.length === 0) return null;
         
@@ -835,22 +837,112 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         }
     };
 
-    const getResizeHandle = (x, y, bounds) => {
+    // Compute unrotated bounds (ignores `rotation`), used for oriented selection box
+    const getUnrotatedBounds = (stroke, padding = 5) => {
+        if (!stroke || stroke.length === 0) return null;
+        const first = stroke[0];
+        const pad = Math.max(0, padding);
+        if (first.type === 'image') {
+            return { minX: first.x - pad, minY: first.y - pad, maxX: first.x + first.width + pad, maxY: first.y + first.height + pad };
+        } else if (first.type === 'highlight-rect') {
+            const rects = first.rects || [{ x: first.x, y: first.y, width: first.width, height: first.height }];
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            rects.forEach(rect => {
+                minX = Math.min(minX, rect.x);
+                minY = Math.min(minY, rect.y);
+                maxX = Math.max(maxX, rect.x + rect.width);
+                maxY = Math.max(maxY, rect.y + rect.height);
+            });
+            return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
+        } else if (first.type === 'text') {
+            const ctx = drawingContexts.value[0];
+            if (!ctx) return null;
+            ctx.font = `${first.fontSize}px Arial`;
+            const metrics = ctx.measureText(first.text);
+            return { minX: first.x - pad, minY: first.y - pad, maxX: first.x + metrics.width + pad, maxY: first.y + first.fontSize + pad };
+        } else if (first.type === 'line' || first.type === 'rectangle' || first.type === 'circle') {
+            let points = [];
+            if (first.type === 'line') {
+                points = [ { x: first.startX, y: first.startY }, { x: first.endX, y: first.endY } ];
+            } else if (first.type === 'rectangle') {
+                points = [
+                    { x: first.startX, y: first.startY },
+                    { x: first.endX, y: first.startY },
+                    { x: first.endX, y: first.endY },
+                    { x: first.startX, y: first.endY }
+                ];
+            } else if (first.type === 'circle') {
+                let rx, ry;
+                if (first.radiusX !== undefined || first.radiusY !== undefined) {
+                    rx = first.radiusX !== undefined ? first.radiusX : Math.abs(first.endX - first.startX);
+                    ry = first.radiusY !== undefined ? first.radiusY : Math.abs(first.endY - first.startY);
+                } else {
+                    const radius = Math.sqrt((first.endX - first.startX) ** 2 + (first.endY - first.startY) ** 2);
+                    rx = radius; ry = radius;
+                }
+                points = [
+                    { x: first.startX - rx, y: first.startY - ry },
+                    { x: first.startX + rx, y: first.startY - ry },
+                    { x: first.startX + rx, y: first.startY + ry },
+                    { x: first.startX - rx, y: first.startY + ry }
+                ];
+            }
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            points.forEach(p => { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); });
+            return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
+        } else {
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            for (let p of stroke) {
+                minX = Math.min(minX, p.x);
+                minY = Math.min(minY, p.y);
+                maxX = Math.max(maxX, p.x);
+                maxY = Math.max(maxY, p.y);
+            }
+            return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
+        }
+    };
+
+    const getResizeHandle = (x, y, bounds, stroke) => {
         if (!bounds) return null;
         
         const handleSize = 8;
         const threshold = handleSize;
-        
-        const handles = [
-            { x: bounds.minX, y: bounds.minY, handle: 'nw' },
-            { x: bounds.maxX, y: bounds.minY, handle: 'ne' },
-            { x: bounds.minX, y: bounds.maxY, handle: 'sw' },
-            { x: bounds.maxX, y: bounds.maxY, handle: 'se' },
-            { x: (bounds.minX + bounds.maxX) / 2, y: bounds.minY, handle: 'n' },
-            { x: (bounds.minX + bounds.maxX) / 2, y: bounds.maxY, handle: 's' },
-            { x: bounds.minX, y: (bounds.minY + bounds.maxY) / 2, handle: 'w' },
-            { x: bounds.maxX, y: (bounds.minY + bounds.maxY) / 2, handle: 'e' }
-        ];
+        const handles = [];
+        const angle = stroke && stroke[0] && stroke[0].type !== 'highlight-rect' ? (stroke[0].rotation || 0) : 0;
+        if (angle) {
+            const bLocal = getUnrotatedBounds(stroke, SELECTION_PADDING);
+            if (!bLocal) return null;
+            const cx = (bLocal.minX + bLocal.maxX) / 2;
+            const cy = (bLocal.minY + bLocal.maxY) / 2;
+            const cosA = Math.cos(angle), sinA = Math.sin(angle);
+            const localPoints = [
+                { x: bLocal.minX, y: bLocal.minY, handle: 'nw' },
+                { x: bLocal.maxX, y: bLocal.minY, handle: 'ne' },
+                { x: bLocal.minX, y: bLocal.maxY, handle: 'sw' },
+                { x: bLocal.maxX, y: bLocal.maxY, handle: 'se' },
+                { x: (bLocal.minX + bLocal.maxX) / 2, y: bLocal.minY, handle: 'n' },
+                { x: (bLocal.minX + bLocal.maxX) / 2, y: bLocal.maxY, handle: 's' },
+                { x: bLocal.minX, y: (bLocal.minY + bLocal.maxY) / 2, handle: 'w' },
+                { x: bLocal.maxX, y: (bLocal.minY + bLocal.maxY) / 2, handle: 'e' }
+            ];
+            localPoints.forEach(p => {
+                const dx = p.x - cx, dy = p.y - cy;
+                const gx = cx + dx * cosA - dy * sinA;
+                const gy = cy + dx * sinA + dy * cosA;
+                handles.push({ x: gx, y: gy, handle: p.handle });
+            });
+        } else {
+            handles.push(
+                { x: bounds.minX, y: bounds.minY, handle: 'nw' },
+                { x: bounds.maxX, y: bounds.minY, handle: 'ne' },
+                { x: bounds.minX, y: bounds.maxY, handle: 'sw' },
+                { x: bounds.maxX, y: bounds.maxY, handle: 'se' },
+                { x: (bounds.minX + bounds.maxX) / 2, y: bounds.minY, handle: 'n' },
+                { x: (bounds.minX + bounds.maxX) / 2, y: bounds.maxY, handle: 's' },
+                { x: bounds.minX, y: (bounds.minY + bounds.maxY) / 2, handle: 'w' },
+                { x: bounds.maxX, y: (bounds.minY + bounds.maxY) / 2, handle: 'e' }
+            );
+        }
         
         for (let h of handles) {
             if (Math.abs(x - h.x) <= threshold && Math.abs(y - h.y) <= threshold) {
@@ -952,9 +1044,9 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 // Check if clicking on a resize handle of already selected stroke
                 // Disable resizing when multiple selection is active
                 if (selectedStrokes.value.length <= 1 && selectedStroke.value && selectedStroke.value.pageIndex === canvasIndex) {
-                    const handlePadding = 5;
-                            const bounds = getStrokeBounds(selectedStroke.value.stroke, handlePadding);
-                            let handle = getResizeHandle(x, y, bounds);
+                        const handlePadding = 5;
+                            const bounds = getStrokeBounds(selectedStroke.value.stroke, SELECTION_PADDING);
+                            let handle = getResizeHandle(x, y, bounds, selectedStroke.value.stroke);
                             // Treat top-right corner as rotation handle for all strokes (single selection), except highlight-rect
                             if (handle === 'ne') {
                                 const multiActive = Array.isArray(selectedStrokes.value) && selectedStrokes.value.filter(s => s.pageIndex === canvasIndex).length > 1;
@@ -1764,7 +1856,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                         if (selectedStroke.value && selectedStroke.value.pageIndex === canvasIndex) {
                             const bounds = getStrokeBounds(selectedStroke.value.stroke, 5);
                             if (bounds) {
-                                newResizeHandle = getResizeHandle(x, y, bounds);
+                                newResizeHandle = getResizeHandle(x, y, bounds, selectedStroke.value.stroke);
     
                                 const inside = x >= bounds.minX && x <= bounds.maxX && y >= bounds.minY && y <= bounds.maxY;
                                 let nearEdge = false;
@@ -2276,7 +2368,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         ctx.strokeStyle = '#0066ff';
         ctx.lineWidth = 2;
         
-        let minX, minY, maxX, maxY, padding = 10;
+        let minX, minY, maxX, maxY, padding = SELECTION_PADDING;
         let shouldDrawBorder = true;
 
         if (multi) {
@@ -2301,62 +2393,92 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         } 
         
         else {
-            const b = getStrokeBounds(stroke, 0);
-            if (!b) { ctx.restore(); return; }
-            minX = b.minX;
-            minY = b.minY;
-            maxX = b.maxX;
-            maxY = b.maxY;
-        }
-
-        minX -= padding;
-        minY -= padding;
-        maxX += padding;
-        maxY += padding;
-        
-        if (shouldDrawBorder) {
-            ctx.strokeRect(minX, minY, maxX - minX, maxY - minY);
-        }
-        
-            // Draw resize handles only for single selection
-        if (!multi) {
-            ctx.setLineDash([]);
-            const handleSize = 8;
-            const handles = [
-                { x: minX, y: minY, handle: 'nw' },
-                { x: maxX, y: minY, handle: 'ne' },
-                { x: minX, y: maxY, handle: 'sw' },
-                { x: maxX, y: maxY, handle: 'se' },
-                { x: (minX + maxX) / 2, y: minY, handle: 'n' },
-                { x: (minX + maxX) / 2, y: maxY, handle: 's' },
-                { x: minX, y: (minY + maxY) / 2, handle: 'w' },
-                { x: maxX, y: (minY + maxY) / 2, handle: 'e' }
-            ];
-
-            // Rotation availability: single selection and not highlight-rect
-            let rotationAvailable = false;
-            try {
-                const pageNumber = canvasIndex + 1;
-                const strokes = strokesPerPage.value[pageNumber] || [];
-                const s = strokes[selectedIndex];
-                const type = s && s[0] ? s[0].type : (stroke && stroke[0] ? stroke[0].type : null);
-                rotationAvailable = type && type !== 'highlight-rect';
-            } catch (e) {
-                rotationAvailable = stroke && stroke[0] && stroke[0].type && stroke[0].type !== 'highlight-rect';
-            }
-
-            handles.forEach(h => {
-                // NE: use circular marker when rotation is available
-                if (h.handle === 'ne' && rotationAvailable) {
-                    ctx.fillStyle = '#ff6600';
-                    ctx.beginPath();
-                    ctx.arc(h.x, h.y, handleSize * 0.8, 0, Math.PI * 2);
-                    ctx.fill();
-                } else {
-                    ctx.fillStyle = '#0066ff';
-                    ctx.fillRect(h.x - handleSize / 2, h.y - handleSize / 2, handleSize, handleSize);
+            const angle = first.rotation || 0;
+            const rotationAllowed = first.type !== 'highlight-rect';
+            if (rotationAllowed && angle) {
+                // Oriented selection box: compute unrotated bounds and draw in rotated space
+                const bLocal = getUnrotatedBounds(stroke, SELECTION_PADDING);
+                if (!bLocal) { ctx.restore(); return; }
+                const cx = (bLocal.minX + bLocal.maxX) / 2;
+                const cy = (bLocal.minY + bLocal.maxY) / 2;
+                const w = (bLocal.maxX - bLocal.minX);
+                const h = (bLocal.maxY - bLocal.minY);
+                ctx.translate(cx, cy);
+                ctx.rotate(angle);
+                if (shouldDrawBorder) {
+                    ctx.strokeRect(bLocal.minX - cx, bLocal.minY - cy, w, h);
                 }
-            });
+                // Single selection: draw rotated handles
+                if (!multi) {
+                    ctx.setLineDash([]);
+                    const handleSize = 8;
+                    const handlesLocal = [
+                        { x: bLocal.minX - cx, y: bLocal.minY - cy, handle: 'nw' },
+                        { x: bLocal.maxX - cx, y: bLocal.minY - cy, handle: 'ne' },
+                        { x: bLocal.minX - cx, y: bLocal.maxY - cy, handle: 'sw' },
+                        { x: bLocal.maxX - cx, y: bLocal.maxY - cy, handle: 'se' },
+                        { x: (bLocal.minX + bLocal.maxX) / 2 - cx, y: bLocal.minY - cy, handle: 'n' },
+                        { x: (bLocal.minX + bLocal.maxX) / 2 - cx, y: bLocal.maxY - cy, handle: 's' },
+                        { x: bLocal.minX - cx, y: (bLocal.minY + bLocal.maxY) / 2 - cy, handle: 'w' },
+                        { x: bLocal.maxX - cx, y: (bLocal.minY + bLocal.maxY) / 2 - cy, handle: 'e' }
+                    ];
+                    handlesLocal.forEach(h => {
+                        if (h.handle === 'ne') {
+                            ctx.fillStyle = '#ff6600';
+                            ctx.beginPath();
+                            ctx.arc(h.x, h.y, handleSize * 0.8, 0, Math.PI * 2);
+                            ctx.fill();
+                        } else {
+                            ctx.fillStyle = '#0066ff';
+                            ctx.fillRect(h.x - handleSize / 2, h.y - handleSize / 2, handleSize, handleSize);
+                        }
+                    });
+                }
+            } else {
+                const b = getStrokeBounds(stroke, 0);
+                if (!b) { ctx.restore(); return; }
+                minX = b.minX;
+                minY = b.minY;
+                maxX = b.maxX;
+                maxY = b.maxY;
+
+                minX -= padding;
+                minY -= padding;
+                maxX += padding;
+                maxY += padding;
+                
+                if (shouldDrawBorder) {
+                    ctx.strokeRect(minX, minY, maxX - minX, maxY - minY);
+                }
+                
+                if (!multi) {
+                    ctx.setLineDash([]);
+                    const handleSize = 8;
+                    const handles = [
+                        { x: minX, y: minY, handle: 'nw' },
+                        { x: maxX, y: minY, handle: 'ne' },
+                        { x: minX, y: maxY, handle: 'sw' },
+                        { x: maxX, y: maxY, handle: 'se' },
+                        { x: (minX + maxX) / 2, y: minY, handle: 'n' },
+                        { x: (minX + maxX) / 2, y: maxY, handle: 's' },
+                        { x: minX, y: (minY + maxY) / 2, handle: 'w' },
+                        { x: maxX, y: (minY + maxY) / 2, handle: 'e' }
+                    ];
+                    // Rotation availability: single selection and not highlight-rect
+                    let rotationAvailable = first.type !== 'highlight-rect';
+                    handles.forEach(h => {
+                        if (h.handle === 'ne' && rotationAvailable) {
+                            ctx.fillStyle = '#ff6600';
+                            ctx.beginPath();
+                            ctx.arc(h.x, h.y, handleSize * 0.8, 0, Math.PI * 2);
+                            ctx.fill();
+                        } else {
+                            ctx.fillStyle = '#0066ff';
+                            ctx.fillRect(h.x - handleSize / 2, h.y - handleSize / 2, handleSize, handleSize);
+                        }
+                    });
+                }
+            }
         }
         
         ctx.restore();
