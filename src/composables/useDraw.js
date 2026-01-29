@@ -140,7 +140,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             const scaleY = canvas.height / rect.height;
             
             redrawAllStrokes(selectionStart.value.canvasIndex);
-            ctx.strokeStyle = '#ff0000';
+            ctx.strokeStyle = boundingBoxColors.rotate;
             ctx.lineWidth = 1;
             ctx.setLineDash([5, 5]);
             
@@ -1310,8 +1310,8 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 const currentX = pt.x;
                 const currentY = pt.y;
                 
-                const dx = currentX - dragStartPos.value.x;
-                const dy = currentY - dragStartPos.value.y;
+                let dx = currentX - dragStartPos.value.x;
+                let dy = currentY - dragStartPos.value.y;
                 
                 const pageNumber = currentCanvasIndex + 1;
                 const strokes = strokesPerPage.value[pageNumber];
@@ -1324,6 +1324,17 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                     const startRawBounds = resizeStartBounds.value.raw;
                     const boundsPadding = resizeStartBounds.value.padding ?? 0;
                     if (!startBounds || !startRawBounds) return;
+                    
+                    // Transform dx/dy into local coordinate space if rotated
+                    const angle = first.rotation || 0;
+                    if (angle !== 0) {
+                        const cosA = Math.cos(-angle);
+                        const sinA = Math.sin(-angle);
+                        const localDx = dx * cosA - dy * sinA;
+                        const localDy = dx * sinA + dy * cosA;
+                        dx = localDx;
+                        dy = localDy;
+                    }
                     
                     // Calculate new bounds based on resize handle
                     let newMinX = startBounds.minX;
@@ -2347,6 +2358,11 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         stopEvent(e);
     };
 
+    const boundingBoxColors = {
+        default: '#0000ff',
+        rotate: '#ff0000'
+    };
+
     const drawSelectionBoundingBox = (canvasIndex, strokeIndex) => {
         const canvas = drawingCanvases.value[canvasIndex];
         const ctx = drawingContexts.value[canvasIndex];
@@ -2365,7 +2381,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         const first = stroke[0];
         
         ctx.save();
-        ctx.strokeStyle = '#0066ff';
+        ctx.strokeStyle = boundingBoxColors.default;
         ctx.lineWidth = 2;
         
         let minX, minY, maxX, maxY, padding = SELECTION_PADDING;
@@ -2436,12 +2452,12 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                     ];
                     handlesLocal.forEach(h => {
                         if (h.handle === 'ne') {
-                            ctx.fillStyle = '#ff6600';
+                            ctx.fillStyle = boundingBoxColors.rotate;
                             ctx.beginPath();
                             ctx.arc(h.x, h.y, handleSize / 2, 0, Math.PI * 2);
                             ctx.fill();
                         } else {
-                            ctx.fillStyle = '#0066ff';
+                            ctx.fillStyle = boundingBoxColors.default;
                             ctx.fillRect(h.x - handleSize / 2, h.y - handleSize / 2, handleSize, handleSize);
                         }
                     });
@@ -2480,12 +2496,12 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                     let rotationAvailable = first.type !== 'highlight-rect';
                     handles.forEach(h => {
                         if (h.handle === 'ne' && rotationAvailable) {
-                            ctx.fillStyle = '#ff6600';
+                            ctx.fillStyle = boundingBoxColors.rotate;
                             ctx.beginPath();
-                            ctx.arc(h.x, h.y, handleSize * 0.8, 0, Math.PI * 2);
+                            ctx.arc(h.x, h.y, handleSize / 2, 0, Math.PI * 2);
                             ctx.fill();
                         } else {
-                            ctx.fillStyle = '#0066ff';
+                            ctx.fillStyle = boundingBoxColors.default;
                             ctx.fillRect(h.x - handleSize / 2, h.y - handleSize / 2, handleSize, handleSize);
                         }
                     });
