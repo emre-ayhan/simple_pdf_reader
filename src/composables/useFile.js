@@ -1033,6 +1033,8 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             }];
             
             const strokeId = uuid();
+            // Assign a stable id to the image stroke for history ops
+            imageStroke[0].id = strokeId;
             const pageNumber = pageIndex.value + 1;
             if (!strokesPerPage.value[pageNumber]) {
                 strokesPerPage.value[pageNumber] = [];
@@ -1040,7 +1042,8 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             strokesPerPage.value[pageNumber].push(imageStroke);
             
             redrawAllStrokesCallback(canvasIndex);
-            addToHistoryCallback({ type: 'add', canvasIndex, strokeId, stroke: imageStroke });
+            // Use unified history action shape
+            addToHistoryCallback({ type: 'add', id: strokeId, page: pageNumber, stroke: imageStroke });
         };
 
         img.src = imageData;
