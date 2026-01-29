@@ -173,10 +173,11 @@ const {
     saveCurrentHistoryStep,
 } = useHistory(fileId, strokesPerPage, drawingCanvases, drawingContexts, deletedPages, redrawAllStrokes);
 
+startSession();
+
 // Create handleImageImport handler with the callbacks
 const handleImageImport = createImageImportHandler(redrawAllStrokes, addToHistory);
 
-startSession();
 
 
 // Toolbar Actions
