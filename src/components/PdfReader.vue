@@ -606,16 +606,19 @@ defineExpose({
     <div class="container-fluid bg-dark" @dragenter.prevent="onDragEnter" @dragleave.prevent="onDragLeave" @dragover.prevent @drop.prevent="onDrop">
         <nav :class="`navbar navbar-expand navbar-dark bg-dark py-1 fixed-${toolbarPosition}`">
             <template v-if="isFileLoaded">
-                <!-- Toolbar -->
-                <ul ref="toolbar" class="navbar-nav mx-auto flex-wrap justify-content-center">
+                <ul class="navbar-nav">
                     <!-- Thumbnail Sidebar -->
                     <li class="nav-item">
                         <a class="nav-link" href="#" :title="$t('Thumbnail Sidebar')">
                             <i class="bi bi-layout-sidebar-inset"></i>
                         </a>
                     </li>
+                    <!-- Search -->
                     <Search :pageTextContent="pageTextContent" :scrollToPage="scrollToPage" />
-                    <li class="nav-item vr bg-white mx-2"></li>
+                </ul>
+                
+                <!-- Toolbar -->
+                <ul ref="toolbar" class="navbar-nav mx-auto flex-wrap justify-content-center">
                     <!-- Drawing -->
                     <template v-if="isDrawing || isTextInputMode || isTextHighlightMode">
                         <li class="nav-item" v-for="(strokeStyle, index) in initialStrokeStyles">

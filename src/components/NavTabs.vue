@@ -90,44 +90,10 @@ onBeforeUnmount(() => {
 <template>
     <ul :class="`nav nav-tabs d-print-none fixed-${props.toolbarPosition} ${activeTab.emptyState ? 'empty-state' : ''}`" id="appTabs" role="tablist">
         <!-- Nav Menu -->
-        <li class="nav-item dropdown">
-            <a class="nav-link nav-link-menu" data-bs-toggle="dropdown" href="#" role="button" aria-expanded="false">
-                Menu
+        <li class="nav-item">
+            <a href="#" class="nav-link nav-link-menu" data-bs-toggle="offcanvas" data-bs-target="#offcanvasExample" aria-controls="offcanvasExample" :title="$t('Menu')">
+                {{ $t('Menu') }}
             </a>
-                <ul class="dropdown-menu dropdown-menu-dark rounded-3">
-                    <template v-for="(item, group, index) in menuItems">
-                        <li v-if="index"><hr class="text-primary my-1"></li>
-                        <li><h6 class="dropdown-header text-capitalize text-primary">{{ $t(group) }}</h6></li>
-                        <template v-for="menuItem in item">
-                            <li>
-                                <template v-if="menuItem.items">
-                                    <div class="dropend">
-                                        <button class="dropdown-item small dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" @click.stop>
-                                            <i :class="`bi bi-${menuItem.icon} me-1`"></i>
-                                            {{ $t(menuItem.label) }}
-                                        </button>
-                                        <ul class="dropdown-menu dropdown-menu-dark rounded-3">
-                                            <li><h6 class="dropdown-header text-capitalize text-primary">{{ $t(menuItem.label) }}</h6></li>
-                                            <template v-for="subItem in menuItem.items">
-                                                <li>
-                                                    <a class="dropdown-item small" :class="{ disabled: activeTab.emptyState && group === 'page' || subItem.disabled }" href="#" @click.prevent="onMenuItemClick(subItem.action, subItem.value)">
-                                                        <i :class="`bi bi-${subItem.icon} me-1`"></i>
-                                                        {{ $t(subItem.label) }} <span v-if="subItem.shortcut">({{ subItem.shortcut }})</span>
-                                                    </a>
-                                                </li>
-                                            </template>
-                                        </ul>
-                                    </div>
-                                </template>
-
-                                <a class="dropdown-item small" :class="{ disabled: activeTab.emptyState && group === 'page' || menuItem.disabled }" href="#" @click.prevent="onMenuItemClick(menuItem.action, menuItem.value)" v-else>
-                                    <i :class="`bi bi-${menuItem.icon} me-1`"></i>
-                                    {{ $t(menuItem.label) }} <span v-if="menuItem.shortcut">({{ menuItem.shortcut }})</span>
-                                </a>
-                            </li>
-                        </template>
-                    </template>
-                </ul>
         </li>
         <template v-for="(tab, index) in tabs" :key="tab">
             <template v-if="!tab.closed">
@@ -165,5 +131,43 @@ onBeforeUnmount(() => {
                 <slot></slot>
             </div>
         </template>
+    </div>
+    <div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasExample" aria-labelledby="offcanvasExampleLabel">
+        <div class="offcanvas-header">
+            <h4 class="offcanvas-title text-primary" id="offcanvasExampleLabel">
+                <i class="bi bi-file-earmark-pdf-fill"></i>
+                Simple PDF Reader
+            </h4>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        </div>
+        <div class="offcanvas-body">
+            <div class="list-group list-group-flush">
+                <template v-for="(item, group, index) in menuItems">
+                    <a href="#" class="list-group-item" v-if="index"><hr class="text-primary my-1"></a>
+                    <a href="#" class="list-group-item"><h6 class="dropdown-header text-capitalize text-primary">{{ $t(group) }}</h6></a>
+                    <template v-for="(menuItem, menuItemIndex) in item">
+                        <a class="list-group-item list-group-item-action" data-bs-dismiss="offcanvas" :class="{ disabled: activeTab.emptyState && group === 'page' || menuItem.disabled }" href="#" @click.prevent="onMenuItemClick(menuItem.action, menuItem.value)" v-if="!menuItem.items">
+                            <i :class="`bi bi-${menuItem.icon} me-1`"></i>
+                            {{ $t(menuItem.label) }} <span v-if="menuItem.shortcut">({{ menuItem.shortcut }})</span>
+                        </a>
+                        <template v-else>
+                            <button class="list-group-item list-group-item-action" type="button"  data-bs-toggle="collapse" :data-bs-target="`#submenu_${menuItemIndex}`" aria-expanded="false" :aria-controls="`submenu_${menuItemIndex}`">
+                                <i :class="`bi bi-${menuItem.icon} me-1`"></i>
+                                {{ $t(menuItem.label) }}
+                                <i class="bi bi-caret-down-fill small"></i>
+                            </button>
+                            <div class="collapse small ps-3 pt-1" :id="`submenu_${menuItemIndex}`">
+                                <template v-for="subItem in menuItem.items">
+                                    <a class="list-group-item list-group-item-action" :class="{ disabled: activeTab.emptyState && group === 'page' || subItem.disabled }" href="#" @click.prevent="onMenuItemClick(subItem.action, subItem.value)">
+                                        <i :class="`bi bi-${subItem.icon} me-1`"></i>
+                                        {{ $t(subItem.label) }} <span v-if="subItem.shortcut">({{ subItem.shortcut }})</span>
+                                    </a>
+                                </template>
+                            </div>
+                        </template>
+                    </template>
+                </template>
+            </div>
+        </div>
     </div>
 </template>
