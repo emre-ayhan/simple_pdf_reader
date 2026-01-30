@@ -68,6 +68,7 @@ const {
     isFileLoaded,
     pdfReader,
     pagesContainer,
+    pageTextContent,
     fileInput,
     renderedPages,
     pageCount,
@@ -613,7 +614,11 @@ defineExpose({
                             <i class="bi bi-layout-sidebar-inset"></i>
                         </a>
                     </li>
-                    <Search />
+                    <Search 
+                        :pageTextContent="pageTextContent" 
+                        :pdfReader="pdfReader"
+                        :scrollToPage="scrollToPage"
+                    />
                     <li class="nav-item vr bg-white mx-2"></li>
                     <!-- Drawing -->
                     <template v-if="isDrawing || isTextInputMode || isTextHighlightMode">

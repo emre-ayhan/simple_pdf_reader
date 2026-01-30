@@ -79,6 +79,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
                 textLayerDiv.style.transform = `scale(${scaleX}, ${scaleY})`;
 
                 const textContent = await page.getTextContent();
+                pageTextContent.value[pageIndex] = textContent;
 
                 for (const item of textContent.items) {
                     if (!item.str) continue;
@@ -169,6 +170,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
     const pdfReader = ref(null);
     const pdfCanvases = ref([]); // Reference to PDF canvases for selection capture
     const textLayerDivs = ref([]); // Reference to text layer divs for text selection
+    const pageTextContent = ref({}); // Store text content by page index
     const isFileLoaded = ref(false);
     const originalPdfData = ref(null);
 
@@ -350,6 +352,28 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         });
     };
 
+    const extractAllText = async () => {
+        if (!pdfDoc) return;
+        
+        const numPages = pdfDoc.numPages;
+        const promises = [];
+
+        for (let i = 1; i <= numPages; i++) {
+            // Check if we already have it
+            if (pageTextContent.value[i-1]) continue;
+
+            promises.push(
+                pdfDoc.getPage(i).then(async (page) => {
+                    const textContent = await page.getTextContent();
+                    pageTextContent.value[i-1] = textContent;
+                })
+            );
+        }
+        
+        // Wait for all text to be extracted
+        await Promise.all(promises);
+    };
+
     const renderAllPages = async () => {
         if (imagePage.value) {
             pageCount.value = 1;
@@ -370,6 +394,9 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             }
         }
 
+        // Start extracting text for search capability (non-blocking)
+        extractAllText();
+
         // Don't render any pages here - let lazy loading handle it
     };
 
@@ -383,6 +410,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             loadFileCallback();
             renderedPages.value.clear();
             drawingContexts.value = [];
+            pageTextContent.value = {};
             
             imagePage.value = reader.result;
             strokesPerPage.value = { 1: [] };
@@ -413,6 +441,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         strokesPerPage.value = {};
         renderedPages.value.clear();
         drawingContexts.value = [];
+        pageTextContent.value = {};
         pdfDoc = pdfDoc_;
         imagePage.value = null;
         handleFileLoadEvent('pdf', pdfDoc.numPages);
@@ -481,6 +510,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             loadFileCallback();
             renderedPages.value.clear();
             drawingContexts.value = [];
+            pageTextContent.value = {};
             
             imagePage.value = dataUrl;
             strokesPerPage.value = { 1: [] };
@@ -863,6 +893,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             strokesPerPage.value = { 1: [] };
             renderedPages.value.clear();
             drawingContexts.value = [];
+            pageTextContent.value = {};
             pdfDoc = pdfDoc_;
             imagePage.value = null;
             handleFileLoadEvent('pdf', pdfDoc.numPages);
@@ -953,6 +984,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             pdfDoc = pdfDoc_;
             renderedPages.value.clear();
             drawingContexts.value = [];
+            pageTextContent.value = {};
             
             await nextTick();
             await renderAllPages();
@@ -1112,6 +1144,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         pagesContainer,
         pdfCanvases,
         textLayerDivs,
+        pageTextContent,
         strokesPerPage,
         drawingCanvases,
         drawingContexts,
@@ -1158,6 +1191,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         openNewBlankPage,
         insertBlankPage,
         createImageImportHandler,
-        createImage
+        createImage,
+        extractAllText
     }
 }

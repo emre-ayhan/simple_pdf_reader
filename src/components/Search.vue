@@ -1,90 +1,172 @@
 <script setup>
-import { ref, watch } from 'vue';
+import { ref, watch, computed } from 'vue';
 
+// Define props to receive the necessary data from parent
+const props = defineProps({
+    pageTextContent: { type: Object, required: true },
+    pdfReader: { type: Object },
+    scrollToPage: { type: Function }
+});
 
 const search = ref(null);
 const caseSensitive = ref(false);
 const wholeWords = ref(false);
 const currentMatchIndex = ref(0);
-const totalMatches = ref(0);
-const matchElements = ref([]);
+const allMatches = ref([]);
 
-const highlightMatches = () => {
-    const searchContainer = document.querySelector('.text-layer');
+const totalMatches = computed(() => allMatches.value.length);
+
+const performSearch = () => {
+    allMatches.value = [];
+    currentMatchIndex.value = 0;
     
-    if (searchContainer) {
-        // Clear previous match elements
-        matchElements.value = [];
-        totalMatches.value = 0;
-        currentMatchIndex.value = 0;
-        
-        searchContainer.querySelectorAll('span').forEach((span) => {
-            // Restore original text if it was previously modified
-            if (span.dataset.originalText) {
-                span.innerHTML = span.dataset.originalText;
-            }
+    // Clear existing DOM highlights first
+    clearDomHighlights();
+
+    const searchTerm = search.value;
+    if (!searchTerm) return;
+
+    const pageIndices = Object.keys(props.pageTextContent).map(Number).sort((a, b) => a - b);
+
+    // Prepare Regex
+    let regex;
+    const escapedTerm = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const flags = caseSensitive.value ? 'g' : 'gi';
+    
+    if (wholeWords.value) {
+        regex = new RegExp(`\\b${escapedTerm}\\b`, flags);
+    } else {
+        regex = new RegExp(escapedTerm, flags);
+    }
+
+    // Search through the extracted text data
+    for (const pageIndex of pageIndices) {
+        const content = props.pageTextContent[pageIndex];
+        if (!content || !content.items) continue;
+
+        content.items.forEach((item, itemIdx) => {
+            if (!item.str) return;
             
-            const text = span.textContent || '';
-            const searchTerm = search.value || '';
+            // Reset regex lastIndex for global searches
+            regex.lastIndex = 0;
             
-            if (searchTerm === '') {
-                return;
-            }
-
-            // Store original text
-            if (!span.dataset.originalText) {
-                span.dataset.originalText = span.innerHTML;
-            }
-
-            let regex;
-            if (wholeWords.value) {
-                const escapedTerm = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                const flags = caseSensitive.value ? 'g' : 'gi';
-                regex = new RegExp(`\\b${escapedTerm}\\b`, flags);
-            } else {
-                const escapedTerm = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                const flags = caseSensitive.value ? 'g' : 'gi';
-                regex = new RegExp(escapedTerm, flags);
-            }
-
-            const matches = text.match(regex);
-            if (matches) {
-                let matchCount = 0;
-                const highlightedText = text.replace(regex, (match) => {
-                    matchCount++;
-                    totalMatches.value++;
-                    const index = totalMatches.value - 1;
-                    return `<mark class="search-highlight" data-match-index="${index}">${match}</mark>`;
+            let match;
+            // Scan the string for all occurrences
+            while ((match = regex.exec(item.str)) !== null) {
+                allMatches.value.push({
+                    pageIndex: pageIndex,
+                    itemIndex: itemIdx,
+                    matchIndex: match.index,
+                    str: item.str,
+                    matchLength: match[0].length
                 });
-                span.innerHTML = highlightedText;
+                
+                // Prevent infinite loop if match is empty string (though unlikely with proper regex)
+                if (match.index === regex.lastIndex) regex.lastIndex++;
+                if (!regex.global) break; 
             }
         });
-        
-        // Collect all match elements
-        matchElements.value = Array.from(searchContainer.querySelectorAll('mark.search-highlight'));
-        
-        // Highlight first match
-        if (matchElements.value.length > 0) {
-            currentMatchIndex.value = 1;
-            highlightCurrentMatch();
-        }
+    }
+
+    if (allMatches.value.length > 0) {
+        currentMatchIndex.value = 1;
+        highlightCurrentMatch();
     }
 };
 
 const highlightCurrentMatch = () => {
-    // Remove active class from all matches
-    matchElements.value.forEach(el => el.classList.remove('search-highlight-active'));
+    if (totalMatches.value === 0) return;
     
-    if (currentMatchIndex.value > 0 && currentMatchIndex.value <= matchElements.value.length) {
-        const currentElement = matchElements.value[currentMatchIndex.value - 1];
-        currentElement.classList.add('search-highlight-active');
-        currentElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const match = allMatches.value[currentMatchIndex.value - 1];
+    
+    // 1. Scroll to the page containing the match
+    // This will trigger lazy loading in useFile.js if the page isn't rendered
+    if (props.scrollToPage) {
+        props.scrollToPage(match.pageIndex);
     }
+
+    // 2. Wait for DOM to update/render, then apply highlight
+    setTimeout(() => {
+        applyVisualHighlight(match);
+    }, 100); 
+};
+
+const escapeHtml = (text) => {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+};
+
+const applyVisualHighlight = (match, retryCount = 0) => {
+    // Stop retrying after 3 seconds (30 * 100ms)
+    if (retryCount > 30) return;
+
+    // Clean up previous highlights on the UI
+    const activeHighlights = document.querySelectorAll('mark.search-highlight');
+    activeHighlights.forEach(el => {
+        // Restore parent span text
+        const parent = el.parentNode;
+        if (parent && parent.dataset.originalText) {
+            parent.innerHTML = parent.dataset.originalText;
+        }
+    });
+
+    const textLayer = document.querySelector(`.page-container[data-page="${match.pageIndex + 1}"] .text-layer`);
+    
+    if (!textLayer) {
+        // Should rarely happen as containers are pre-created
+        setTimeout(() => applyVisualHighlight(match, retryCount + 1), 100);
+        return;
+    }
+
+    const spans = textLayer.querySelectorAll('span');
+    // If no spans, text layer probably hasn't rendered yet
+    if (spans.length === 0) {
+        setTimeout(() => applyVisualHighlight(match, retryCount + 1), 100);
+        return;
+    }
+
+    const targetSpan = spans[match.itemIndex];
+
+    if (targetSpan) {
+        // Prepare highlighted HTML
+        if (!targetSpan.dataset.originalText) {
+            targetSpan.dataset.originalText = targetSpan.innerHTML;
+        }
+
+        const text = match.str;
+        const start = match.matchIndex;
+        const length = match.matchLength;
+        
+        const pre = text.substring(0, start);
+        const highlighted = text.substring(start, start + length);
+        const post = text.substring(start + length);
+        
+        targetSpan.innerHTML = `${escapeHtml(pre)}<mark class="search-highlight">${escapeHtml(highlighted)}</mark>${escapeHtml(post)}`;
+
+        // Helper to find the mark for scrolling
+        const mark = targetSpan.querySelector('mark');
+        if (mark) {
+            mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    } else {
+         // Span match not found, could be misalignment or logic error, but might appearing late?
+         setTimeout(() => applyVisualHighlight(match, retryCount + 1), 100);
+    }
+};
+
+const clearDomHighlights = () => {
+    // Simplified cleanup for this example
+    document.querySelectorAll('mark.search-highlight').forEach(el => {
+         const parent = el.parentNode;
+        if (parent && parent.dataset.originalText) {
+            parent.innerHTML = parent.dataset.originalText;
+        }
+    });
 };
 
 const goToNextMatch = () => {
     if (totalMatches.value === 0) return;
-    
     if (currentMatchIndex.value < totalMatches.value) {
         currentMatchIndex.value++;
     } else {
@@ -95,7 +177,6 @@ const goToNextMatch = () => {
 
 const goToPreviousMatch = () => {
     if (totalMatches.value === 0) return;
-    
     if (currentMatchIndex.value > 1) {
         currentMatchIndex.value--;
     } else {
@@ -104,9 +185,11 @@ const goToPreviousMatch = () => {
     highlightCurrentMatch();
 };
 
-watch(search, highlightMatches);
-watch(caseSensitive, highlightMatches);
-watch(wholeWords, highlightMatches);
+watch([search, caseSensitive, wholeWords], performSearch);
+watch(() => props.pageTextContent, () => {
+    // If text content loads late, re-run search if we have a term
+    if (search.value) performSearch();
+}, { deep: true });
 
 defineExpose({
     search,
@@ -124,10 +207,6 @@ defineExpose({
     background-color: yellow;
     color: black;
     padding: 0;
-}
-.search-highlight-active {
-    background-color: orange;
-    color: black;
 }
 </style>
 <template>
