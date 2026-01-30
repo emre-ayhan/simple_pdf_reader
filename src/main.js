@@ -1,7 +1,7 @@
 import { createApp } from 'vue'
 import App from './App.vue'
 import './scss/app.scss'
-import 'bootstrap'
+import * as bootstrap from 'bootstrap'
 import 'bootstrap-icons/font/bootstrap-icons.css'
 import i18n from './plugins/i18n.js'
 

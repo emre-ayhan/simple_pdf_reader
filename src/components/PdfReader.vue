@@ -614,11 +614,7 @@ defineExpose({
                             <i class="bi bi-layout-sidebar-inset"></i>
                         </a>
                     </li>
-                    <Search 
-                        :pageTextContent="pageTextContent" 
-                        :pdfReader="pdfReader"
-                        :scrollToPage="scrollToPage"
-                    />
+                    <Search :pageTextContent="pageTextContent" :scrollToPage="scrollToPage" />
                     <li class="nav-item vr bg-white mx-2"></li>
                     <!-- Drawing -->
                     <template v-if="isDrawing || isTextInputMode || isTextHighlightMode">

@@ -4,9 +4,10 @@ import { ref, watch, computed } from 'vue';
 // Define props to receive the necessary data from parent
 const props = defineProps({
     pageTextContent: { type: Object, required: true },
-    pdfReader: { type: Object },
     scrollToPage: { type: Function }
 });
+
+const disabled = computed(() => Object.values(props.pageTextContent).map(page => page.items.length).reduce((a, b) => a + b, 0) === 0);
 
 const search = ref(null);
 const caseSensitive = ref(false);
@@ -211,10 +212,10 @@ defineExpose({
 </style>
 <template>
 <li class="nav-item btn-group">
-    <a class="nav-link" href="#" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" :title="$t('Search')">
+    <a class="nav-link" :class="{ disabled }" href="#" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" :title="$t('Search')">
         <i class="bi bi-search"></i>
     </a>
-    <div class="dropdown-menu dropdown-menu-dark rounded-3 p-2">
+    <div class="dropdown-menu dropdown-menu-dark shadow rounded-3 p-2 mt-2">
         <div class="d-flex align-items-start gap-2">
             <div>
                 <div class="d-flex gap-2">
