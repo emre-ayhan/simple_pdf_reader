@@ -48,7 +48,7 @@
 
     .nav-item.btn-group {
         .dropdown-menu {
-            width: 256px;
+            min-width: 256px;
 
             input[type="color"] {
                 border: none !important;
@@ -192,9 +192,15 @@
     pointer-events: none;
     z-index: 2;
     
+    mark.search-highlight {
+        background-color: rgb(255, 255, 0);
+        padding: 0;
+    }
+
     &.text-selectable {
         > span {
             pointer-events: auto;
+            
         }
     }
     

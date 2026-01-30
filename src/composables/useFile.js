@@ -106,7 +106,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
                     const fontAscent = fontHeight;
 
                     span.style.left = `${x}px`;
-                    span.style.top = `${y - fontAscent}px`;
+                    span.style.top = `${y - fontAscent + 5}px`;
                     span.style.fontSize = `${fontHeight}px`;
                     span.style.fontFamily = item.fontName || 'sans-serif';
 

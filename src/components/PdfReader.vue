@@ -10,6 +10,7 @@ import { useWindowEvents } from "../composables/useWindowEvents";
 import { enableTouchDrawing } from "../composables/useTouchDrawing";
 import EmptyState from "./EmptyState.vue";
 import PrintModal from "./PrintModal.vue";
+import Search from "./Search.vue";
 
 const props = defineProps({
     toolbarPosition: {
@@ -344,14 +345,14 @@ const hasActiveTool = computed(() => {
 
 let resizeTimeout = null;
 
-const isTextInputFocused = computed(() => {
-    return isTextInputMode.value || selectedStroke.value?.stroke[0]?.type === 'text';
-});
-
 const printModal = ref(null);
 const printPage = () => {
     printModal.value?.printPage();
 };
+
+const isAnyInputFocused = computed(() => {
+    return document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA' || document.activeElement.isContentEditable);
+});
 
 // Page Event Handlers
 useWindowEvents(fileId, {
@@ -375,14 +376,14 @@ useWindowEvents(fileId, {
     keydown: {
         d: {
             action: (event) => {
-                if (isTextInputFocused.value) return;
+                if (isAnyInputFocused.value) return;
                 event.preventDefault();
                 selectDrawingTool('pen');
             }
         },
         e: {
             action: (event) => {
-                if (isTextInputFocused.value) return;
+                if (isAnyInputFocused.value) return;
                 event.preventDefault();
                 selectEraser();
             }
@@ -395,14 +396,14 @@ useWindowEvents(fileId, {
                     return;
                 }
 
-                if (isTextInputFocused.value) return;
+                if (isAnyInputFocused.value) return;
                 event.preventDefault();
                 selectDrawingTool('line');
             }
         },
         r: {
             action: (event) => {
-                if (isTextInputFocused.value) return;
+                if (isAnyInputFocused.value) return;
                 event.preventDefault();
                 selectDrawingTool('rectangle');
             }
@@ -415,7 +416,7 @@ useWindowEvents(fileId, {
                     return;
                 }
 
-                if (isTextInputFocused.value) return;
+                if (isAnyInputFocused.value) return;
                 event.preventDefault();
                 selectDrawingTool('circle');
             }
@@ -437,21 +438,21 @@ useWindowEvents(fileId, {
         },
         e: {
             action: (event) => {
-                if (isTextInputFocused.value) return;
+                if (isAnyInputFocused.value) return;
                 event.preventDefault();
                 selectEraser();
             }
         },
         h: {
             action: (event) => {
-                if (isTextInputFocused.value) return;
+                if (isAnyInputFocused.value) return;
                 event.preventDefault();
                 toggleTextHighlightMode();
             }
         },
         t: {
             action: (event) => {
-                if (isTextInputFocused.value) return;
+                if (isAnyInputFocused.value) return;
                 event.preventDefault();
                 selectText();
             }
@@ -464,7 +465,7 @@ useWindowEvents(fileId, {
                     return;
                 }
 
-                if (isTextInputFocused.value) return;
+                if (isAnyInputFocused.value) return;
                 event.preventDefault();
                 toggleTextSelection();
             }
@@ -490,7 +491,7 @@ useWindowEvents(fileId, {
         v: {
             ctrl: true,
             action: () => {
-                if (isTextInputFocused.value) return;
+                if (isAnyInputFocused.value) return;
                 insertFromClipboard();
             }
         },
@@ -507,14 +508,14 @@ useWindowEvents(fileId, {
         },
         Home: {
             action: (event) => {
-                if (isFirstPage.value || isTextInputFocused.value) return;
+                if (isFirstPage.value || isAnyInputFocused.value) return;
                 event.preventDefault();
                 scrollToFirstPage();
             }
         },
         End: {
             action: (event) => {
-                if (isLastPage.value || isTextInputFocused.value) return;
+                if (isLastPage.value || isAnyInputFocused.value) return;
                 event.preventDefault();
                 scrollToLastPage();
             }
@@ -528,13 +529,13 @@ useWindowEvents(fileId, {
         },
         ArrowLeft: {
             action: () => {
-                if (isFirstPage.value || isTextInputFocused.value) return;
+                if (isFirstPage.value || isAnyInputFocused.value) return;
                 scrollToPage(pageIndex.value - 1);
             }
         },
         ArrowRight: {
             action: () => {
-                if (isLastPage.value || isTextInputFocused.value) return;
+                if (isLastPage.value || isAnyInputFocused.value) return;
                 scrollToPage(pageIndex.value + 1);
             }
         },
@@ -606,6 +607,14 @@ defineExpose({
             <template v-if="isFileLoaded">
                 <!-- Toolbar -->
                 <ul ref="toolbar" class="navbar-nav mx-auto flex-wrap justify-content-center">
+                    <!-- Thumbnail Sidebar -->
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" :title="$t('Thumbnail Sidebar')">
+                            <i class="bi bi-layout-sidebar-inset"></i>
+                        </a>
+                    </li>
+                    <Search />
+                    <li class="nav-item vr bg-white mx-2"></li>
                     <!-- Drawing -->
                     <template v-if="isDrawing || isTextInputMode || isTextHighlightMode">
                         <li class="nav-item" v-for="(strokeStyle, index) in initialStrokeStyles">

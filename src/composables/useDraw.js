@@ -26,7 +26,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     const isBoundingBoxHovering = ref(false);
 
     const textModesActive = computed(() => {
-        return isTextSelectionMode.value && isTextHighlightMode.value;
+        return isTextSelectionMode.value || isTextHighlightMode.value;
     })
 
     const colors = [
