@@ -33,12 +33,19 @@
 
     .nav-link {
         padding: 4px 12px !important;
+        outline: none !important;
 
         &:hover,
         &.active {
             border-radius: var(--bs-border-radius-lg);
             background-color: rgba(255, 255, 255, 0.1) !important;
             color: $text-secondary !important;
+        }
+
+
+        &:focus {
+            outline: none !important;
+            box-shadow: none !important;
         }
     }
 
