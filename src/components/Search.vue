@@ -148,7 +148,7 @@ const applyVisualHighlight = (match, retryCount = 0) => {
         // Helper to find the mark for scrolling
         const mark = targetSpan.querySelector('mark');
         if (mark) {
-            mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            mark.scrollIntoView({ block: 'center' });
         }
     } else {
          // Span match not found, could be misalignment or logic error, but might appearing late?
@@ -198,18 +198,6 @@ defineExpose({
     wholeWords
 });
 </script>
-<style scoped>
-.form-control {
-    padding-left: 32px !important;
-}
-</style>
-<style>
-.search-highlight {
-    background-color: yellow;
-    color: black;
-    padding: 0;
-}
-</style>
 <template>
 <li class="nav-item btn-group">
     <a class="nav-link" :class="{ disabled }" href="#" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" :title="$t('Search')">
@@ -221,7 +209,7 @@ defineExpose({
                 <div class="d-flex gap-2">
                     <div class="position-relative">
                         <i class="bi bi-search text-dark position-absolute top-50 start-0 translate-middle-y ps-2"></i>
-                        <input type="search" class="form-control rounded-3 ps-4" placeholder="Search..." v-model="search" />
+                        <input type="search" class="form-control rounded-3 ps-4" placeholder="Search..." @keydown.enter.prevent="goToNextMatch" v-model="search" />
                     </div>
                     <div class="d-flex gap-1 mb-2 align-items-center">
                         <span>{{ currentMatchIndex }}</span>

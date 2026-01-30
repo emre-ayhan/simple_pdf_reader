@@ -396,3 +396,13 @@ select.form-control-plaintext {
         background: #fff !important;
     }
 }
+
+input[type="search"] {
+    padding-left: 32px !important;
+}
+
+.search-highlight {
+    background-color: yellow;
+    color: black;
+    padding: 0;
+}
