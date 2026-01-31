@@ -278,7 +278,7 @@ defineExpose({
                 <div class="d-flex gap-2">
                     <div class="position-relative">
                         <i class="bi bi-search text-dark position-absolute top-50 start-0 translate-middle-y ps-2"></i>
-                        <input type="search" class="form-control rounded-3 ps-4" placeholder="Search..." @keydown.enter.prevent="goToNextMatch" v-model="search" />
+                        <input type="search" class="form-control rounded-3 ps-4" :placeholder="`${$t('Search')}...`" @keydown.enter.prevent="goToNextMatch" v-model="search" />
                     </div>
                     <div class="d-flex gap-1 mb-2 align-items-center">
                         <span>{{ currentMatchIndex }}</span>
@@ -287,11 +287,11 @@ defineExpose({
                     </div>
                 </div>
                 <div class="d-flex align-items-center gap-4 mt-2">
-                    <div class="form-check">
+                    <div class="form-check small">
                         <input class="form-check-input" type="checkbox" id="searchCaseSensitive" v-model="caseSensitive">
                         <label class="form-check-label text-nowrap" for="searchCaseSensitive">{{ $t('Case Sensitive') }}</label>
                     </div>
-                    <div class="form-check">
+                    <div class="form-check small">
                         <input class="form-check-input" type="checkbox" id="searchWholeWords" v-model="wholeWords">
                         <label class="form-check-label text-nowrap" for="searchWholeWords">{{ $t('Whole Words') }}</label>
                     </div>
@@ -300,12 +300,12 @@ defineExpose({
             <div class="vr bg-white"></div>
             <ul class="navbar-nav">
                 <li class="nav-item">
-                    <a href="#" class="nav-link" :title="$t('Previous')" @click.prevent="goToPreviousMatch">
+                    <a href="#" class="nav-link" :class="{ disabled: !totalMatches }" :title="$t('Previous')" @click.prevent="goToPreviousMatch">
                         <i class="bi bi-chevron-up"></i>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a href="#" class="nav-link" :title="$t('Next')" @click.prevent="goToNextMatch">
+                    <a href="#" class="nav-link" :class="{ disabled: !totalMatches }" :title="$t('Next')" @click.prevent="goToNextMatch">
                         <i class="bi bi-chevron-down"></i>
                     </a>
                 </li>

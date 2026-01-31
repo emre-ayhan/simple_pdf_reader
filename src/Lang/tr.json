@@ -79,5 +79,8 @@
     "You have unsaved changes in this tab. Are you sure you want to close it?": "Bu sekmede kaydedilmemiş değişiklikleriniz var. Kapatmak istediğinizden emin misiniz?",
     "You have unsaved changes in one or more tabs. Are you sure you want to close the application?": "Bir veya daha fazla sekmede kaydedilmemiş değişiklikleriniz var. Uygulamayı kapatmak istediğinizden emin misiniz?",
     "Import From Clipboard": "Panodan İçe Aktar",
-    "Insert Last Copied Stroke": "Son Kopyalanan Fırçayı Ekle"
+    "Insert Last Copied Stroke": "Son Kopyalanan Fırçayı Ekle",
+    "Search": "Ara",
+    "Case Sensitive": "Büyük/Küçük Harf Duyarlı",
+    "Whole Words": "Tam Kelimeler"
 }
