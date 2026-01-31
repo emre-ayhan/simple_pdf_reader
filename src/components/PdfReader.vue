@@ -246,10 +246,13 @@ const selectDrawingTool = (mode) => {
     const wasActive = isDrawing.value && drawMode.value === mode;
     resetAllTools();
     
-    if (!wasActive) {
-        isDrawing.value = true;
-        drawMode.value = mode;
+    if (wasActive) {
+        isSelectModeActive.value = true;
+        return;
     }
+
+    isDrawing.value = true;
+    drawMode.value = mode;
 };
 
 const selectEraser = () => {
@@ -359,7 +362,7 @@ const printPage = () => {
 };
 
 const isAnyInputFocused = computed(() => {
-    return document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA' || document.activeElement.isContentEditable);
+    return (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA' || document.activeElement.isContentEditable) || isTextInputMode.value);
 });
 
 // Page Event Handlers
@@ -637,7 +640,7 @@ defineExpose({
                             <a href="#" role="button" class="nav-link" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
                                 <i class="bi bi-palette-fill"></i>
                             </a>
-                            <div class="dropdown-menu dropdown-menu-dark rounded-3 p-3">
+                            <div class="dropdown-menu dropdown-menu-dark rounded-3 mt-2 p-3">
                                 <div class="mb-3">
                                     <div class="form-label">{{ $t('Color') }}</div>
                                     <div class="row row-cols-5">
