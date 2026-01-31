@@ -24,6 +24,7 @@ const props = defineProps({
 // Cursor Style
 const cursorStyle = computed(() => {
     if (resizeCursor.value) return resizeCursor.value;
+    if (handToolActive.value) return isHandToolPanning.value ? 'grabbing' : 'grab';
     if (selectedStroke.value && (isStrokeHovering.value || isDragging.value)) return 'move';
     if (isSelectModeActive.value && isStrokeHovering.value) return 'pointer';
     if (isSelectionMode.value) return 'crosshair';
@@ -137,6 +138,8 @@ const {
     showStrokeMenu,
     strokeMenuPosition,
     resizeCursor,
+    handToolActive,
+    isHandToolPanning,
     startDrawing,
     stopDrawing,
     onPointerMove,
@@ -187,11 +190,24 @@ const handleImageImport = createImageImportHandler(redrawAllStrokes, addToHistor
 
 
 // Toolbar Actions
+const touchAction = computed(() => {
+    if (isViewLocked.value || isPenHovering.value || isSelectModeActive.value || isSelectionMode.value || (enableTouchDrawing.value && hasActiveTool.value)) {
+        return 'none';
+    }
+    return 'pan-y pan-x';
+});
+
 const isViewLocked = ref(false);
 const isThumbnailSidebarVisible = ref(false);
 
 const toggleThumbnailSidebar = () => {
     isThumbnailSidebarVisible.value = !isThumbnailSidebarVisible.value;
+};
+
+const toggleHandTool = () => {
+    if (!isFileLoaded.value) return;
+    resetAllTools();
+    handToolActive.value = !handToolActive.value;
 };
 
 const lockView = () => {
@@ -201,6 +217,7 @@ const lockView = () => {
 
 const resetAllTools = () => {
     resetToolState();
+    handToolActive.value = false;
     window.getSelection()?.removeAllRanges();
     document.removeEventListener('mouseup', handleTextSelectionMouseUp);
 };
@@ -730,6 +747,11 @@ defineExpose({
                             <i class="bi bi-cursor-text"></i>
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" @click.prevent="toggleHandTool" :class="{ active: handToolActive }" :title="$t('Hand Tool')">
+                            <i class="bi bi-hand-index-thumb-fill"></i>
+                        </a>
+                    </li>
                     <li class="nav-item vr bg-white mx-2"></li>
 
                     <!-- Undo/Redo -->
@@ -844,7 +866,7 @@ defineExpose({
                                 :style="{
                                     cursor: cursorStyle,
                                     pointerEvents: 'auto',
-                                    touchAction: (isViewLocked || isPenHovering || isSelectModeActive || isSelectionMode || (enableTouchDrawing && hasActiveTool)) ? 'none' : 'pan-y pan-x',
+                                    touchAction: touchAction,
                                     zIndex: isTextSelectionMode ? 1 : 3
                                 }"
                                 :data-color="drawColor"

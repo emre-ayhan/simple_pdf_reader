@@ -25,9 +25,25 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     const isStrokeHovering = ref(false);
     const isBoundingBoxHovering = ref(false);
 
+    const handToolActive = ref(false);
+
+    const isHandToolPanning = ref(false);
+    const handPanStart = ref(null); // { x, y, scrollLeft, scrollTop }
+    const handPanPointerId = ref(null);
+    const handPanCanvasEl = ref(null);
+
     const textModesActive = computed(() => {
+        // Modes where we want the PDF.js text layer to receive pointer events.
         return isTextSelectionMode.value || isTextHighlightMode.value;
     })
+
+    const getScrollContainer = () => {
+        // The element with overflow scrolling is `.pdf-reader`.
+        // `pagesContainer` is inside it, so we can resolve it via closest().
+        const el = pagesContainer?.value;
+        if (!el) return null;
+        return el.closest?.('.pdf-reader') || el;
+    };
 
     const colors = [
         'black', 'dimgray', 'gray', 'darkgray', 'silver', 'white',
@@ -1014,6 +1030,31 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     };
 
     const startDrawing = (e) => {
+        if (handToolActive.value) {
+            const scrollEl = getScrollContainer();
+            if (!scrollEl) return;
+
+            const canvasIndex = getCanvasIndexFromEvent(e);
+            const canvas = drawingCanvases.value?.[canvasIndex] || null;
+
+            isHandToolPanning.value = true;
+            handPanPointerId.value = e.pointerId;
+            handPanCanvasEl.value = canvas;
+            handPanStart.value = {
+                x: e.clientX,
+                y: e.clientY,
+                scrollLeft: scrollEl.scrollLeft,
+                scrollTop: scrollEl.scrollTop,
+            };
+
+            if (canvas && e.pointerId !== undefined) {
+                canvas.setPointerCapture(e.pointerId);
+            }
+
+            stopEvent(e);
+            return;
+        }
+
         if (textModesActive.value) return;
 
         // Track active pointer type
@@ -1270,6 +1311,23 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     };
 
     const draw = (e) => {
+        if (handToolActive.value) {
+            if (!isHandToolPanning.value) return;
+            if (e.pointerId !== handPanPointerId.value) return;
+
+            const scrollEl = getScrollContainer();
+            if (!scrollEl || !handPanStart.value) return;
+
+            const dx = e.clientX - handPanStart.value.x;
+            const dy = e.clientY - handPanStart.value.y;
+
+            scrollEl.scrollLeft = handPanStart.value.scrollLeft - dx;
+            scrollEl.scrollTop = handPanStart.value.scrollTop - dy;
+
+            stopEvent(e);
+            return;
+        }
+
         if (textModesActive.value) return;
 
         // Text mode doesn't need draw event handling
@@ -1660,6 +1718,27 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     };
 
     const stopDrawing = (e) => {
+        if (handToolActive.value) {
+            if (!isHandToolPanning.value) return;
+            if (e && e.pointerId !== handPanPointerId.value) return;
+
+            if (handPanCanvasEl.value && e && e.pointerId !== undefined) {
+                try {
+                    handPanCanvasEl.value.releasePointerCapture(e.pointerId);
+                } catch (err) {
+                    // Ignore if capture was already released
+                }
+            }
+
+            isHandToolPanning.value = false;
+            handPanStart.value = null;
+            handPanPointerId.value = null;
+            handPanCanvasEl.value = null;
+
+            if (e) stopEvent(e);
+            return;
+        }
+
         if (textModesActive.value) return;
         
         // Text mode is handled by confirmText function
@@ -3043,6 +3122,8 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         strokeMenu,
         showStrokeMenu,
         strokeMenuPosition,
+        handToolActive,
+        isHandToolPanning,
         startDrawing,
         draw,
         stopDrawing,
