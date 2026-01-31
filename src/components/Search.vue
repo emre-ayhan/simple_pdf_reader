@@ -17,9 +17,17 @@ const allMatches = ref([]);
 
 const totalMatches = computed(() => allMatches.value.length);
 
-const performSearch = () => {
+const performSearch = (resetIndex = true) => {
+    // Store current match details if we want to preserve position
+    let previousMatch = null;
+    if (!resetIndex && currentMatchIndex.value > 0 && allMatches.value.length > 0) {
+        previousMatch = allMatches.value[currentMatchIndex.value - 1];
+    }
+
     allMatches.value = [];
-    currentMatchIndex.value = 0;
+    if (resetIndex) {
+        currentMatchIndex.value = 0;
+    }
     
     // Clear existing DOM highlights first
     clearDomHighlights();
@@ -73,8 +81,42 @@ const performSearch = () => {
     }
 
     if (allMatches.value.length > 0) {
-        currentMatchIndex.value = 1;
-        highlightCurrentMatch();
+        if (resetIndex) {
+            currentMatchIndex.value = 1;
+            highlightCurrentMatch();
+        } else if (previousMatch) {
+            // Try to find the previous match in the new list
+            const newIndex = allMatches.value.findIndex(m => 
+                m.pageIndex === previousMatch.pageIndex && 
+                m.itemIndex === previousMatch.itemIndex && 
+                m.matchIndex === previousMatch.matchIndex
+            );
+            
+            if (newIndex !== -1) {
+                 // Update index to match the new array position
+                currentMatchIndex.value = newIndex + 1;
+            } else {
+                // Determine where we should be relative to pages
+                // If the previous match is gone, find the nearest one after it
+                 const nextBest = allMatches.value.findIndex(m => 
+                    (m.pageIndex > previousMatch.pageIndex) || 
+                    (m.pageIndex === previousMatch.pageIndex && m.itemIndex > previousMatch.itemIndex)
+                );
+                
+                if (nextBest !== -1) {
+                    currentMatchIndex.value = nextBest + 1;
+                } else {
+                     // No matches after, go to last
+                    currentMatchIndex.value = allMatches.value.length;
+                }
+            }
+            // Re-highlight just in case DOM changed
+             highlightCurrentMatch();
+        } else {
+            // If we weren't resetting but had no valid previous match, default to 1
+             currentMatchIndex.value = 1;
+             highlightCurrentMatch();
+        }
     }
 };
 
@@ -213,10 +255,10 @@ const goToPreviousMatch = () => {
     highlightCurrentMatch();
 };
 
-watch([search, caseSensitive, wholeWords], performSearch);
+watch([search, caseSensitive, wholeWords], () => performSearch(true));
 watch(() => props.pageTextContent, () => {
-    // If text content loads late, re-run search if we have a term
-    if (search.value) performSearch();
+    // If text content loads late, re-run search if we have a term, but preserve position
+    if (search.value) performSearch(false);
 }, { deep: true });
 
 defineExpose({

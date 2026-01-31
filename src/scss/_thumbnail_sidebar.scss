@@ -8,12 +8,14 @@
     z-index: 1040;
     color: $primary;
 }
+
 .thumbs-list {
     display: flex;
     flex-direction: column;
     gap: 8px;
     padding: 8px;
 }
+
 .thumbnail-item {
     cursor: pointer;
     border-radius: $border-radius-xl;
@@ -23,22 +25,29 @@
     &:hover,
     &.active {
         background: $darkLighter;
+    }
+
+    &.active {
         outline: 2px solid $primary;
     }
 }
+
 .thumb-page-number {
     font-size: 0.8rem;
     color: $primary;
 }
+
 .thumb-image-wrapper {
     border-radius: $border-radius-xl;
     overflow: hidden;
 }
+
 .thumb-image {
     display: block;
     width: 100%;
     height: auto;
 }
+
 .thumb-placeholder {
     display: flex;
     align-items: center;
