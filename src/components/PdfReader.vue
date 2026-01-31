@@ -839,7 +839,7 @@ defineExpose({
         <div :class="`pdf-reader toolbar-${toolbarPosition} ${isViewLocked ? 'overflow-hidden' : ''}`" ref="pdfReader">
             <EmptyState v-if="!isFileLoaded" @open-file="handleFileOpen" />
 
-            <div v-else class="reader-layout d-flex">
+            <template v-else>
                 <ThumbnailSidebar 
                     v-if="isThumbnailSidebarVisible"
                     :pageCount="pageCount"
@@ -877,7 +877,7 @@ defineExpose({
                     </div>
                 </template>
                 </div>
-            </div>
+            </template>
         </div>
         <input ref="fileInput" type="file"  accept="application/pdf,image/*" class="d-none" @change="loadFile" />
         <input ref="imageInput" type="file" accept="image/*" class="d-none" @change="handleImageImport" />
@@ -985,10 +985,4 @@ defineExpose({
         />
     </div>
 </template>
-
-<style scoped>
-.reader-layout {
-    height: 100%;
-}
-</style>
 
