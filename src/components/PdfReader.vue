@@ -190,6 +190,8 @@ const handleImageImport = createImageImportHandler(redrawAllStrokes, addToHistor
 
 
 // Toolbar Actions
+const textActionsDisabled = computed(() => Object.values(pageTextContent.value).map(page => page.items.length).reduce((a, b) => a + b, 0) === 0);
+
 const touchAction = computed(() => {
     if (isViewLocked.value || isPenHovering.value || isSelectModeActive.value || isSelectionMode.value || (enableTouchDrawing.value && hasActiveTool.value)) {
         return 'none';
@@ -646,7 +648,7 @@ defineExpose({
                         </a>
                     </li>
                     <!-- Search -->
-                    <Search :pageTextContent="pageTextContent" :scrollToPage="scrollToPage" />
+                    <Search :pageTextContent="pageTextContent" :disabled="textActionsDisabled" :scrollToPage="scrollToPage" />
                 </ul>
                 
                 <!-- Toolbar -->
@@ -723,7 +725,7 @@ defineExpose({
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="toggleTextHighlightMode" :class="{ active: isTextHighlightMode }" :title="$t('Highlight Text') + ' (H)'">
+                        <a class="nav-link" href="#" @click.prevent="toggleTextHighlightMode" :class="{ active: isTextHighlightMode, disabled: textActionsDisabled }" :title="$t('Highlight Text') + ' (H)'">
                             <i class="bi bi-highlighter"></i>
                         </a>
                     </li>
@@ -743,7 +745,7 @@ defineExpose({
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="toggleTextSelection" :class="{ active: isTextSelectionMode && !isTextHighlightMode }" :title="$t('Text Selection') + ' (S)'">
+                        <a class="nav-link" href="#" @click.prevent="toggleTextSelection" :class="{ active: isTextSelectionMode && !isTextHighlightMode, disabled: textActionsDisabled }" :title="$t('Text Selection') + ' (S)'">
                             <i class="bi bi-cursor-text"></i>
                         </a>
                     </li>

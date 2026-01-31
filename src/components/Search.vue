@@ -3,11 +3,10 @@ import { ref, watch, computed } from 'vue';
 
 // Define props to receive the necessary data from parent
 const props = defineProps({
+    disabled: Boolean,
     pageTextContent: { type: Object, required: true },
     scrollToPage: { type: Function }
 });
-
-const disabled = computed(() => Object.values(props.pageTextContent).map(page => page.items.length).reduce((a, b) => a + b, 0) === 0);
 
 const search = ref(null);
 const caseSensitive = ref(false);
