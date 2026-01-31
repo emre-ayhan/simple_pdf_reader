@@ -1,0 +1,48 @@
+.thumbnail-sidebar {
+    background-color: $dark-bg-accent;
+    position: fixed;
+    width: 180px;
+    max-width: 220px;
+    height: 100%;
+    overflow-y: auto;
+    z-index: 1040;
+    color: $primary;
+}
+.thumbs-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px;
+}
+.thumbnail-item {
+    cursor: pointer;
+    border-radius: $border-radius-xl;
+    outline: 1px solid $secondary;
+    padding: 8px;
+
+    &:hover,
+    &.active {
+        background: $darkLighter;
+        outline: 2px solid $primary;
+    }
+}
+.thumb-page-number {
+    font-size: 0.8rem;
+    color: $primary;
+}
+.thumb-image-wrapper {
+    border-radius: $border-radius-xl;
+    overflow: hidden;
+}
+.thumb-image {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+.thumb-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 140px;
+    color: $secondary;
+}

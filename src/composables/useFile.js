@@ -157,6 +157,30 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         }
     };
 
+    // Render a low-res offscreen thumbnail for a page (independent of lazy loading)
+    const renderPageThumbnail = async (pageNumber, maxWidth = 160) => {
+        try {
+            if (!pdfDoc) return null;
+            if (!pageNumber || pageNumber < 1 || pageNumber > pdfDoc.numPages) return null;
+
+            const page = await pdfDoc.getPage(pageNumber);
+            const viewport1x = page.getViewport({ scale: 1 });
+            const scale = Math.min(maxWidth / viewport1x.width, 0.5); // cap scale to avoid heavy work
+            const viewport = page.getViewport({ scale });
+
+            const offscreen = document.createElement('canvas');
+            offscreen.width = viewport.width;
+            offscreen.height = viewport.height;
+            const ctx = offscreen.getContext('2d');
+
+            await page.render({ canvasContext: ctx, viewport }).promise;
+            return offscreen.toDataURL('image/jpeg', 0.6);
+        } catch (e) {
+            console.warn('Thumbnail render failed for page', pageNumber, e);
+            return null;
+        }
+    };
+
     // Observers
     const intersectionObserver = ref(null);
     const lazyLoadObserver = ref(null);
@@ -1179,6 +1203,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         setupIntersectionObserver,
         setupLazyLoadObserver,
         renderPdfPage,
+        renderPageThumbnail,
         resyncRenderedTextLayers,
         scrollToPage,
         scrollToFirstPage,

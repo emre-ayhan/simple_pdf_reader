@@ -11,6 +11,7 @@ import { enableTouchDrawing } from "../composables/useTouchDrawing";
 import EmptyState from "./EmptyState.vue";
 import PrintModal from "./PrintModal.vue";
 import Search from "./Search.vue";
+import ThumbnailSidebar from "./ThumbnailSidebar.vue";
 
 const props = defineProps({
     toolbarPosition: {
@@ -94,6 +95,7 @@ const {
     createImageImportHandler,
     handlePageNumberInput,
     renderPdfPage,
+    renderPageThumbnail,
     resyncRenderedTextLayers,
 } = useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallback, fileSavedCallback);
 
@@ -184,6 +186,11 @@ const handleImageImport = createImageImportHandler(redrawAllStrokes, addToHistor
 
 // Toolbar Actions
 const isViewLocked = ref(false);
+const isThumbnailSidebarVisible = ref(false);
+
+const toggleThumbnailSidebar = () => {
+    isThumbnailSidebarVisible.value = !isThumbnailSidebarVisible.value;
+};
 
 const lockView = () => {
     if (!isFileLoaded.value) return;
@@ -604,12 +611,12 @@ defineExpose({
 </script>
 <template>
     <div class="container-fluid bg-dark" @dragenter.prevent="onDragEnter" @dragleave.prevent="onDragLeave" @dragover.prevent @drop.prevent="onDrop">
-        <nav :class="`navbar navbar-expand navbar-dark bg-dark py-1 fixed-${toolbarPosition}`">
+        <nav :class="`navbar navbar-expand navbar-dark bg-dark p-1 fixed-${toolbarPosition}`">
             <template v-if="isFileLoaded">
                 <ul class="navbar-nav">
                     <!-- Thumbnail Sidebar -->
                     <li class="nav-item">
-                        <a class="nav-link" href="#" :title="$t('Thumbnail Sidebar')">
+                        <a class="nav-link" href="#" :title="$t('Thumbnail Sidebar')" @click.prevent="toggleThumbnailSidebar" :class="{ active: isThumbnailSidebarVisible }">
                             <i class="bi bi-layout-sidebar-inset"></i>
                         </a>
                     </li>
@@ -800,7 +807,18 @@ defineExpose({
         <div :class="`pdf-reader toolbar-${toolbarPosition} ${isViewLocked ? 'overflow-hidden' : ''}`" ref="pdfReader">
             <EmptyState v-if="!isFileLoaded" @open-file="handleFileOpen" />
 
-            <div v-else class="pages-container" ref="pagesContainer" :style="{ width: `${zoomPercentage}%` }">
+            <div v-else class="reader-layout d-flex">
+                <ThumbnailSidebar 
+                    v-if="isThumbnailSidebarVisible"
+                    :pageCount="pageCount"
+                    :deletedPages="deletedPages"
+                    :renderedPages="renderedPages"
+                    :pdfCanvases="pdfCanvases"
+                    :pageIndex="pageIndex"
+                    :scrollToPage="scrollToPage"
+                    :renderPageThumbnail="renderPageThumbnail"
+                />
+                <div class="pages-container flex-grow-1" ref="pagesContainer" :style="{ width: `${zoomPercentage}%` }">
                 <template v-for="page in pageCount" :key="page">
                     <div  class="page-container" :data-page="page" v-show="!deletedPages.has(page)">
                         <div class="canvas-container" :class="{ 'canvas-loading': !renderedPages.has(page) }">
@@ -826,6 +844,7 @@ defineExpose({
                         </div>
                     </div>
                 </template>
+                </div>
             </div>
         </div>
         <input ref="fileInput" type="file"  accept="application/pdf,image/*" class="d-none" @change="loadFile" />
@@ -934,4 +953,10 @@ defineExpose({
         />
     </div>
 </template>
+
+<style scoped>
+.reader-layout {
+    height: 100%;
+}
+</style>
 
