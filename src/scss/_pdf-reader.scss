@@ -201,7 +201,8 @@
     
     mark.search-highlight {
         background-color: rgb(255, 255, 0);
-        padding: 0;
+        color: #000 !important;
+        padding: 8px 0;
     }
 
     &.text-selectable {
@@ -406,10 +407,4 @@ select.form-control-plaintext {
 
 input[type="search"] {
     padding-left: 32px !important;
-}
-
-.search-highlight {
-    background-color: yellow;
-    color: black;
-    padding: 0;
 }

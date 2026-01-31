@@ -45,6 +45,8 @@ const performSearch = () => {
         const content = props.pageTextContent[pageIndex];
         if (!content || !content.items) continue;
 
+        let spanIndex = 0;
+
         content.items.forEach((item, itemIdx) => {
             if (!item.str) return;
             
@@ -56,7 +58,7 @@ const performSearch = () => {
             while ((match = regex.exec(item.str)) !== null) {
                 allMatches.value.push({
                     pageIndex: pageIndex,
-                    itemIndex: itemIdx,
+                    itemIndex: spanIndex,
                     matchIndex: match.index,
                     str: item.str,
                     matchLength: match[0].length
@@ -66,6 +68,7 @@ const performSearch = () => {
                 if (match.index === regex.lastIndex) regex.lastIndex++;
                 if (!regex.global) break; 
             }
+            spanIndex++;
         });
     }
 
@@ -127,7 +130,31 @@ const applyVisualHighlight = (match, retryCount = 0) => {
         return;
     }
 
-    const targetSpan = spans[match.itemIndex];
+    let targetSpan = spans[match.itemIndex];
+
+    // Validation: Ensure the span content matches the matched string to handle index misalignments
+    if (!targetSpan || targetSpan.textContent !== match.str) {
+        // Attempt to find the correct span in the vicinity
+        const range = 50; 
+        for (let i = 1; i < range; i++) {
+            // Check forward
+            if (match.itemIndex + i < spans.length) {
+                const s = spans[match.itemIndex + i];
+                if (s.textContent === match.str) {
+                    targetSpan = s;
+                    break;
+                }
+            }
+            // Check backward
+            if (match.itemIndex - i >= 0) {
+                const s = spans[match.itemIndex - i];
+                if (s.textContent === match.str) {
+                    targetSpan = s;
+                    break;
+                }
+            }
+        }
+    }
 
     if (targetSpan) {
         // Prepare highlighted HTML
