@@ -95,5 +95,7 @@
     "Creation Date": "Oluşturulma Tarihi",
     "Modification Date": "Değiştirilme Tarihi",
     "PDF Format": "PDF Formatı",
-    "Page Count": "Sayfa Sayısı"
+    "Page Count": "Sayfa Sayısı",
+    "Rotate Clockwise": "Saat Yönünde Döndür",
+    "Rotate Counterclockwise": "Saat Yönünün Tersine Döndür"
 }

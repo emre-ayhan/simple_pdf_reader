@@ -32,6 +32,8 @@ const menuItems = computed(() => ({
         { label: 'Save', action: 'saveFile', icon: 'floppy', shortcut: 'Ctrl+S', disabled: !activePageHasUnsavedChanges.value },
     ],
     page: [
+        { label: 'Rotate Clockwise', action: 'rotateClockwise', icon: 'arrow-clockwise' },
+        { label: 'Rotate Counterclockwise', action: 'rotateCounterClockwise', icon: 'arrow-counterclockwise' },
         { label: 'Import From Clipboard', action: 'insertFromClipboard', icon: 'clipboard-plus' },
         { label: 'Insert Page After', action: 'insertBlankPage', icon: 'file-earmark-arrow-down' },
         { label: 'Delete', action: 'deletePage', icon: 'trash3' }

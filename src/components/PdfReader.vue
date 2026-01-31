@@ -98,6 +98,7 @@ const {
     renderPageThumbnail,
     resyncRenderedTextLayers,
     showDocumentProperties,
+    rotatePage,
 } = useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallback, fileSavedCallback);
 
 // Drag and Drop Handlers
@@ -612,6 +613,8 @@ defineExpose({
     resetAllTools,
     insertFromClipboard,
     showDocumentProperties,
+    rotateClockwise: () => rotatePage('clockwise'),
+    rotateCounterClockwise: () => rotatePage('counterclockwise'),
 })
 </script>
 <template>
