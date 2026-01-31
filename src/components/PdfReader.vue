@@ -97,6 +97,7 @@ const {
     renderPdfPage,
     renderPageThumbnail,
     resyncRenderedTextLayers,
+    showDocumentProperties,
 } = useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallback, fileSavedCallback);
 
 // Drag and Drop Handlers
@@ -610,6 +611,7 @@ defineExpose({
     },
     resetAllTools,
     insertFromClipboard,
+    showDocumentProperties,
 })
 </script>
 <template>

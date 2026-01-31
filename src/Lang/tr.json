@@ -82,5 +82,18 @@
     "Insert Last Copied Stroke": "Son Kopyalanan Fırçayı Ekle",
     "Search": "Ara",
     "Case Sensitive": "Büyük/Küçük Harf Duyarlı",
-    "Whole Words": "Tam Kelimeler"
+    "Whole Words": "Tam Kelimeler",
+    "document": "belge",
+    "File Name": "Dosya Adı",
+    "File Size": "Dosya Boyutu",
+    "Title": "Başlık",
+    "Author": "Yazar",
+    "Subject": "Konu",
+    "Keywords": "Anahtar Kelimeler",
+    "Creator": "Oluşturan",
+    "Producer": "Üretici",
+    "Creation Date": "Oluşturulma Tarihi",
+    "Modification Date": "Değiştirilme Tarihi",
+    "PDF Format": "PDF Formatı",
+    "Page Count": "Sayfa Sayısı"
 }

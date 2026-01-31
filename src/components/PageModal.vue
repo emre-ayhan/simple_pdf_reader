@@ -19,7 +19,12 @@ onMounted(() => {
                     {{ $t(mustConfirm ? 'Please Confirm' : 'Notice') }}
                     <hr>
                 </h4>
-                <div class="text-center text-dark fs-5">
+                <div v-if="typeof message === 'object'">
+                    <template v-for="(text, label) in message">
+                        <div><strong class="me-1" v-if="isNaN(label)">{{ $t(label) }}:</strong>{{ $t(text) }}</div>
+                    </template>
+                </div>
+                <div class="text-center text-dark fs-5" v-else>
                     {{ $t(message) }}
                 </div>
             </div>

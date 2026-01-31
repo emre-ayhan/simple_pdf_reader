@@ -23,6 +23,8 @@ const onMenuItemClick = (action, value) => {
     emit('menu-item-click', action, value);
 };
 
+const documentGroups = ['page', 'document'];
+
 const menuItems = computed(() => ({
     file: [
         { label: 'New Blank Page', action: 'openNewBlankPage', icon: 'pencil-square' },
@@ -32,10 +34,13 @@ const menuItems = computed(() => ({
     page: [
         { label: 'Import From Clipboard', action: 'insertFromClipboard', icon: 'clipboard-plus' },
         { label: 'Insert Page After', action: 'insertBlankPage', icon: 'file-earmark-arrow-down' },
+        { label: 'Delete', action: 'deletePage', icon: 'trash3' }
+    ],
+    document: [
         { label: 'First Page', action: 'scrollToFirstPage', icon: 'chevron-double-up', shortcut: 'Home' },
         { label: 'Last Page', action: 'scrollToLastPage', icon: 'chevron-double-down', shortcut: 'End' },
         { label: 'Print', action: 'printPage', icon: 'printer', shortcut: 'Ctrl+P' },
-        { label: 'Delete', action: 'deletePage', icon: 'trash3' }
+        { label: 'Properties', action: 'showDocumentProperties', icon: 'info-circle' }
     ],
     pereferences: [
         { label: 'Language', icon: 'translate', items: [
@@ -146,7 +151,7 @@ onBeforeUnmount(() => {
                     <a href="#" class="list-group-item" v-if="index"><hr class="text-primary my-1"></a>
                     <a href="#" class="list-group-item"><h6 class="dropdown-header text-capitalize text-primary">{{ $t(group) }}</h6></a>
                     <template v-for="(menuItem, menuItemIndex) in item">
-                        <a class="list-group-item list-group-item-action" data-bs-dismiss="offcanvas" :class="{ disabled: activeTab.emptyState && group === 'page' || menuItem.disabled }" href="#" @click.prevent="onMenuItemClick(menuItem.action, menuItem.value)" v-if="!menuItem.items">
+                        <a class="list-group-item list-group-item-action" data-bs-dismiss="offcanvas" :class="{ disabled: activeTab.emptyState && documentGroups.includes(group) || menuItem.disabled }" href="#" @click.prevent="onMenuItemClick(menuItem.action, menuItem.value)" v-if="!menuItem.items">
                             <i :class="`bi bi-${menuItem.icon} me-1`"></i>
                             {{ $t(menuItem.label) }} <span v-if="menuItem.shortcut">({{ menuItem.shortcut }})</span>
                         </a>
@@ -158,7 +163,7 @@ onBeforeUnmount(() => {
                             </button>
                             <div class="collapse small ps-3 pt-1" :id="`submenu_${menuItemIndex}`">
                                 <template v-for="subItem in menuItem.items">
-                                    <a class="list-group-item list-group-item-action" :class="{ disabled: activeTab.emptyState && group === 'page' || subItem.disabled }" href="#" @click.prevent="onMenuItemClick(subItem.action, subItem.value)">
+                                    <a class="list-group-item list-group-item-action" :class="{ disabled: activeTab.emptyState && documentGroups.includes(group) || subItem.disabled }" href="#" @click.prevent="onMenuItemClick(subItem.action, subItem.value)">
                                         <i :class="`bi bi-${subItem.icon} me-1`"></i>
                                         {{ $t(subItem.label) }} <span v-if="subItem.shortcut">({{ subItem.shortcut }})</span>
                                     </a>

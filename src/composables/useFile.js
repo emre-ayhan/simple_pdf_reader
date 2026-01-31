@@ -189,6 +189,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
     const fileInput = ref(null);
     const filename = ref(null);
     const filepath = ref(null);
+    const internalFileSize = ref(0);
     const pagesContainer = ref(null);
     const renderedPages = ref(new Set());
     const pdfReader = ref(null);
@@ -474,6 +475,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
 
     const loadPdfFile = (file) => {
         if (file) {
+            internalFileSize.value = file.size;
             filename.value = file.name;
             filepath.value = file.path || null;
             const url = URL.createObjectURL(file);
@@ -1163,6 +1165,58 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         }
     };
 
+    const showDocumentProperties = async () => {
+        if (!pdfDoc) return;
+        
+        try {
+            const { info } = await pdfDoc.getMetadata();
+            
+            const formatBytes = (bytes, decimals = 2) => {
+                if (!+bytes) return '0 Bytes';
+                const k = 1024;
+                const dm = decimals < 0 ? 0 : decimals;
+                const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+            };
+
+            const formatPdfDate = (dateStr) => {
+                if (!dateStr) return '-';
+                // Simple cleanup for PDF date string D:YYYYMMDDHHmmss...
+                if (dateStr.startsWith('D:')) {
+                    return dateStr.substring(2).replace(/'/g, '');
+                }
+                return dateStr;
+            };
+
+            const size = originalPdfData.value ? originalPdfData.value.byteLength : internalFileSize.value;
+            const fileSize = size ? formatBytes(size) : 'Unknown';
+            console.log(info);
+            
+            const properties = {
+                "File Name": filename.value,
+                "File Size": fileSize,
+                "Title": info?.Title || '-',
+                "Author": info?.Author || '-',
+                "Subject": info?.Subject || '-',
+                "Keywords": info?.Keywords || '-',
+                "Creator": info?.Creator || '-',
+                "Producer": info?.Producer || '-',
+                "Creation Date": formatPdfDate(info?.CreationDate),
+                "Modification Date": formatPdfDate(info?.ModDate),
+                "PDF Format Version": info?.PDFFormatVersion || '-',
+                "Page Count": pageCount.value
+
+            };
+
+            await showModal(properties);
+            
+        } catch (error) {
+            console.error('Error getting document properties:', error);
+            await showModal('Failed to retrieve document properties.');
+        }
+    };
+
     return {
         fileId,
         pagesContainer,
@@ -1217,6 +1271,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         insertBlankPage,
         createImageImportHandler,
         createImage,
-        extractAllText
+        extractAllText,
+        showDocumentProperties
     }
 }
