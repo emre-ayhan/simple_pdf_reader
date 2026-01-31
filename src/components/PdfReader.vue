@@ -260,6 +260,32 @@ const importImage = () => {
     imageInput.value?.click();
 };
 
+const dravingTools = {
+    pen: {
+        icon: 'pencil-fill',
+        title: 'Draw',
+        shortcut: 'D',
+    },
+    line: {
+        icon: 'slash-lg',
+        title: 'Line',
+        shortcut: 'L',
+    },
+    rectangle: {
+        icon: 'square',
+        title: 'Rectangle',
+        shortcut: 'R',
+    },
+    circle: {
+        icon: 'circle',
+        title: 'Circle',
+        shortcut: 'O',
+    },
+}
+
+const activeDrawingTool = computed(() => {
+    return dravingTools[drawMode.value] || dravingTools['pen'];
+});
 
 const selectDrawingTool = (mode) => {
     if (!isFileLoaded.value) return;
@@ -704,25 +730,22 @@ defineExpose({
                             <i class="bi bi-eraser-fill"></i>
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="selectDrawingTool('pen')" :class="{ active: isDrawing && drawMode === 'pen' }" :title="$t('Draw') + ' (D)'">
-                            <i class="bi bi-pencil-fill"></i>
+                    <li class="nav-item btn-group">
+                        <a class="nav-link" href="#" @click.prevent="selectDrawingTool(drawMode)" :class="{ active: isDrawing }" :title="$t(activeDrawingTool.title) + ` (${activeDrawingTool.shortcut})`">
+                            <i :class="`bi bi-${activeDrawingTool.icon}`"></i>
                         </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="selectDrawingTool('line')" :class="{ active: isDrawing && drawMode === 'line' }" :title="$t('Line') + ' (L)'">
-                            <i class="bi bi-slash-lg"></i>
+                        <a class="nav-link dropdown-toggle dropdown-toggle-split" href="#" data-bs-toggle="dropdown" aria-expanded="false">
+                            <span class="visually-hidden">Toggle Dropdown</span>
                         </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="selectDrawingTool('rectangle')" :class="{ active: isDrawing && drawMode === 'rectangle' }" :title="$t('Rectangle') + ' (R)'">
-                            <i class="bi bi-square"></i>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="selectDrawingTool('circle')" :class="{ active: isDrawing && drawMode === 'circle' }" :title="$t('Circle') + ' (O)'">
-                            <i class="bi bi-circle"></i>
-                        </a>
+                        <div class="dropdown-menu dropdown-menu-dark rounded-3 mt-2">
+                            <template v-for="(tool, key) in dravingTools">
+                                <a class="dropdown-item d-flex align-items-center" href="#" @click.prevent="selectDrawingTool(key)">
+                                    <i :class="`bi bi-${tool.icon} me-2`"></i>
+                                    <span>{{ $t(tool.title) }} ({{ tool.shortcut }})</span>
+                                    <i class="bi bi-check-circle-fill ms-auto" v-if="key === drawMode"></i>
+                                </a>
+                            </template>
+                        </div>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="#" @click.prevent="toggleTextHighlightMode" :class="{ active: isTextHighlightMode, disabled: textActionsDisabled }" :title="$t('Highlight Text') + ' (H)'">

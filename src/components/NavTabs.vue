@@ -1,5 +1,5 @@
 <script setup>
-import { computed, inject, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Electron } from '../composables/useElectron';
 import { openNewTab, closeTab, activeTabIndex, activeTab, tabs, tabHistory, openTabs, markAsActive, isLastTabOnEmptyState, fileHasUnsavedChanges, activePageHasUnsavedChanges, handleElectronButtonClick, fileDataCache } from '../composables/useTabs';
 import { enableTouchDrawing } from '../composables/useTouchDrawing.js';
@@ -23,8 +23,19 @@ const onMenuItemClick = (action, value) => {
     emit('menu-item-click', action, value);
 };
 
+const menuGroups = ['file', 'page', 'document', 'preferences'];
 const documentGroups = ['page', 'document'];
 
+const activeGroup = ref('file');
+
+watch(activeTab, (newTab) => {
+    if (newTab.emptyState) {
+        activeGroup.value = 'file';
+        return;
+    }
+
+    activeGroup.value = 'page';
+}, { immediate: true });
 const menuItems = computed(() => ({
     file: [
         { label: 'New Blank Page', action: 'openNewBlankPage', icon: 'pencil-square' },
@@ -44,7 +55,7 @@ const menuItems = computed(() => ({
         { label: 'Print', action: 'printPage', icon: 'printer', shortcut: 'Ctrl+P' },
         { label: 'Properties', action: 'showDocumentProperties', icon: 'info-circle' }
     ],
-    pereferences: [
+    preferences: [
         { label: 'Language', icon: 'translate', items: [
                 { label: 'English', action: 'changeLocale', value: 'en', icon: currentLocale.value === 'en' ? 'check-circle-fill' : 'circle' },
                 { label: 'Portuguese', action: 'changeLocale', value: 'pt', icon: currentLocale.value === 'pt' ? 'check-circle-fill' : 'circle' },
@@ -148,24 +159,30 @@ onBeforeUnmount(() => {
             <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
         </div>
         <div class="offcanvas-body">
-            <div class="list-group list-group-flush">
-                <template v-for="(item, group, index) in menuItems">
-                    <a href="#" class="list-group-item" v-if="index"><hr class="text-primary my-1"></a>
-                    <a href="#" class="list-group-item"><h6 class="dropdown-header text-capitalize text-primary">{{ $t(group) }}</h6></a>
-                    <template v-for="(menuItem, menuItemIndex) in item">
-                        <a class="list-group-item list-group-item-action" data-bs-dismiss="offcanvas" :class="{ disabled: activeTab.emptyState && documentGroups.includes(group) || menuItem.disabled }" href="#" @click.prevent="onMenuItemClick(menuItem.action, menuItem.value)" v-if="!menuItem.items">
-                            <i :class="`bi bi-${menuItem.icon} me-1`"></i>
-                            {{ $t(menuItem.label) }} <span v-if="menuItem.shortcut">({{ menuItem.shortcut }})</span>
+            <div class="d-flex">
+                <ul class="nav flex-column">
+                    <li class="nav-item" v-for="group in menuGroups" :key="group">
+                        <a href="#" class="nav-link text-capitalize" :class="{ active: activeGroup === group, 'text-secondary': activeGroup !== group }" @click.prevent="activeGroup = group">
+                            {{ $t(group) }}
+                        </a>
+                    </li>
+                </ul>
+                <div class="vr me-2"></div>
+                <div class="list-group list-group-flush small flex-fill">
+                    <template v-for="item in menuItems[activeGroup]">
+                        <a class="list-group-item list-group-item-action" data-bs-dismiss="offcanvas" :class="{ disabled: activeTab.emptyState && documentGroups.includes(activeGroup) || item.disabled }" href="#" @click.prevent="onMenuItemClick(item.action, item.value)" v-if="!item.items">
+                            <i :class="`bi bi-${item.icon} me-1`"></i>
+                            {{ $t(item.label) }} <span v-if="item.shortcut">({{ item.shortcut }})</span>
                         </a>
                         <template v-else>
                             <button class="list-group-item list-group-item-action" type="button"  data-bs-toggle="collapse" :data-bs-target="`#submenu_${menuItemIndex}`" aria-expanded="false" :aria-controls="`submenu_${menuItemIndex}`">
-                                <i :class="`bi bi-${menuItem.icon} me-1`"></i>
-                                {{ $t(menuItem.label) }}
+                                <i :class="`bi bi-${item.icon} me-1`"></i>
+                                {{ $t(item.label) }}
                                 <i class="bi bi-caret-down-fill small"></i>
                             </button>
                             <div class="collapse small ps-3 pt-1" :id="`submenu_${menuItemIndex}`">
-                                <template v-for="subItem in menuItem.items">
-                                    <a class="list-group-item list-group-item-action" :class="{ disabled: activeTab.emptyState && documentGroups.includes(group) || subItem.disabled }" href="#" @click.prevent="onMenuItemClick(subItem.action, subItem.value)">
+                                <template v-for="subItem in item.items">
+                                    <a class="list-group-item list-group-item-action" :class="{ disabled: activeTab.emptyState && documentGroups.includes(activeGroup) || subItem.disabled }" href="#" @click.prevent="onMenuItemClick(subItem.action, subItem.value)">
                                         <i :class="`bi bi-${subItem.icon} me-1`"></i>
                                         {{ $t(subItem.label) }} <span v-if="subItem.shortcut">({{ subItem.shortcut }})</span>
                                     </a>
@@ -173,7 +190,7 @@ onBeforeUnmount(() => {
                             </div>
                         </template>
                     </template>
-                </template>
+                </div>
             </div>
         </div>
     </div>
