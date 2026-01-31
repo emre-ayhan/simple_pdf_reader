@@ -106,7 +106,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
                     const textWidth = item.width * viewport.scale;
 
                     span.style.left = `${x}px`;
-                    span.style.top = `${y - fontHeight * 0.8}px`;
+                    span.style.top = `${y - fontHeight * 0.85}px`;
                     span.style.fontSize = `${fontHeight}px`;
                     span.style.fontFamily = item.fontName || 'sans-serif';
 
