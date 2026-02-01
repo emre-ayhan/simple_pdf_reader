@@ -2,7 +2,7 @@
 import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Electron } from '../composables/useElectron';
 import { openNewTab, closeTab, activeTabIndex, activeTab, tabs, tabHistory, openTabs, markAsActive, isLastTabOnEmptyState, fileHasUnsavedChanges, activePageHasUnsavedChanges, handleElectronButtonClick, fileDataCache } from '../composables/useTabs';
-import { enableTouchDrawing } from '../composables/useTouchDrawing.js';
+import { enableTouchDrawing } from '../composables/useAppPreferences.js';
 
 const currentLocale = inject('currentLocale');
 

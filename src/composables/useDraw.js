@@ -1,7 +1,7 @@
 import { ref, nextTick, computed, watch } from 'vue';
 import { uuid } from './useUuid.js';
 import { useStore } from './useStore.js';
-import { enableTouchDrawing } from './useTouchDrawing.js';
+import { enableTouchDrawing } from './useAppPreferences.js';
 
 const copiedStroke = ref(null);
 

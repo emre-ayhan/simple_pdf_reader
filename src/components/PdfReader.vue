@@ -7,7 +7,7 @@ import { useDraw } from "../composables/useDraw";
 import { useHistory } from "../composables/useHistory";
 import { fileDataCache } from "../composables/useTabs";
 import { useWindowEvents } from "../composables/useWindowEvents";
-import { enableTouchDrawing } from "../composables/useTouchDrawing";
+import { enableTouchDrawing } from "../composables/useAppPreferences";
 import EmptyState from "./EmptyState.vue";
 import PrintModal from "./PrintModal.vue";
 import Search from "./Search.vue";

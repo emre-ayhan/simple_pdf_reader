@@ -1,5 +1,6 @@
 <script setup>
 import { ref, watch } from 'vue';
+import { toolbarPosition } from '../composables/useAppPreferences';
 
 const props = defineProps({
     pageNum: {
@@ -23,7 +24,7 @@ watch(() => props.pageNum, () => {
 
 </script>
 <template>
-<div class="card bg-dark text-secondary position-fixed bottom-0 end-0 my-3 mx-4" v-if="show">
+<div :class="`card bg-dark text-secondary position-fixed end-0 my-3 mx-4 ${toolbarPosition === 'top' ? 'bottom-0' : 'top-0'}`" v-if="show">
     <div class="card-body d-flex justify-content-center align-items-center gap-2">
         <div class="text-primary">{{ pageNum }}</div>
         <div class="vr"></div>
