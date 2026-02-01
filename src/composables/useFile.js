@@ -243,9 +243,11 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
 
     const handlePageNumberInput = (event) => {
         const page = parseInt(event.target.value);
-        if (isNaN(page) || page < 1 || page > pageCount.value - deletedPages.size) {
+        const lastPageNum = pageCount.value - deletedPages.value.size;
+
+        if (isNaN(page) || page < 1 || page > lastPageNum) {
             // Invalid page number
-            event.target.value = pageNum.value;
+            pageNum.value = lastPageNum;
             return;
         }
 

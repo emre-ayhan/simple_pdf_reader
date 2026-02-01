@@ -805,8 +805,8 @@ defineExpose({
                     </li>
                     <li class="nav-item">
                         <div class="input-group flex-nowrap">
-                            <input type="text" class="form-control-plaintext" :value="pageNum" @input="handlePageNumberInput" />
-                            <div class="input-group-text bg-transparent border-0 text-secondary p-0 pe-1">/ {{ pageCount - deletedPages.size }}</div>
+                            <input type="text" class="form-control-plaintext text-end" v-model="pageNum" @input="handlePageNumberInput" />
+                            <input type="text" class="form-control-plaintext text-start" :value="`/ ${pageCount - deletedPages.size}`" disabled />
                         </div>
                     </li>
                     
