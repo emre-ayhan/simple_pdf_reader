@@ -219,7 +219,6 @@ const lockView = () => {
 
 const resetAllTools = () => {
     resetToolState();
-    handToolActive.value = false;
     window.getSelection()?.removeAllRanges();
     document.removeEventListener('mouseup', handleTextSelectionMouseUp);
 };
@@ -678,7 +677,7 @@ defineExpose({
                 </ul>
                 
                 <!-- Toolbar -->
-                <ul ref="toolbar" class="navbar-nav mx-auto flex-wrap justify-content-center">
+                <ul ref="toolbar" class="navbar-nav mx-auto flex-wrap">
                     <!-- Drawing -->
                     <template v-if="isDrawing || isTextInputMode || isTextHighlightMode">
                         <li class="nav-item" v-for="(strokeStyle, index) in initialStrokeStyles">
@@ -777,6 +776,20 @@ defineExpose({
                             <i class="bi bi-hand-index-thumb-fill"></i>
                         </a>
                     </li>
+
+                    <!-- Capture Image Tool -->
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" @click.prevent="captureSelection" :class="{ active: isSelectionMode }" :title="$t('Select Area to Whiteboard')">
+                            <i class="bi bi-scissors"></i>
+                        </a>
+                    </li>
+
+                    <!-- Insert Last Copied Stroke -->
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" :class="{ disabled: !copiedStroke }" @click.prevent="insertCopiedStroke" :title="$t('Insert Last Copied Stroke')">
+                            <i class="bi bi-clipboard-plus"></i>
+                        </a>
+                    </li>
                     <li class="nav-item vr bg-white mx-2"></li>
 
                     <!-- Undo/Redo -->
@@ -794,6 +807,12 @@ defineExpose({
                     <!-- Pagination -->
                     <li class="nav-item vr bg-white mx-2"></li>
                     <li class="nav-item">
+                        <div class="input-group flex-nowrap">
+                            <input type="text" class="form-control-plaintext text-end" v-model="pageNum" @input="handlePageNumberInput" />
+                            <input type="text" class="form-control-plaintext text-start" :value="`/ ${pageCount - deletedPages.size}`" disabled />
+                        </div>
+                    </li>
+                    <li class="nav-item">
                         <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex - 1)" :class="{ disabled: isFirstPage }" :title="$t('Previous Page')">
                             <i class="bi bi-chevron-up"></i>
                         </a>
@@ -803,15 +822,16 @@ defineExpose({
                             <i class="bi bi-chevron-down"></i>
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <div class="input-group flex-nowrap">
-                            <input type="text" class="form-control-plaintext text-end" v-model="pageNum" @input="handlePageNumberInput" />
-                            <input type="text" class="form-control-plaintext text-start" :value="`/ ${pageCount - deletedPages.size}`" disabled />
-                        </div>
-                    </li>
                     
-                    <!-- Zoom -->
                     <li class="nav-item vr bg-white mx-2"></li>
+                    <!-- View Lock -->
+                    <li class="nav-item" :title="isViewLocked ? $t('Unlock View') : $t('Lock View')">
+                        <a href="#" class="nav-link" @click.prevent="lockView" :class="{ active: isViewLocked }">
+                            <i class="bi" :class="isViewLocked ? 'bi-lock-fill' : 'bi-lock'"></i>
+                        </a>
+                    </li>
+
+                    <!-- Zoom -->
                     <li class="nav-item">
                         <a href="#" class="nav-link" @click.prevent="zoom(-1)" :class="{ disabled: isViewLocked || zoomPercentage <= minZoom }">
                             <i class="bi bi-zoom-out"></i>
@@ -832,29 +852,6 @@ defineExpose({
                                 </option>
                             </template>
                         </select>
-                    </li>
-
-                    <li class="nav-item vr bg-white mx-2"></li>
-                    
-                    <!-- Selection Tool -->
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="captureSelection" :class="{ active: isSelectionMode }" :title="$t('Select Area to Whiteboard')">
-                            <i class="bi bi-scissors"></i>
-                        </a>
-                    </li>
-
-                    <!-- View Lock -->
-                    <li class="nav-item" :title="isViewLocked ? $t('Unlock View') : $t('Lock View')">
-                        <a href="#" class="nav-link" @click.prevent="lockView" :class="{ active: isViewLocked }">
-                            <i class="bi" :class="isViewLocked ? 'bi-lock-fill' : 'bi-lock'"></i>
-                        </a>
-                    </li>
-
-                    <!-- Insert Last Copied Stroke -->
-                    <li class="nav-item" v-if="copiedStroke">
-                        <a href="#" class="nav-link" @click.prevent="insertCopiedStroke" :title="$t('Insert Last Copied Stroke')">
-                            <i class="bi bi-clipboard-plus"></i>
-                        </a>
                     </li>
                 </ul>
             </template>

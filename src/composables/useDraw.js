@@ -2077,6 +2077,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         resizeHandle.value = null;
         showStrokeMenu.value = false;
         isSelectModeActive.value = false;
+        handToolActive.value = false;
     };
 
     const changeStrokeColor = (newColor) => {
