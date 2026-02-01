@@ -4,7 +4,7 @@ import NavTabs from './components/NavTabs.vue';
 import PdfReader from './components/PdfReader.vue';
 import PageModal from './components/PageModal.vue';
 import UpdateState from './components/UpdateState.vue';
-import { toolbarPosition, toggleTouchDrawing, toggleToolbarPosition } from './composables/useAppPreferences';
+import { toggleTouchDrawing, toggleToolbarPosition } from './composables/useAppPreferences';
 
 const reader = ref(null);
 const changeLocale = inject('changeLocale');
@@ -23,8 +23,8 @@ const menuItemClickHandler = (action, value) => {
 }
 </script>
 <template>
-    <nav-tabs @menu-item-click="menuItemClickHandler" :toolbar-position="toolbarPosition">
-        <PdfReader ref="reader" :toolbar-position="toolbarPosition" />
+    <nav-tabs @menu-item-click="menuItemClickHandler">
+        <PdfReader ref="reader" />
     </nav-tabs>
     <PageModal />
     <UpdateState />

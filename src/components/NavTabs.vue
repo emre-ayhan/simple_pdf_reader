@@ -2,17 +2,9 @@
 import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Electron } from '../composables/useElectron';
 import { openNewTab, closeTab, activeTabIndex, activeTab, tabs, tabHistory, openTabs, markAsActive, isLastTabOnEmptyState, fileHasUnsavedChanges, activePageHasUnsavedChanges, handleElectronButtonClick, fileDataCache } from '../composables/useTabs';
-import { enableTouchDrawing } from '../composables/useAppPreferences.js';
+import { enableTouchDrawing, toolbarPosition } from '../composables/useAppPreferences.js';
 
 const currentLocale = inject('currentLocale');
-
-const props = defineProps({
-    toolbarPosition: {
-        type: String,
-        default: 'top',
-        validator: (value) => ['top', 'bottom'].includes(value)
-    }
-});
 
 const emit = defineEmits([
     'menu-item-click'
@@ -63,7 +55,7 @@ const menuItems = computed(() => ({
             ]
         },
         { label: enableTouchDrawing.value ? 'Disable Touch Drawing' : 'Enable Touch Drawing', action: 'toggleTouchDrawing', icon: enableTouchDrawing.value ? 'hand-index-thumb-fill' : 'hand-index-thumb' },
-        { label: `Move Toolbar to ${props.toolbarPosition === 'top' ? 'Bottom' : 'Top'}`, action: 'toggleToolbarPosition', icon: props.toolbarPosition === 'top' ? 'arrow-down-square' : 'arrow-up-square' },
+        { label: `Move Toolbar to ${toolbarPosition.value === 'top' ? 'Bottom' : 'Top'}`, action: 'toggleToolbarPosition', icon: toolbarPosition.value === 'top' ? 'arrow-down-square' : 'arrow-up-square' },
     ]
 }));
 
@@ -106,7 +98,7 @@ onBeforeUnmount(() => {
 });
 </script>
 <template>
-    <ul :class="`nav nav-tabs d-print-none fixed-${props.toolbarPosition} ${activeTab.emptyState ? 'empty-state' : ''}`" id="appTabs" role="tablist">
+    <ul :class="`nav nav-tabs d-print-none fixed-${toolbarPosition} ${activeTab.emptyState ? 'empty-state' : ''}`" id="appTabs" role="tablist">
         <!-- Nav Menu -->
         <li class="nav-item">
             <a href="#" class="nav-link nav-link-menu" data-bs-toggle="offcanvas" data-bs-target="#offcanvasExample" aria-controls="offcanvasExample" :title="$t('Menu')">
