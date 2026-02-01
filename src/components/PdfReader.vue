@@ -808,6 +808,11 @@ defineExpose({
                     <!-- Pagination -->
                     <li class="nav-item vr bg-white mx-2"></li>
                     <li class="nav-item">
+                        <div class="input-group flex-nowrap">
+                            <input type="text" class="form-control-plaintext" v-model="pageNum" @input="handlePageNumberInput" />
+                        </div>
+                    </li>
+                    <li class="nav-item">
                         <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex - 1)" :class="{ disabled: isFirstPage }" :title="$t('Previous Page')">
                             <i class="bi bi-chevron-up"></i>
                         </a>
