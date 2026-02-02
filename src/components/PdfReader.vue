@@ -394,6 +394,14 @@ const contextMenuActions = {
     lockView,
     zoomIn:  () => zoom(1),
     zoomOut: () => zoom(-1),
+    rotateClockwise: () => rotatePage('clockwise'),
+    rotateCounterClockwise: () => rotatePage('counterclockwise'),
+    insertBlankPage: handleInsertBlankPage,
+    insertFromClipboard,
+    deletePage: () => deletePage(pageIndex.value, addToHistory),
+    insertCopiedStroke,
+    undo,
+    redo,
 }
 
 const handleContextMenuItemClick = (action, value) => {
@@ -655,17 +663,10 @@ defineExpose({
     openFile: handleFileOpen,
     saveFile: handleSaveFile,
     printPage,
-    insertBlankPage: handleInsertBlankPage,
     scrollToFirstPage,
     scrollToLastPage,
-    deletePage: () => {
-        deletePage(pageIndex.value, addToHistory);
-    },
     resetAllTools,
-    insertFromClipboard,
     showDocumentProperties,
-    rotateClockwise: () => rotatePage('clockwise'),
-    rotateCounterClockwise: () => rotatePage('counterclockwise'),
 })
 </script>
 <template>
@@ -684,7 +685,7 @@ defineExpose({
                 </ul>
                 
                 <!-- Toolbar -->
-                <ul ref="toolbar" class="navbar-nav mx-auto flex-wrap">
+                <ul ref="toolbar" class="navbar-nav mx-auto">
                     <!-- Drawing -->
                     <template v-if="isDrawing || isTextInputMode || isTextHighlightMode">
                         <li class="nav-item" v-for="(strokeStyle, index) in initialStrokeStyles">

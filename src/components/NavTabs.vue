@@ -1,5 +1,5 @@
 <script setup>
-import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, inject, onBeforeUnmount, onMounted, ref } from 'vue';
 import { Electron } from '../composables/useElectron';
 import { openNewTab, closeTab, activeTabIndex, activeTab, tabs, tabHistory, openTabs, markAsActive, isLastTabOnEmptyState, fileHasUnsavedChanges, activePageHasUnsavedChanges, handleElectronButtonClick, fileDataCache } from '../composables/useTabs';
 import { enableTouchDrawing, toolbarPosition } from '../composables/useAppPreferences.js';
@@ -15,31 +15,16 @@ const onMenuItemClick = (action, value) => {
     emit('menu-item-click', action, value);
 };
 
-const menuGroups = ['file', 'page', 'document', 'preferences'];
-const documentGroups = ['page', 'document'];
+const menuGroups = ['file', 'document', 'preferences'];
+const documentGroups = ['document'];
 
 const activeGroup = ref('file');
 
-watch(activeTab, (newTab) => {
-    if (newTab.emptyState) {
-        activeGroup.value = 'file';
-        return;
-    }
-
-    activeGroup.value = 'page';
-}, { immediate: true });
 const menuItems = computed(() => ({
     file: [
         { label: 'New Blank Page', action: 'openNewBlankPage', icon: 'file-earmark-fill' },
         { label: 'Open', action: 'openFile', icon: 'folder', shortcut: 'Ctrl+O' },
         { label: 'Save', action: 'saveFile', icon: 'floppy', shortcut: 'Ctrl+S', disabled: !activePageHasUnsavedChanges.value },
-    ],
-    page: [
-        { label: 'Rotate Clockwise', action: 'rotateClockwise', icon: 'arrow-clockwise' },
-        { label: 'Rotate Counterclockwise', action: 'rotateCounterClockwise', icon: 'arrow-counterclockwise' },
-        { label: 'Import From Clipboard', action: 'insertFromClipboard', icon: 'clipboard-plus' },
-        { label: 'Insert Page After', action: 'insertBlankPage', icon: 'file-earmark-arrow-down' },
-        { label: 'Delete', action: 'deletePage', icon: 'trash3' }
     ],
     document: [
         { label: 'First Page', action: 'scrollToFirstPage', icon: 'chevron-double-up', shortcut: 'Home' },

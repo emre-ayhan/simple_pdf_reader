@@ -267,7 +267,7 @@ defineExpose({
 });
 </script>
 <template>
-<li class="nav-item btn-group">
+<li class="nav-item btn-group me-auto">
     <a class="nav-link" :class="{ disabled }" href="#" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" :title="$t('Search')">
         <i class="bi bi-search"></i>
     </a>
