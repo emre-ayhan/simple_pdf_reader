@@ -161,18 +161,18 @@ onBeforeUnmount(() => {
                 </ul>
                 <div class="vr me-2"></div>
                 <div class="list-group list-group-flush small flex-fill">
-                    <template v-for="item in menuItems[activeGroup]">
+                    <template v-for="(item, menuItemIndex) in menuItems[activeGroup]">
                         <a class="list-group-item list-group-item-action" data-bs-dismiss="offcanvas" :class="{ disabled: activeTab.emptyState && documentGroups.includes(activeGroup) || item.disabled }" href="#" @click.prevent="onMenuItemClick(item.action, item.value)" v-if="!item.items">
                             <i :class="`bi bi-${item.icon} me-1`"></i>
                             {{ $t(item.label) }} <span v-if="item.shortcut">({{ item.shortcut }})</span>
                         </a>
                         <template v-else>
-                            <button class="list-group-item list-group-item-action" type="button"  data-bs-toggle="collapse" :data-bs-target="`#submenu_${menuItemIndex}`" aria-expanded="false" :aria-controls="`submenu_${menuItemIndex}`">
+                            <button class="list-group-item list-group-item-action" type="button"  data-bs-toggle="collapse" :data-bs-target="`#menu_item_${menuItemIndex}`" aria-expanded="false" :aria-controls="`menu_item_${menuItemIndex}`">
                                 <i :class="`bi bi-${item.icon} me-1`"></i>
                                 {{ $t(item.label) }}
                                 <i class="bi bi-caret-down-fill small"></i>
                             </button>
-                            <div class="collapse small ps-3 pt-1" :id="`submenu_${menuItemIndex}`">
+                            <div class="collapse small ps-3 pt-1" :id="`menu_item_${menuItemIndex}`">
                                 <template v-for="subItem in item.items">
                                     <a class="list-group-item list-group-item-action" :class="{ disabled: activeTab.emptyState && documentGroups.includes(activeGroup) || subItem.disabled }" href="#" @click.prevent="onMenuItemClick(subItem.action, subItem.value)">
                                         <i :class="`bi bi-${subItem.icon} me-1`"></i>

@@ -13,6 +13,7 @@ import PrintModal from "./PrintModal.vue";
 import Search from "./Search.vue";
 import ThumbnailSidebar from "./ThumbnailSidebar.vue";
 import PageNumber from "./PageNumber.vue";
+import ContextMenu from "./ContextMenu.vue";
 
 // Cursor Style
 const cursorStyle = computed(() => {
@@ -388,6 +389,19 @@ const zoom = (direction) => {
     const newZoom = zoomPercentage.value + (direction * 25);
     handleZoomLevel(newZoom);
 }
+
+const contextMenuActions = {
+    lockView,
+    zoomIn:  () => zoom(1),
+    zoomOut: () => zoom(-1),
+}
+
+const handleContextMenuItemClick = (action, value) => {
+    if (!isFileLoaded.value || !action) return;
+    const handler = contextMenuActions[action];
+    if (typeof handler !== 'function') return;
+    handler(value);
+};
 
 const hasActiveTool = computed(() => {
     return isDrawing.value || isEraser.value || isTextInputMode.value || isSelectionMode.value || isTextHighlightMode.value;
@@ -848,7 +862,7 @@ defineExpose({
                 </ul>
             </template>
         </nav>
-        <div :class="`pdf-reader toolbar-${toolbarPosition} ${isViewLocked ? 'overflow-hidden' : ''}`" ref="pdfReader">
+        <div id="pdf-reader" ref="pdfReader" :class="`pdf-reader toolbar-${toolbarPosition} ${isViewLocked ? 'overflow-hidden' : ''}`">
             <EmptyState v-if="!isFileLoaded" @open-file="handleFileOpen" />
 
             <template v-else>
@@ -863,120 +877,137 @@ defineExpose({
                     :renderPageThumbnail="renderPageThumbnail"
                 />
                 <div class="pages-container flex-grow-1" ref="pagesContainer" :style="{ width: `${zoomPercentage}%` }">
-                <template v-for="page in pageCount" :key="page">
-                    <div  class="page-container" :data-page="page" v-show="!deletedPages.has(page)">
-                        <div class="canvas-container" :class="{ 'canvas-loading': !renderedPages.has(page) }">
-                            <canvas class="pdf-canvas" :ref="el => { if (el) pdfCanvases[page - 1] = el }"></canvas>
-                            <div class="text-layer" :class="{ 'text-selectable': isTextSelectionMode }" :ref="el => { if (el) textLayerDivs[page - 1] = el }"></div>
-                            <canvas 
-                                :ref="el => { if (el) drawingCanvases[page - 1] = el }"
-                                class="drawing-canvas"
-                                @pointerdown="startDrawing"
-                                @pointermove="onPointerMove"
-                                @pointerup="stopDrawing"
-                                @pointerleave="onPointerLeave"
-                                @pointercancel="stopDrawing"
-                                @click="handleStrokeMenu"
-                                :style="{
-                                    cursor: cursorStyle,
-                                    pointerEvents: 'auto',
-                                    touchAction: touchAction,
-                                    zIndex: isTextSelectionMode ? 1 : 3
-                                }"
-                                :data-color="drawColor"
-                            ></canvas>
+                    <template v-for="page in pageCount" :key="page">
+                        <div  class="page-container" :data-page="page" v-show="!deletedPages.has(page)">
+                            <div class="canvas-container" :class="{ 'canvas-loading': !renderedPages.has(page) }">
+                                <canvas class="pdf-canvas" :ref="el => { if (el) pdfCanvases[page - 1] = el }"></canvas>
+                                <div class="text-layer" :class="{ 'text-selectable': isTextSelectionMode }" :ref="el => { if (el) textLayerDivs[page - 1] = el }"></div>
+                                <canvas 
+                                    :ref="el => { if (el) drawingCanvases[page - 1] = el }"
+                                    class="drawing-canvas"
+                                    @pointerdown="startDrawing"
+                                    @pointermove="onPointerMove"
+                                    @pointerup="stopDrawing"
+                                    @pointerleave="onPointerLeave"
+                                    @pointercancel="stopDrawing"
+                                    @click="handleStrokeMenu"
+                                    :style="{
+                                        cursor: cursorStyle,
+                                        pointerEvents: 'auto',
+                                        touchAction: touchAction,
+                                        zIndex: isTextSelectionMode ? 1 : 3
+                                    }"
+                                    :data-color="drawColor"
+                                ></canvas>
+                            </div>
                         </div>
-                    </div>
-                </template>
+                    </template>
                 </div>
+
+                <!-- Text Input Box -->
+                <div v-if="isTextInputMode && textboxPosition" 
+                     class="text-input-box" 
+                     :style="{ 
+                         left: textboxPosition.x + 'px', 
+                         top: textboxPosition.y + 'px'
+                     }">
+                    <input 
+                        id="textInputField"
+                        ref="textInputField"
+                        type="text" 
+                        v-model="textInput" 
+                        class="text-input-field" 
+                        :placeholder="$t('Type text...')" 
+                        @keydown.enter="confirmText()"
+                        @keydown.esc="cancelText()"
+                        @blur="handleTextboxBlur()"
+                        :style="{ 
+                            fontSize: fontSize + 'px',
+                            color: drawColor,
+                            minWidth: '150px'
+                        }"
+                        autofocus
+                    />
+                </div>
+    
+                <!-- Stroke Menu -->
+                <div v-if="showStrokeMenu && selectedStroke" 
+                     ref="strokeMenu"
+                     class="stroke-menu" 
+                     :style="{ 
+                         left: strokeMenuPosition.x + 'px', 
+                         top: strokeMenuPosition.y + 'px'
+                     }">
+                    <div class="stroke-menu-content">
+                        <div class="stroke-menu-section">
+                            <div class="stroke-menu-colors dropdown-center">
+                                <template v-if="!isSelectedStrokeType('image')">
+                                    <button
+                                        type="button"
+                                        class="btn-color"
+                                        data-bs-toggle="dropdown"
+                                        aria-expanded="false"
+                                        :style="{ backgroundColor: selectedStroke?.stroke[0]?.color || 'transparent' }"
+                                    ></button>
+                                    <div class="dropdown-menu dropdown-menu-dark color-menu px-2">
+                                        <button 
+                                            v-for="strokeStyle in initialStrokeStyles"
+                                            class="btn-color dropdown-item mb-1"
+                                            :style="{ backgroundColor: strokeStyle.color }"
+                                            :title="strokeStyle.color"
+                                            @click="changeStrokeColor(strokeStyle.color)"
+                                        ></button>
+                                    </div>
+                                    <div class="vr bg-primary"></div>
+                                </template>
+                                <button type="button" class="btn btn-link link-secondary btn-stroke-menu border-0 p-0" :title="$t('Copy')" @click.stop="copySelectedStroke()">
+                                    <i class="bi bi-clipboard-fill"></i>
+                                </button>
+                                <button type="button" class="btn btn-link link-secondary btn-stroke-menu border-0 p-0" :title="$t('Delete')" @click.stop="deleteSelectedStroke()">
+                                    <i class="bi bi-trash-fill"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <template v-if="!isSelectedStrokeType('image')">
+                            <div v-if="isSelectedStrokeType('text')" class="stroke-menu-section">
+                                <input 
+                                    type="text" 
+                                    class="form-control form-control-sm" 
+                                    :value="selectedStroke?.stroke[0]?.text || ''"
+                                    @input="changeStrokeText($event.target.value)"
+                                    @click.stop
+                                    :placeholder="$t('Enter text')"
+                                />
+                            </div>
+                            <!-- <div class="stroke-menu-section" v-else-if="!isSelectedStrokeType('highlight-rect')">
+                                <div class="d-flex align-items-center gap-1">
+                                    <input type="range" class="form-range" min="1" max="10" @input="changeStrokeThickness($event.target.value)" :value="selectedStroke?.stroke[0]?.thickness || 1" />
+                                    <input type="text" class="form-control-plaintext" min="1" max="10" :value="selectedStroke?.stroke[0]?.thickness || 1" readonly />
+                                </div>
+                            </div> -->
+                        </template>
+                    </div>
+                </div>
+    
+                <!-- Custom Print Modal (Electron silent printing) -->
+                <PrintModal
+                    ref="printModal"
+                    :isFileLoaded="isFileLoaded"
+                    :pageCount="pageCount"
+                    :activePages="activePages"
+                    :pdfCanvases="pdfCanvases"
+                    :drawingCanvases="drawingCanvases"
+                    :renderPdfPage="renderPdfPage"
+                />
+
+                <PageNumber :pageNum="pageNum" :totalPages="pageCount - deletedPages.size" />
+                <ContextMenu parent="#pdf-reader" @menu-item-click="handleContextMenuItemClick" />
             </template>
         </div>
+
+
         <input ref="fileInput" type="file"  accept="application/pdf,image/*" class="d-none" @change="loadFile" />
         <input ref="imageInput" type="file" accept="image/*" class="d-none" @change="handleImageImport" />
-
-        <div v-if="isTextInputMode && textboxPosition" 
-             class="text-input-box" 
-             :style="{ 
-                 left: textboxPosition.x + 'px', 
-                 top: textboxPosition.y + 'px'
-             }">
-            <input 
-                id="textInputField"
-                ref="textInputField"
-                type="text" 
-                v-model="textInput" 
-                class="text-input-field" 
-                :placeholder="$t('Type text...')" 
-                @keydown.enter="confirmText()"
-                @keydown.esc="cancelText()"
-                @blur="handleTextboxBlur()"
-                :style="{ 
-                    fontSize: fontSize + 'px',
-                    color: drawColor,
-                    minWidth: '150px'
-                }"
-                autofocus
-            />
-        </div>
-
-        <!-- Stroke Menu -->
-        <div v-if="showStrokeMenu && selectedStroke" 
-             ref="strokeMenu"
-             class="stroke-menu" 
-             :style="{ 
-                 left: strokeMenuPosition.x + 'px', 
-                 top: strokeMenuPosition.y + 'px'
-             }">
-            <div class="stroke-menu-content">
-                <div class="stroke-menu-section">
-                    <div class="stroke-menu-colors dropdown-center">
-                        <template v-if="!isSelectedStrokeType('image')">
-                            <button
-                                type="button"
-                                class="btn-color"
-                                data-bs-toggle="dropdown"
-                                aria-expanded="false"
-                                :style="{ backgroundColor: selectedStroke?.stroke[0]?.color || 'transparent' }"
-                            ></button>
-                            <div class="dropdown-menu dropdown-menu-dark color-menu px-2">
-                                <button 
-                                    v-for="strokeStyle in initialStrokeStyles"
-                                    class="btn-color dropdown-item mb-1"
-                                    :style="{ backgroundColor: strokeStyle.color }"
-                                    :title="strokeStyle.color"
-                                    @click="changeStrokeColor(strokeStyle.color)"
-                                ></button>
-                            </div>
-                            <div class="vr bg-primary"></div>
-                        </template>
-                        <button type="button" class="btn btn-link link-secondary btn-stroke-menu border-0 p-0" :title="$t('Copy')" @click.stop="copySelectedStroke()">
-                            <i class="bi bi-clipboard-fill"></i>
-                        </button>
-                        <button type="button" class="btn btn-link link-secondary btn-stroke-menu border-0 p-0" :title="$t('Delete')" @click.stop="deleteSelectedStroke()">
-                            <i class="bi bi-trash-fill"></i>
-                        </button>
-                    </div>
-                </div>
-                <template v-if="!isSelectedStrokeType('image')">
-                    <div v-if="isSelectedStrokeType('text')" class="stroke-menu-section">
-                        <input 
-                            type="text" 
-                            class="form-control form-control-sm" 
-                            :value="selectedStroke?.stroke[0]?.text || ''"
-                            @input="changeStrokeText($event.target.value)"
-                            @click.stop
-                            :placeholder="$t('Enter text')"
-                        />
-                    </div>
-                    <!-- <div class="stroke-menu-section" v-else-if="!isSelectedStrokeType('highlight-rect')">
-                        <div class="d-flex align-items-center gap-1">
-                            <input type="range" class="form-range" min="1" max="10" @input="changeStrokeThickness($event.target.value)" :value="selectedStroke?.stroke[0]?.thickness || 1" />
-                            <input type="text" class="form-control-plaintext" min="1" max="10" :value="selectedStroke?.stroke[0]?.thickness || 1" readonly />
-                        </div>
-                    </div> -->
-                </template>
-            </div>
-        </div>
 
         <div v-if="isDraggingFile" class="drag-overlay">
             <div class="drag-message">
@@ -984,19 +1015,6 @@ defineExpose({
                 <h3>{{ $t('Drop PDF here to open') }}</h3>
             </div>
         </div>
-
-        <!-- Custom Print Modal (Electron silent printing) -->
-        <PrintModal
-            ref="printModal"
-            :isFileLoaded="isFileLoaded"
-            :pageCount="pageCount"
-            :activePages="activePages"
-            :pdfCanvases="pdfCanvases"
-            :drawingCanvases="drawingCanvases"
-            :renderPdfPage="renderPdfPage"
-        />
-
-        <PageNumber :pageNum="pageNum" :totalPages="pageCount - deletedPages.size" v-if="isFileLoaded" />
     </div>
 </template>
 

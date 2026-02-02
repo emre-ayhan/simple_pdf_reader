@@ -23,9 +23,11 @@ const menuItemClickHandler = (action, value) => {
 }
 </script>
 <template>
-    <nav-tabs @menu-item-click="menuItemClickHandler">
-        <PdfReader ref="reader" />
-    </nav-tabs>
-    <PageModal />
-    <UpdateState />
+    <div @contextmenu.prevent>
+        <nav-tabs @menu-item-click="menuItemClickHandler">
+            <PdfReader ref="reader" />
+        </nav-tabs>
+        <PageModal />
+        <UpdateState />
+    </div>
 </template>
