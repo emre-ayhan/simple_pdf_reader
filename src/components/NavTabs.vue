@@ -30,7 +30,7 @@ watch(activeTab, (newTab) => {
 }, { immediate: true });
 const menuItems = computed(() => ({
     file: [
-        { label: 'New Blank Page', action: 'openNewBlankPage', icon: 'pencil-square' },
+        { label: 'New Blank Page', action: 'openNewBlankPage', icon: 'file-earmark-fill' },
         { label: 'Open', action: 'openFile', icon: 'folder', shortcut: 'Ctrl+O' },
         { label: 'Save', action: 'saveFile', icon: 'floppy', shortcut: 'Ctrl+S', disabled: !activePageHasUnsavedChanges.value },
     ],
