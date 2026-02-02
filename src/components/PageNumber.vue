@@ -15,11 +15,18 @@ const props = defineProps({
 
 const show = ref(true);
 
-watch(() => props.pageNum, () => {
-    show.value = true;
+const hidePageNumber = () => {
     setTimeout(() => {
         show.value = false;
     }, 2000);
+};
+
+let timer = hidePageNumber();
+
+watch(() => props.pageNum, () => {
+    show.value = true;
+    clearTimeout(timer);
+    timer = hidePageNumber();
 });
 
 </script>
