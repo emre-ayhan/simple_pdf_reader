@@ -2,9 +2,7 @@
 import { computed, inject, onBeforeUnmount, onMounted, ref } from 'vue';
 import { Electron } from '../composables/useElectron';
 import { openNewTab, closeTab, activeTabIndex, activeTab, tabs, tabHistory, openTabs, markAsActive, isLastTabOnEmptyState, fileHasUnsavedChanges, activePageHasUnsavedChanges, handleElectronButtonClick, fileDataCache } from '../composables/useTabs';
-import { enableTouchDrawing, toolbarPosition } from '../composables/useAppPreferences.js';
-
-const currentLocale = inject('currentLocale');
+import { enableTouchDrawing, toolbarPosition, currentLocale } from '../composables/useAppPreferences.js';
 
 const emit = defineEmits([
     'menu-item-click'

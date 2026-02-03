@@ -1,13 +1,12 @@
 <script setup>
-import { inject, ref } from 'vue';
+import { ref } from 'vue';
 import NavTabs from './components/NavTabs.vue';
 import PdfReader from './components/PdfReader.vue';
 import PageModal from './components/PageModal.vue';
 import UpdateState from './components/UpdateState.vue';
-import { toggleTouchDrawing, toggleToolbarPosition } from './composables/useAppPreferences';
+import { toggleTouchDrawing, toggleToolbarPosition, changeLocale } from './composables/useAppPreferences';
 
 const reader = ref(null);
-const changeLocale = inject('changeLocale');
 
 const appHandlers = {
     toggleToolbarPosition,

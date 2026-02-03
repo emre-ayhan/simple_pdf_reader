@@ -1,10 +1,15 @@
 <script setup>
 import { onMounted, onUnmounted, ref, nextTick } from 'vue';
+import { useTools } from '../composables/useTools';
 
 const props = defineProps({
     parent: {
         type: String,
         required: true
+    },
+    items: {
+        type: Object,
+        default: () => ({})
     }
 });
 
@@ -73,27 +78,6 @@ const handleContextMenu = async (event) => {
     };
 };
 
-const groups = {
-    // Define your context menu items here
-    view: [
-        { label: 'Lock View', action: 'lockView', icon: 'lock' },
-        { label: 'Zoom In', action: 'zoomIn', icon: 'zoom-in' },
-        { label: 'Zoom Out', action: 'zoomOut', icon: 'zoom-out' },
-    ],
-    edit: [
-        { label: 'Undo', action: 'undo', icon: 'arrow-counterclockwise' },
-        { label: 'Redo', action: 'redo', icon: 'arrow-clockwise' },
-        { label: 'Paste', action: 'insertCopiedStroke', icon: 'clipboard-fill' },
-        { label: 'Import From Clipboard', action: 'insertFromClipboard', icon: 'clipboard-plus-fill' },
-    ],
-    page: [
-        { label: 'Rotate Clockwise', action: 'rotateClockwise', icon: 'arrow-clockwise' },
-        { label: 'Rotate Counterclockwise', action: 'rotateCounterClockwise', icon: 'arrow-counterclockwise' },
-        { label: 'Insert Page After', action: 'insertBlankPage', icon: 'file-earmark-arrow-down-fill' },
-        { label: 'Delete', action: 'deletePage', icon: 'trash3-fill' },
-    ],
-}
-
 onMounted(() => {
     document.querySelector(props.parent).addEventListener('contextmenu', handleContextMenu);
     document.querySelector(props.parent).addEventListener('click', handleContextMenu);
@@ -112,10 +96,10 @@ onUnmounted(() => {
         :class="{ show }" 
         :style="style"
     >
-        <template v-for="(items, group, index) in groups">
+        <template v-for="(groupItems, group, index) in items">
             <div class="dropdown-divider" v-if="index"></div>
             <!-- <div class="dropdown-header text-capitalize">{{ $t(group) }}</div> -->
-            <template v-for="item in items">
+            <template v-for="item in groupItems">
                 <a href="#" class="dropdown-item" @click.prevent="$emit('menu-item-click', item.action)">
                     <i v-if="item.icon" :class="`bi bi-${item.icon} me-2`"></i>{{ $t(item.label) }}
                 </a>

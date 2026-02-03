@@ -1,7 +1,5 @@
 import { ref, watch } from "vue"
-import { useStore } from "../composables/useStore"
-
-const store = useStore();
+import { currentLocale } from "../composables/useAppPreferences";
 
 // Import all language files using Vite's glob import
 const langModules = import.meta.glob('../Lang/*.json')
@@ -10,13 +8,6 @@ export default {
     install: (app) => {
         const translations = ref({})
         
-        // App Default Langueage
-        const currentLocale = ref(document.documentElement.lang || 'en');
-
-        store.get('userLocale', 'tr').then((locale) => {
-            changeLocale(locale);
-        });
-
         const getLangFile = async () => {
             if (Object.keys(translations.value?.[currentLocale.value] || {}).length) return;
 
@@ -64,12 +55,6 @@ export default {
             return get(key).replace(/:attribute/g, () => attributes.shift());
         }
 
-        const changeLocale = (locale) => {
-            currentLocale.value = locale;
-            document.documentElement.lang = locale;
-            store.set('userLocale', locale);
-        }
-
 
         // Watch for Page Locale Changes
         watch(currentLocale, (locale) => {
@@ -80,10 +65,6 @@ export default {
 
         // Global Translation Function
         app.config.globalProperties.$t = (key) => translate(key);
-        app.config.globalProperties.$currentLocale = currentLocale.value;
-
-        app.provide('currentLocale', currentLocale)
         app.provide('translate', translate);
-        app.provide('changeLocale', changeLocale)
     }
 }

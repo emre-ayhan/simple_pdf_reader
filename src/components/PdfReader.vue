@@ -14,6 +14,7 @@ import Search from "./Search.vue";
 import ThumbnailSidebar from "./ThumbnailSidebar.vue";
 import PageNumber from "./PageNumber.vue";
 import ContextMenu from "./ContextMenu.vue";
+import { useTools } from "../composables/useTools";
 
 // Cursor Style
 const cursorStyle = computed(() => {
@@ -390,7 +391,12 @@ const zoom = (direction) => {
     handleZoomLevel(newZoom);
 }
 
-const contextMenuActions = {
+const { 
+    handleToolClick,
+    viewLock,
+    viewZoomIn,
+    viewZoomOut
+} = useTools({
     lockView,
     zoomIn:  () => zoom(1),
     zoomOut: () => zoom(-1),
@@ -402,14 +408,15 @@ const contextMenuActions = {
     insertCopiedStroke,
     undo,
     redo,
-}
+});
 
-const handleContextMenuItemClick = (action, value) => {
-    if (!isFileLoaded.value || !action) return;
-    const handler = contextMenuActions[action];
-    if (typeof handler !== 'function') return;
-    handler(value);
-};
+const contextMenuItems = {
+    view: [
+        viewLock,
+        viewZoomIn,
+        viewZoomOut
+    ],
+}
 
 const hasActiveTool = computed(() => {
     return isDrawing.value || isEraser.value || isTextInputMode.value || isSelectionMode.value || isTextHighlightMode.value;
@@ -1002,8 +1009,16 @@ defineExpose({
                     :renderPdfPage="renderPdfPage"
                 />
 
-                <PageNumber :pageNum="pageNum" :totalPages="pageCount - deletedPages.size" />
-                <ContextMenu parent="#pdf-reader" @menu-item-click="handleContextMenuItemClick" />
+                <PageNumber
+                    :pageNum="pageNum"
+                    :totalPages="pageCount - deletedPages.size"
+                />
+                
+                <ContextMenu
+                    parent="#pdf-reader"
+                    :items="contextMenuItems"
+                    @menu-item-click="handleToolClick"
+                />
             </template>
         </div>
 
