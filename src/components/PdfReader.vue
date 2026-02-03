@@ -769,6 +769,7 @@ defineExpose({
                             <i class="bi bi-image"></i>
                         </a>
                     </li>
+                    <li class="nav-item vr bg-white mx-2"></li>
                     <li class="nav-item">
                         <a class="nav-link" href="#" @click.prevent="selectStrokeMode" :class="{ active: isSelectModeActive }" :title="$t('Stroke Selection') + ' (P)'">
                             <i class="bi bi-cursor-fill"></i>
