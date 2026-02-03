@@ -23,8 +23,8 @@ const activeGroup = ref('file');
 const menuItems = computed(() => ({
     file: [
         { label: 'New Blank Page', action: 'openNewBlankPage', icon: 'file-earmark-fill' },
-        { label: 'Open', action: 'openFile', icon: 'folder', shortcut: 'Ctrl+O' },
-        { label: 'Save', action: 'saveFile', icon: 'floppy', shortcut: 'Ctrl+S', disabled: !activePageHasUnsavedChanges.value },
+        { label: 'Open', action: 'openFile', icon: 'folder-fill', shortcut: 'Ctrl+O' },
+        { label: 'Save', action: 'saveFile', icon: 'floppy-fill', shortcut: 'Ctrl+S', disabled: !activePageHasUnsavedChanges.value },
     ],
     document: [
         { label: 'First Page', action: 'scrollToFirstPage', icon: 'chevron-double-up', shortcut: 'Home' },
