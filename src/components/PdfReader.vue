@@ -8,13 +8,13 @@ import { useHistory } from "../composables/useHistory";
 import { fileDataCache } from "../composables/useTabs";
 import { useWindowEvents } from "../composables/useWindowEvents";
 import { enableTouchDrawing, toolbarPosition } from "../composables/useAppPreferences";
+import { useTools } from "../composables/useTools";
 import EmptyState from "./EmptyState.vue";
 import PrintModal from "./PrintModal.vue";
 import Search from "./Search.vue";
 import ThumbnailSidebar from "./ThumbnailSidebar.vue";
 import PageNumber from "./PageNumber.vue";
 import ContextMenu from "./ContextMenu.vue";
-import { useTools } from "../composables/useTools";
 
 // Cursor Style
 const cursorStyle = computed(() => {
