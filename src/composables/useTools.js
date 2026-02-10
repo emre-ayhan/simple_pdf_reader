@@ -2,7 +2,7 @@ import { ref } from "vue";
 
 // File Group
 class Tool {
-    constructor(group, label, action, icon, value, items = null) {
+    constructor(group, label, icon, action, value, items = null) {
         this.group = group;
         this.label = label;
         this.action = action;
@@ -20,38 +20,42 @@ class Tool {
     }
 }
 
-const newFile = new Tool('file', { text: 'New Blank Page' }, 'openNewBlankPage', 'file-earmark-fill');
-const openFile = new Tool('file', { text: 'Open File', shortcut: 'Ctrl+O' }, 'openFile', 'folder2-open');
-const saveFile = new Tool('file', { text: 'Save', shortcut: 'Ctrl+S' }, 'saveFile', 'floppy');
+const newFile = new Tool('file', { text: 'New Blank Page' }, 'file-earmark-fill', 'openNewBlankPage');
+const openFile = new Tool('file', { text: 'Open File', shortcut: 'Ctrl+O' }, 'folder2-open', 'openFile');
+const saveFile = new Tool('file', { text: 'Save', shortcut: 'Ctrl+S' }, 'floppy', 'saveFile');
 
 // Page Group
-const rotateClockwise = new Tool('page', { text: 'Rotate Clockwise' }, 'rotateClockwise', 'arrow-clockwise');
-const rotateCounterclockwise = new Tool('page', { text: 'Rotate Counterclockwise' }, 'rotateCounterclockwise', 'arrow-counterclockwise');
-const insertFromClipboard = new Tool('page', { text: 'Import From Clipboard' }, 'insertFromClipboard', 'clipboard-plus');
-const insertBlankPage = new Tool('page', { text: 'Insert Page After' }, 'insertBlankPage', 'file-earmark-arrow-down');
-const deletePage = new Tool('page', { text: 'Delete' }, 'deletePage', 'trash3');
+const rotateClockwise = new Tool('page', { text: 'Rotate Clockwise' }, 'arrow-clockwise', 'rotateClockwise');
+const rotateCounterclockwise = new Tool('page', { text: 'Rotate Counterclockwise' }, 'arrow-counterclockwise', 'rotateCounterclockwise');
+const insertFromClipboard = new Tool('page', { text: 'Import From Clipboard' }, 'clipboard-plus', 'insertFromClipboard');
+const insertBlankPage = new Tool('page', { text: 'Insert Page After' }, 'file-earmark-arrow-down', 'insertBlankPage');
+const deletePage = new Tool('page', { text: 'Delete' }, 'trash3', 'deletePage');
 
 // Document Group
-const firstPage = new Tool('document', { text: 'First Page', shortcut: 'Home' }, 'scrollToFirstPage', 'chevron-double-up');
-const lastPage = new Tool('document', { text: 'Last Page', shortcut: 'End' }, 'scrollToLastPage', 'chevron-double-down');
-const previousPage = new Tool('document', { text: 'Previous Page', shortcut: 'PageUp' }, 'scrollToPreviousPage', 'chevron-up');
-const nextPage = new Tool('document', { text: 'Next Page', shortcut: 'PageDown' }, 'scrollToNextPage', 'chevron-down');
-const printPage = new Tool('document', { text: 'Print', shortcut: 'Ctrl+P' }, 'printPage', 'printer');
-const showDocumentProperties = new Tool('document', { text: 'Properties' }, 'showDocumentProperties', 'info-circle');
+const firstPage = new Tool('document', { text: 'First Page', shortcut: 'Home' }, 'chevron-double-up', 'scrollToFirstPage');
+const lastPage = new Tool('document', { text: 'Last Page', shortcut: 'End' }, 'chevron-double-down', 'scrollToLastPage');
+const previousPage = new Tool('document', { text: 'Previous Page', shortcut: 'PageUp' }, 'chevron-up', 'scrollToPreviousPage');
+const nextPage = new Tool('document', { text: 'Next Page', shortcut: 'PageDown' }, 'chevron-down', 'scrollToNextPage');
+const printPage = new Tool('document', { text: 'Print', shortcut: 'Ctrl+P' }, 'printer', 'printPage');
+const showDocumentProperties = new Tool('document', { text: 'Properties' }, 'info-circle', 'showDocumentProperties');
 
 // View Group
-const viewLock = new Tool('view', { text: 'Lock View' }, 'lockView', { active: 'lock-fill', inactive: 'lock' });
-const viewZoomIn = new Tool('view', { text: 'Zoom In' }, 'zoomIn', 'zoom-in');
-const viewZoomOut = new Tool('view', { text: 'Zoom Out' }, 'zoomOut', 'zoom-out');
+const viewLock = new Tool('view', { text: 'Lock View' }, { active: 'lock-fill', inactive: 'lock' }, 'lockView');
+const viewZoomIn = new Tool('view', { text: 'Zoom In' }, 'zoom-in', 'zoomIn');
+const viewZoomOut = new Tool('view', { text: 'Zoom Out' }, 'zoom-out', 'zoomOut');
 
 // Edit Group
-const editUndo = new Tool('edit', { text: 'Undo', shortcut: 'Ctrl+Z' }, 'undo', 'arrow-counterclockwise');
-const editRedo = new Tool('edit', { text: 'Redo', shortcut: 'Ctrl+Y' }, 'redo', 'arrow-clockwise');
-const editPaste = new Tool('edit', { text: 'Paste', shortcut: 'Ctrl+V' }, 'insertCopiedStroke', 'clipboard-fill');
+const editUndo = new Tool('edit', { text: 'Undo', shortcut: 'Ctrl+Z' }, 'arrow-counterclockwise', 'undo');
+const editRedo = new Tool('edit', { text: 'Redo', shortcut: 'Ctrl+Y' }, 'arrow-clockwise', 'redo');
+const editPaste = new Tool('edit', { text: 'Paste', shortcut: 'Ctrl+V' }, 'clipboard-fill', 'insertCopiedStroke');
+const editCapture = new Tool('edit', { text: 'Capture Selection' }, 'scissors', 'captureSelection');
+const editSelectStroke = new Tool('edit', { text: 'Select Stroke' }, 'cursor-fill', 'selectStrokeMode');
+const editSelectText = new Tool('edit', { text: 'Select Text' }, 'cursor-text', 'toggleTextSelection');
+const editHandTool = new Tool('edit', { text: 'Hand Tool' }, 'hand-index-thumb-fill', 'toggleHandTool');
 
 // Preferences Group
-const toggleTouchDrawing = new Tool('preferences', { text: 'Toggle Touch Drawing' }, 'toggleTouchDrawing', 'hand-index-thumb');
-const toggleToolbarPosition = new Tool('preferences', { text: 'Toggle Toolbar Position' }, 'toggleToolbarPosition', 'arrows-expand');
+const toggleTouchDrawing = new Tool('preferences', { text: 'Toggle Touch Drawing' }, 'hand-index-thumb', 'toggleTouchDrawing');
+const toggleToolbarPosition = new Tool('preferences', { text: 'Toggle Toolbar Position' }, 'arrows-expand', 'toggleToolbarPosition');
 // const translate = { 
 //     group: 'preferences', label: 'Language', icon: 'translate', items: [
 //         { label: 'English', action: 'changeLocale', value: 'en', icon: currentLocale.value === 'en' ? 'check-circle-fill' : 'circle' },
@@ -85,6 +89,10 @@ export function useTools(actions) {
         editUndo,
         editRedo,
         editPaste,
+        editCapture,
+        editSelectStroke,
+        editSelectText,
+        editHandTool,
         toggleTouchDrawing,
         toggleToolbarPosition,
         // translate,

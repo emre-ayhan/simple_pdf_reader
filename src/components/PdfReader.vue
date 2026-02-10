@@ -401,6 +401,10 @@ const {
     editUndo,
     editRedo,
     editPaste,
+    editCapture,
+    editHandTool,
+    editSelectStroke,
+    editSelectText,
 } = useTools({
     lockView,
     zoomIn:  () => zoom(1),
@@ -412,14 +416,16 @@ const {
     insertCopiedStroke,
     undo,
     redo,
+    captureSelection,
+    selectStrokeMode,
+    toggleTextSelection,
+    toggleHandTool,
 });
 
 const contextMenuItems = {
-    view: [],
     edit: [
         editUndo,
         editRedo,
-        editPaste,
     ]
 }
 
@@ -975,39 +981,45 @@ defineExpose({
                 />
                 
                 <context-menu parent="#pdf-reader" @menu-item-click="handleToolClick" @show="getFromClipboard">
+                    <div class="d-flex">
+                        <template v-for="item in [editSelectStroke, editSelectText, editHandTool, editCapture, editPaste]">
+                            <ToolItem class="dropdown-item" hide-label :item="item" @tool-click="handleToolClick" />
+                        </template>
+                    </div>
+                    <div class="dropdown-divider"></div>
+                    <div class="d-flex">
+                        <template v-for="item in [viewLock, viewZoomIn, viewZoomOut]">
+                            <ToolItem class="dropdown-item" hide-label :item="item" @tool-click="handleToolClick" />
+                        </template>
+                        <div class="dropend">
+                            <a href="#" class="dropdown-item dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false" @click.prevent.stop :title="$t('Change Zoom Level')">
+                                {{ zoomPercentage }}
+                                <i class="bi bi-percent"></i>
+                            </a>
+                            <div class="dropdown-menu dropdown-menu-dark rounded-3">
+                                <a href="#" class="dropdown-item" @click.prevent="toggleZoomMode('fit-height')">
+                                    <i :class="`bi bi-${!zoomLevels.includes(zoomPercentage) ? 'check-circle-fill' : 'circle'} me-1`"></i>
+                                    {{ $t('Fit Height') }}
+                                </a>
+                                <a href="#" class="dropdown-item" @click.prevent="toggleZoomMode('fit-width')">
+                                    <i class="bi bi-circle me-1"></i>
+                                    {{ $t('Fit Width') }}
+                                </a>
+                                <template v-for="level in zoomLevels">
+                                    <a href="#" class="dropdown-item" @click.prevent="handleZoomLevel(level)">
+                                        <i :class="`bi bi-${level === zoomPercentage ? 'check-circle-fill' : 'circle'} me-1`"></i>
+                                        {{ level }}
+                                        <i class="bi bi-percent"></i>
+                                    </a>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
                     <template v-for="(groupItems, group, index) in contextMenuItems">
-                        <div class="dropdown-divider" v-if="index"></div>
+                        <div class="dropdown-divider"></div>
                         <template v-for="item in groupItems">
                             <ToolItem class="dropdown-item"  :item="item" @tool-click="handleToolClick" />
                         </template>
-                        <div class="d-flex" v-if="!index">
-                            <ToolItem class="dropdown-item" hide-label :item="viewLock" @tool-click="handleToolClick" />
-                            <ToolItem class="dropdown-item" hide-label :item="viewZoomIn" @tool-click="handleToolClick" />
-                            <ToolItem class="dropdown-item" hide-label :item="viewZoomOut" @tool-click="handleToolClick" />
-                            <div class="dropend">
-                                <a href="#" class="dropdown-item dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false" @click.prevent.stop :title="$t('Change Zoom Level')">
-                                    {{ zoomPercentage }}
-                                    <i class="bi bi-percent"></i>
-                                </a>
-                                <div class="dropdown-menu dropdown-menu-dark rounded-3">
-                                    <a href="#" class="dropdown-item" @click.prevent="toggleZoomMode('fit-height')">
-                                        <i :class="`bi bi-${!zoomLevels.includes(zoomPercentage) ? 'check-circle-fill' : 'circle'} me-1`"></i>
-                                        {{ $t('Fit Height') }}
-                                    </a>
-                                    <a href="#" class="dropdown-item" @click.prevent="toggleZoomMode('fit-width')">
-                                        <i class="bi bi-circle me-1"></i>
-                                        {{ $t('Fit Width') }}
-                                    </a>
-                                    <template v-for="level in zoomLevels">
-                                        <a href="#" class="dropdown-item" @click.prevent="handleZoomLevel(level)">
-                                            <i :class="`bi bi-${level === zoomPercentage ? 'check-circle-fill' : 'circle'} me-1`"></i>
-                                            {{ level }}
-                                            <i class="bi bi-percent"></i>
-                                        </a>
-                                    </template>
-                                </div>
-                            </div>
-                        </div>
                     </template>
                 </context-menu>
             </template>

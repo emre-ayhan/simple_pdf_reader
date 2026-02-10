@@ -3,6 +3,10 @@
     border: 1px solid $border-color !important;
 }
 
+.dropdown-item.active {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
 .navbar {
     background: $dark-bg-accent !important;
 
