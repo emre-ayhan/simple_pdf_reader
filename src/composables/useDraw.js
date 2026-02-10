@@ -2934,13 +2934,13 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
 
                 canvas.width = canvasWidth * pixelRatio;
                 canvas.height = canvasHeight * pixelRatio;
-                canvas.style.width = `${canvasWidth}px`;
-                canvas.style.height = `${canvasHeight}px`;
+                canvas.style.width = `100%`;
+                canvas.style.height = `auto`;
 
                 drawCanvas.width = canvasWidth * pixelRatio;
                 drawCanvas.height = canvasHeight * pixelRatio;
-                drawCanvas.style.width = `${canvasWidth}px`;
-                drawCanvas.style.height = `${canvasHeight}px`;
+                drawCanvas.style.width = `100%`;
+                drawCanvas.style.height = `100%`;
 
                 const ctx = canvas.getContext('2d', { willReadFrequently: true });
                 ctx.clearRect(0, 0, canvasWidth * pixelRatio, canvasHeight * pixelRatio);

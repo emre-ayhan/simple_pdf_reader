@@ -1,37 +1,58 @@
+import { ref } from "vue";
+
 // File Group
-const newFile = { group: 'file', label: 'New Blank Page', action: 'openNewBlankPage', icon: 'file-earmark-fill' };
-const openFile = { group: 'file', label: 'Open', action: 'openFile', icon: 'folder', shortcut: 'Ctrl+O' };
-const saveFile = { group: 'file', label: 'Save', action: 'saveFile', icon: 'floppy', shortcut: 'Ctrl+S' };
+class Tool {
+    constructor(group, label, action, icon, value, items = null) {
+        this.group = group;
+        this.label = label;
+        this.action = action;
+        this.iconStored = icon; // Store the original icon for toggling
+        this.icon = ref(icon.inactive || icon); // Use inactive icon if provided, otherwise use the original
+        this.active = false;
+        this.value = value;
+        this.items = items;
+        this.disabled = false;
+    }
+    
+    toggle() {
+        this.active = !this.active;
+        this.icon.value = this.active && this.iconStored.active ? this.iconStored.active : (this.iconStored.inactive || this.iconStored);
+    }
+}
+
+const newFile = new Tool('file', { text: 'New Blank Page' }, 'openNewBlankPage', 'file-earmark-fill');
+const openFile = new Tool('file', { text: 'Open File', shortcut: 'Ctrl+O' }, 'openFile', 'folder2-open');
+const saveFile = new Tool('file', { text: 'Save', shortcut: 'Ctrl+S' }, 'saveFile', 'floppy');
 
 // Page Group
-const rotateClockwise = { group: 'page', label: 'Rotate Clockwise', action: 'rotateClockwise', icon: 'arrow-clockwise' };
-const rotateCounterclockwise = { group: 'page', label: 'Rotate Counterclockwise', action: 'rotateCounterclockwise', icon: 'arrow-counterclockwise' };
-const insertFromClipboard = { group: 'page', label: 'Import From Clipboard', action: 'insertFromClipboard', icon: 'clipboard-plus' };
-const insertBlankPage = { group: 'page', label: 'Insert Page After', action: 'insertBlankPage', icon: 'file-earmark-arrow-down' };
-const deletePage = { group: 'page', label: 'Delete', action: 'deletePage', icon: 'trash3' };
+const rotateClockwise = new Tool('page', { text: 'Rotate Clockwise' }, 'rotateClockwise', 'arrow-clockwise');
+const rotateCounterclockwise = new Tool('page', { text: 'Rotate Counterclockwise' }, 'rotateCounterclockwise', 'arrow-counterclockwise');
+const insertFromClipboard = new Tool('page', { text: 'Import From Clipboard' }, 'insertFromClipboard', 'clipboard-plus');
+const insertBlankPage = new Tool('page', { text: 'Insert Page After' }, 'insertBlankPage', 'file-earmark-arrow-down');
+const deletePage = new Tool('page', { text: 'Delete' }, 'deletePage', 'trash3');
 
 // Document Group
-const firstPage = { group: 'document', label: 'First Page', action: 'scrollToFirstPage', icon: 'chevron-double-up', shortcut: 'Home' };
-const lastPage = { group: 'document', label: 'Last Page', action: 'scrollToLastPage', icon: 'chevron-double-down', shortcut: 'End' };
-const previousPage = { group: 'document', label: 'Previous Page', action: 'scrollToPreviousPage', icon: 'chevron-up', shortcut: 'PageUp' };
-const nextPage = { group: 'document', label: 'Next Page', action: 'scrollToNextPage', icon: 'chevron-down', shortcut: 'PageDown' };
-const printPage = { group: 'document', label: 'Print', action: 'printPage', icon: 'printer', shortcut: 'Ctrl+P' };
-const showDocumentProperties = { group: 'document', label: 'Properties', action: 'showDocumentProperties', icon: 'info-circle' };
+const firstPage = new Tool('document', { text: 'First Page', shortcut: 'Home' }, 'scrollToFirstPage', 'chevron-double-up');
+const lastPage = new Tool('document', { text: 'Last Page', shortcut: 'End' }, 'scrollToLastPage', 'chevron-double-down');
+const previousPage = new Tool('document', { text: 'Previous Page', shortcut: 'PageUp' }, 'scrollToPreviousPage', 'chevron-up');
+const nextPage = new Tool('document', { text: 'Next Page', shortcut: 'PageDown' }, 'scrollToNextPage', 'chevron-down');
+const printPage = new Tool('document', { text: 'Print', shortcut: 'Ctrl+P' }, 'printPage', 'printer');
+const showDocumentProperties = new Tool('document', { text: 'Properties' }, 'showDocumentProperties', 'info-circle');
 
 // View Group
-const viewLock = { group: 'view', label: 'Lock View', action: 'lockView', icon: 'lock' };
-const viewZoomIn = { group: 'view', label: 'Zoom In', action: 'zoomIn', icon: 'zoom-in' };
-const viewZoomOut = { group: 'view', label: 'Zoom Out', action: 'zoomOut', icon: 'zoom-out' };
+const viewLock = new Tool('view', { text: 'Lock View' }, 'lockView', { active: 'lock-fill', inactive: 'lock' });
+const viewZoomIn = new Tool('view', { text: 'Zoom In' }, 'zoomIn', 'zoom-in');
+const viewZoomOut = new Tool('view', { text: 'Zoom Out' }, 'zoomOut', 'zoom-out');
 
 // Edit Group
-const undo = { group: 'edit', label: 'Undo', action: 'undo', icon: 'arrow-counterclockwise' };
-const redo = { group: 'edit', label: 'Redo', action: 'redo', icon: 'arrow-clockwise' };
-const paste = { group: 'edit', label: 'Paste', action: 'insertCopiedStroke', icon: 'clipboard-fill' };
-const importFromClipboard = { group: 'edit', label: 'Import From Clipboard', action: 'insertFromClipboard', icon: 'clipboard-plus-fill' };
+const editUndo = new Tool('edit', { text: 'Undo', shortcut: 'Ctrl+Z' }, 'undo', 'arrow-counterclockwise');
+const editRedo = new Tool('edit', { text: 'Redo', shortcut: 'Ctrl+Y' }, 'redo', 'arrow-clockwise');
+const editPaste = new Tool('edit', { text: 'Paste', shortcut: 'Ctrl+V' }, 'insertCopiedStroke', 'clipboard-fill');
+const editImportFromClipboard = new Tool('edit', { text: 'Import From Clipboard' }, 'insertFromClipboard', 'clipboard-plus-fill');
 
 // Preferences Group
-const toggleTouchDrawing = { group: 'preferences', label: 'Toggle Touch Drawing', action: 'toggleTouchDrawing', icon: 'hand-index-thumb' };
-const toggleToolbarPosition = { group: 'preferences', label: 'Toggle Toolbar Position', action: 'toggleToolbarPosition', icon: 'arrows-expand' };
+const toggleTouchDrawing = new Tool('preferences', { text: 'Toggle Touch Drawing' }, 'toggleTouchDrawing', 'hand-index-thumb');
+const toggleToolbarPosition = new Tool('preferences', { text: 'Toggle Toolbar Position' }, 'toggleToolbarPosition', 'arrows-expand');
 // const translate = { 
 //     group: 'preferences', label: 'Language', icon: 'translate', items: [
 //         { label: 'English', action: 'changeLocale', value: 'en', icon: currentLocale.value === 'en' ? 'check-circle-fill' : 'circle' },
@@ -41,11 +62,12 @@ const toggleToolbarPosition = { group: 'preferences', label: 'Toggle Toolbar Pos
 // };
 
 export function useTools(actions) {
-    const handleToolClick = (action, value) => {
-        if (!action) return;
-        const handler = actions[action];
+    const handleToolClick = (tool) => {
+        if (!tool.action) return;
+        const handler = actions[tool.action];
         if (typeof handler !== 'function') return;
-        handler(value);
+        handler(tool.value);
+        tool.toggle();
     };
 
     return {
@@ -61,10 +83,10 @@ export function useTools(actions) {
         lastPage,
         previousPage,
         nextPage,
-        undo,
-        redo,
-        paste,
-        importFromClipboard,
+        editUndo,
+        editRedo,
+        editPaste,
+        editImportFromClipboard,
         toggleTouchDrawing,
         toggleToolbarPosition,
         // translate,

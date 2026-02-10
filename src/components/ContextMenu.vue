@@ -1,15 +1,10 @@
 <script setup>
 import { onMounted, onUnmounted, ref, nextTick } from 'vue';
-import { useTools } from '../composables/useTools';
 
 const props = defineProps({
     parent: {
         type: String,
         required: true
-    },
-    items: {
-        type: Object,
-        default: () => ({})
     }
 });
 
@@ -90,20 +85,7 @@ onUnmounted(() => {
 
 </script>
 <template>
-    <div 
-        ref="menuRef"
-        class="dropdown-menu dropdown-menu-dark position-absolute rounded-4" 
-        :class="{ show }" 
-        :style="style"
-    >
-        <template v-for="(groupItems, group, index) in items">
-            <div class="dropdown-divider" v-if="index"></div>
-            <!-- <div class="dropdown-header text-capitalize">{{ $t(group) }}</div> -->
-            <template v-for="item in groupItems">
-                <a href="#" class="dropdown-item" @click.prevent="$emit('menu-item-click', item.action)">
-                    <i v-if="item.icon" :class="`bi bi-${item.icon} me-2`"></i>{{ $t(item.label) }}
-                </a>
-            </template>
-        </template>
+    <div ref="menuRef" class="dropdown-menu dropdown-menu-dark position-absolute rounded-3 show" :style="style" v-if="show">
+        <slot></slot>
     </div>
 </template>

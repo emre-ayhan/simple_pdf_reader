@@ -8,13 +8,14 @@ import { useHistory } from "../composables/useHistory";
 import { fileDataCache } from "../composables/useTabs";
 import { useWindowEvents } from "../composables/useWindowEvents";
 import { enableTouchDrawing, toolbarPosition } from "../composables/useAppPreferences";
-import { useTools } from "../composables/useTools";
 import EmptyState from "./EmptyState.vue";
 import PrintModal from "./PrintModal.vue";
 import Search from "./Search.vue";
 import ThumbnailSidebar from "./ThumbnailSidebar.vue";
 import PageNumber from "./PageNumber.vue";
 import ContextMenu from "./ContextMenu.vue";
+import { useTools } from "../composables/useTools";
+import Tool from "./Tool.vue";
 
 // Cursor Style
 const cursorStyle = computed(() => {
@@ -361,7 +362,7 @@ const handleZoomLevel = (percentage) => {
     if (!isFileLoaded.value) return;
 
     if (isNaN(percentage)) {
-        toggleZoomMode(event.target.value);
+        toggleZoomMode(percentage);
         return;
     }
 
@@ -395,7 +396,10 @@ const {
     handleToolClick,
     viewLock,
     viewZoomIn,
-    viewZoomOut
+    viewZoomOut,
+    editUndo,
+    editRedo,
+    editPaste,
 } = useTools({
     lockView,
     zoomIn:  () => zoom(1),
@@ -416,7 +420,17 @@ const contextMenuItems = {
         viewZoomIn,
         viewZoomOut
     ],
+    edit: [
+        editUndo,
+        editRedo,
+        editPaste,
+    ]
 }
+
+viewZoomIn.disabled = computed(() => zoomPercentage.value >= maxZoom);
+viewZoomOut.disabled = computed(() => zoomPercentage.value <= minZoom);
+editUndo.disabled = computed(() => !canUndo.value);
+editRedo.disabled = computed(() => !canRedo.value);
 
 const hasActiveTool = computed(() => {
     return isDrawing.value || isEraser.value || isTextInputMode.value || isSelectionMode.value || isTextHighlightMode.value;
@@ -799,26 +813,6 @@ defineExpose({
                             <i class="bi bi-scissors"></i>
                         </a>
                     </li>
-
-                    <!-- Insert Last Copied Stroke -->
-                    <li class="nav-item">
-                        <a href="#" class="nav-link" :class="{ disabled: !copiedStroke }" @click.prevent="insertCopiedStroke" :title="$t('Insert Last Copied Stroke')">
-                            <i class="bi bi-clipboard-plus"></i>
-                        </a>
-                    </li>
-                    <li class="nav-item vr bg-white mx-2"></li>
-
-                    <!-- Undo/Redo -->
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="undo()" :class="{ disabled: !canUndo }" :title="$t('Undo') + ' (Ctrl+Z)'">
-                            <i class="bi bi-arrow-counterclockwise"></i>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="redo()" :class="{ disabled: !canRedo }" :title="$t('Redo') + ' (Ctrl+Y)'">
-                            <i class="bi bi-arrow-clockwise"></i>
-                        </a>
-                    </li>
                     
                     <!-- Pagination -->
                     <li class="nav-item vr bg-white mx-2"></li>
@@ -836,37 +830,6 @@ defineExpose({
                         <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex + 1)" :class="{ disabled: isLastPage }" :title="$t('Next Page')">
                             <i class="bi bi-chevron-down"></i>
                         </a>
-                    </li>
-                    
-                    <li class="nav-item vr bg-white mx-2"></li>
-                    <!-- View Lock -->
-                    <li class="nav-item" :title="isViewLocked ? $t('Unlock View') : $t('Lock View')">
-                        <a href="#" class="nav-link" @click.prevent="lockView" :class="{ active: isViewLocked }">
-                            <i class="bi" :class="isViewLocked ? 'bi-lock-fill' : 'bi-lock'"></i>
-                        </a>
-                    </li>
-
-                    <!-- Zoom -->
-                    <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="zoom(-1)" :class="{ disabled: isViewLocked || zoomPercentage <= minZoom }">
-                            <i class="bi bi-zoom-out"></i>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="zoom(1)" :class="{ disabled: isViewLocked || zoomPercentage >= maxZoom }">
-                            <i class="bi bi-zoom-in"></i>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <select name="zoom-level" id="zoom-level" class="form-control-plaintext zoom-level" @change="onZoomLevelChange" :disabled="isViewLocked">
-                            <option value="fit-height">{{ $t('Fit Height') }}</option>
-                            <option value="fit-width">{{ $t('Fit Width') }}</option>
-                            <template v-for="value in zoomLevels">
-                                <option :value="value" :selected="zoomPercentage === value">
-                                    {{ value }} %
-                                </option>
-                            </template>
-                        </select>
                     </li>
                 </ul>
             </template>
@@ -1014,11 +977,38 @@ defineExpose({
                     :totalPages="pageCount - deletedPages.size"
                 />
                 
-                <ContextMenu
-                    parent="#pdf-reader"
-                    :items="contextMenuItems"
-                    @menu-item-click="handleToolClick"
-                />
+                <context-menu parent="#pdf-reader" @menu-item-click="handleToolClick">
+                    <template v-for="(groupItems, group, index) in contextMenuItems">
+                        <div class="dropdown-divider" v-if="index"></div>
+                        <template v-for="item in groupItems">
+                            <div class="d-flex">
+                                <Tool class="dropdown-item"  :item="item" @tool-click="handleToolClick" />
+                                <div class="vr"></div>
+                                <div class="dropend" v-if="item.action === 'zoomIn'">
+                                    <a href="#" class="dropdown-item dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false" @click.prevent.stop>
+                                        {{ zoomPercentage }} %
+                                    </a>
+                                    <div class="dropdown-menu dropdown-menu-dark rounded-3">
+                                        <a href="#" class="dropdown-item" @click.prevent="toggleZoomMode('fit-height')">
+                                            <i :class="`bi bi-${!zoomLevels.includes(zoomPercentage) ? 'check-circle-fill' : 'circle'} me-1`"></i>
+                                            {{ $t('Fit Height') }}
+                                        </a>
+                                        <a href="#" class="dropdown-item" @click.prevent="toggleZoomMode('fit-width')">
+                                            <i class="bi bi-circle me-1"></i>
+                                            {{ $t('Fit Width') }}
+                                        </a>
+                                        <template v-for="level in zoomLevels">
+                                            <a href="#" class="dropdown-item" @click.prevent="handleZoomLevel(level)">
+                                                <i :class="`bi bi-${level === zoomPercentage ? 'check-circle-fill' : 'circle'} me-1`"></i>
+                                                {{ level }} %
+                                            </a>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </template>
+                </context-menu>
             </template>
         </div>
 
@@ -1034,4 +1024,3 @@ defineExpose({
         </div>
     </div>
 </template>
-
