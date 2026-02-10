@@ -48,7 +48,6 @@ const viewZoomOut = new Tool('view', { text: 'Zoom Out' }, 'zoomOut', 'zoom-out'
 const editUndo = new Tool('edit', { text: 'Undo', shortcut: 'Ctrl+Z' }, 'undo', 'arrow-counterclockwise');
 const editRedo = new Tool('edit', { text: 'Redo', shortcut: 'Ctrl+Y' }, 'redo', 'arrow-clockwise');
 const editPaste = new Tool('edit', { text: 'Paste', shortcut: 'Ctrl+V' }, 'insertCopiedStroke', 'clipboard-fill');
-const editImportFromClipboard = new Tool('edit', { text: 'Import From Clipboard' }, 'insertFromClipboard', 'clipboard-plus-fill');
 
 // Preferences Group
 const toggleTouchDrawing = new Tool('preferences', { text: 'Toggle Touch Drawing' }, 'toggleTouchDrawing', 'hand-index-thumb');
@@ -86,7 +85,6 @@ export function useTools(actions) {
         editUndo,
         editRedo,
         editPaste,
-        editImportFromClipboard,
         toggleTouchDrawing,
         toggleToolbarPosition,
         // translate,

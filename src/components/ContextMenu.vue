@@ -8,6 +8,8 @@ const props = defineProps({
     }
 });
 
+const emit = defineEmits(['show', 'hide']);
+
 const show = ref(false);
 const menuRef = ref(null);
 
@@ -22,10 +24,12 @@ const handleContextMenu = async (event) => {
 
     if (event.type === 'click') {
         show.value = false;
+        emit('hide');
         return;
     }
 
     show.value = true;
+    emit('show');
 
     // Wait for the menu to render
     await nextTick();

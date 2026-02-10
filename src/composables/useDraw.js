@@ -4,6 +4,7 @@ import { useStore } from './useStore.js';
 import { enableTouchDrawing } from './useAppPreferences.js';
 
 const copiedStroke = ref(null);
+const copiedStrokes = ref([]); // For multi-selection copy
 
 export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPage, drawingCanvases, drawingContexts, strokeChangeCallback) {
     const { get: storeGet, set: storeSet } = useStore();
@@ -227,6 +228,18 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         return first.type === type;
     };
 
+    const copyAsStroke = (stroke) => {
+        if (!stroke) return;
+
+        copiedStroke.value = stroke;
+
+        if (copiedStrokes.value.length > 10) {
+            copiedStrokes.value.shift();
+        }
+
+        copiedStrokes.value.push(copiedStroke.value);
+    }
+
     // Copy Selected Stroke
     const copySelectedStroke = () => {
         if (!selectedStroke.value) return;
@@ -236,19 +249,19 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             const group = selectedStrokes.value
                 .filter(sel => sel.pageIndex === pageIndex)
                 .map(sel => JSON.parse(JSON.stringify(sel.stroke)));
-            copiedStroke.value = {
+            copyAsStroke({
                 strokes: group,
                 inserted: 0
-            };
+            });
         } else {
-            copiedStroke.value = {
+            copyAsStroke({
                 stroke: JSON.parse(JSON.stringify(selectedStroke.value.stroke)),
                 inserted: 0
-            };
+            });
         }
     };
 
-    const insertFromClipboard = async () => {
+    const getFromClipboard = async () => {
         try {
             const clipboardItems = await navigator.clipboard.read();
             for (const item of clipboardItems) {
@@ -260,7 +273,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                         const dataUrl = e.target.result;
                         const img = new Image();
                         img.onload = () => {
-                            copiedStroke.value = {
+                            const stroke = {
                                 inserted: 0,
                                 stroke: [{
                                     type: 'image',
@@ -271,7 +284,12 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                                     imageData: dataUrl
                                 }]
                             };
-                            insertCopiedStroke(-1); 
+
+                            const isCoppied = copiedStrokes.value.findIndex(s => s.stroke[0]?.imageData === dataUrl);
+
+                            if (isCoppied !== -1) return;
+
+                            copyAsStroke(stroke);
                         };
                         img.src = dataUrl;
                     };
@@ -280,7 +298,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 }
             }
         } catch (err) {
-            console.error('Failed to insert from clipboard:', err);
+            console.error('Failed to get from clipboard:', err);
         }
     }
 
@@ -2896,7 +2914,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             const dataUrl = cropCanvas.toDataURL('image/png');
             
             // Set as copied stroke
-            copiedStroke.value = {
+            copyAsStroke({
                 inserted: 0,
                 stroke: [{
                     type: 'image',
@@ -2906,7 +2924,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                     height: selectedHeight,
                     imageData: dataUrl
                 }]
-            };
+            });
 
             // Redraw to clear the selection rectangle
             redrawAllStrokes(canvasIndex);
@@ -3152,9 +3170,10 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         createHighlightRectangle,
         highlightTextSelection,
         copiedStroke,
+        copiedStrokes,
         copySelectedStroke,
         insertCopiedStroke,
-        insertFromClipboard,
+        getFromClipboard,
         isSelectedStrokeType
     };
 }

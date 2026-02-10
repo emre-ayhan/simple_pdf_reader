@@ -14,8 +14,8 @@ import Search from "./Search.vue";
 import ThumbnailSidebar from "./ThumbnailSidebar.vue";
 import PageNumber from "./PageNumber.vue";
 import ContextMenu from "./ContextMenu.vue";
+import ToolItem from "./ToolItem.vue";
 import { useTools } from "../composables/useTools";
-import Tool from "./Tool.vue";
 
 // Cursor Style
 const cursorStyle = computed(() => {
@@ -160,9 +160,10 @@ const {
     highlightTextSelection,
     copySelectedStroke,
     insertCopiedStroke,
-    insertFromClipboard,
+    getFromClipboard,
     isSelectedStrokeType,
     copiedStroke,
+    copiedStrokes,
 } = useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPage, drawingCanvases, drawingContexts, strokeChangeCallback);
 
 // History management
@@ -407,7 +408,6 @@ const {
     rotateClockwise: () => rotatePage('clockwise'),
     rotateCounterClockwise: () => rotatePage('counterclockwise'),
     insertBlankPage: handleInsertBlankPage,
-    insertFromClipboard,
     deletePage: () => deletePage(pageIndex.value, addToHistory),
     insertCopiedStroke,
     undo,
@@ -415,11 +415,7 @@ const {
 });
 
 const contextMenuItems = {
-    view: [
-        viewLock,
-        viewZoomIn,
-        viewZoomOut
-    ],
+    view: [],
     edit: [
         editUndo,
         editRedo,
@@ -431,6 +427,7 @@ viewZoomIn.disabled = computed(() => zoomPercentage.value >= maxZoom);
 viewZoomOut.disabled = computed(() => zoomPercentage.value <= minZoom);
 editUndo.disabled = computed(() => !canUndo.value);
 editRedo.disabled = computed(() => !canRedo.value);
+editPaste.disabled = computed(() => !copiedStroke.value);
 
 const hasActiveTool = computed(() => {
     return isDrawing.value || isEraser.value || isTextInputMode.value || isSelectionMode.value || isTextHighlightMode.value;
@@ -585,7 +582,7 @@ useWindowEvents(fileId, {
             ctrl: true,
             action: () => {
                 if (isAnyInputFocused.value) return;
-                insertFromClipboard();
+                insertCopiedStroke();
             }
         },
         Delete: {
@@ -977,36 +974,40 @@ defineExpose({
                     :totalPages="pageCount - deletedPages.size"
                 />
                 
-                <context-menu parent="#pdf-reader" @menu-item-click="handleToolClick">
+                <context-menu parent="#pdf-reader" @menu-item-click="handleToolClick" @show="getFromClipboard">
                     <template v-for="(groupItems, group, index) in contextMenuItems">
                         <div class="dropdown-divider" v-if="index"></div>
                         <template v-for="item in groupItems">
-                            <div class="d-flex">
-                                <Tool class="dropdown-item"  :item="item" @tool-click="handleToolClick" />
-                                <div class="vr"></div>
-                                <div class="dropend" v-if="item.action === 'zoomIn'">
-                                    <a href="#" class="dropdown-item dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false" @click.prevent.stop>
-                                        {{ zoomPercentage }} %
+                            <ToolItem class="dropdown-item"  :item="item" @tool-click="handleToolClick" />
+                        </template>
+                        <div class="d-flex" v-if="!index">
+                            <ToolItem class="dropdown-item" hide-label :item="viewLock" @tool-click="handleToolClick" />
+                            <ToolItem class="dropdown-item" hide-label :item="viewZoomIn" @tool-click="handleToolClick" />
+                            <ToolItem class="dropdown-item" hide-label :item="viewZoomOut" @tool-click="handleToolClick" />
+                            <div class="dropend">
+                                <a href="#" class="dropdown-item dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false" @click.prevent.stop :title="$t('Change Zoom Level')">
+                                    {{ zoomPercentage }}
+                                    <i class="bi bi-percent"></i>
+                                </a>
+                                <div class="dropdown-menu dropdown-menu-dark rounded-3">
+                                    <a href="#" class="dropdown-item" @click.prevent="toggleZoomMode('fit-height')">
+                                        <i :class="`bi bi-${!zoomLevels.includes(zoomPercentage) ? 'check-circle-fill' : 'circle'} me-1`"></i>
+                                        {{ $t('Fit Height') }}
                                     </a>
-                                    <div class="dropdown-menu dropdown-menu-dark rounded-3">
-                                        <a href="#" class="dropdown-item" @click.prevent="toggleZoomMode('fit-height')">
-                                            <i :class="`bi bi-${!zoomLevels.includes(zoomPercentage) ? 'check-circle-fill' : 'circle'} me-1`"></i>
-                                            {{ $t('Fit Height') }}
+                                    <a href="#" class="dropdown-item" @click.prevent="toggleZoomMode('fit-width')">
+                                        <i class="bi bi-circle me-1"></i>
+                                        {{ $t('Fit Width') }}
+                                    </a>
+                                    <template v-for="level in zoomLevels">
+                                        <a href="#" class="dropdown-item" @click.prevent="handleZoomLevel(level)">
+                                            <i :class="`bi bi-${level === zoomPercentage ? 'check-circle-fill' : 'circle'} me-1`"></i>
+                                            {{ level }}
+                                            <i class="bi bi-percent"></i>
                                         </a>
-                                        <a href="#" class="dropdown-item" @click.prevent="toggleZoomMode('fit-width')">
-                                            <i class="bi bi-circle me-1"></i>
-                                            {{ $t('Fit Width') }}
-                                        </a>
-                                        <template v-for="level in zoomLevels">
-                                            <a href="#" class="dropdown-item" @click.prevent="handleZoomLevel(level)">
-                                                <i :class="`bi bi-${level === zoomPercentage ? 'check-circle-fill' : 'circle'} me-1`"></i>
-                                                {{ level }} %
-                                            </a>
-                                        </template>
-                                    </div>
+                                    </template>
                                 </div>
                             </div>
-                        </template>
+                        </div>
                     </template>
                 </context-menu>
             </template>
