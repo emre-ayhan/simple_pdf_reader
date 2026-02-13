@@ -8,9 +8,9 @@ import { showModal } from "./useModal";
 import { fileDataCache, openNewTab, setCurrentTab } from "./useTabs";
 
 GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.449/build/pdf.worker.min.mjs';
+const { set: storeSet, get: storeGet } = useStore();
 
 export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallback, fileSavedCallback) {
-    const { set: storeSet, get: storeGet } = useStore();
     const fileId = uuid();
 
     var pdfDoc = null;

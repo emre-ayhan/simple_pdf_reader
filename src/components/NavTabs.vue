@@ -1,8 +1,9 @@
 <script setup>
-import { computed, inject, onBeforeUnmount, onMounted, ref } from 'vue';
 import { Electron } from '../composables/useElectron';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { openNewTab, closeTab, activeTabIndex, activeTab, tabs, tabHistory, openTabs, markAsActive, isLastTabOnEmptyState, fileHasUnsavedChanges, activePageHasUnsavedChanges, handleElectronButtonClick, fileDataCache } from '../composables/useTabs';
 import { enableTouchDrawing, toolbarPosition, currentLocale } from '../composables/useAppPreferences.js';
+import EmptyState from './EmptyState.vue';
 
 const emit = defineEmits([
     'menu-item-click'
@@ -84,7 +85,7 @@ onBeforeUnmount(() => {
     <ul :class="`nav nav-tabs d-print-none fixed-${toolbarPosition} ${activeTab.emptyState ? 'empty-state' : ''}`" id="appTabs" role="tablist">
         <!-- Nav Menu -->
         <li class="nav-item">
-            <a href="#" class="nav-link nav-link-menu" data-bs-toggle="offcanvas" data-bs-target="#offcanvasExample" aria-controls="offcanvasExample" :title="$t('Menu')">
+            <a href="#" class="nav-link nav-link-menu" data-bs-toggle="offcanvas" data-bs-target="#appMenu" aria-controls="appMenu" :title="$t('Menu')">
                 {{ $t('Menu') }}
             </a>
         </li>
@@ -121,19 +122,20 @@ onBeforeUnmount(() => {
     <div class="tab-content" id="appTabContent">
         <template v-for="(tab, index) in tabs">
             <div class="tab-pane" :class="{ 'active show': index === activeTabIndex }" tabindex="0" v-if="!tab.closed">
+                <EmptyState v-if="tab.emptyState" @open-file="emit('menu-item-click', 'openFile')" />
                 <slot></slot>
             </div>
         </template>
     </div>
-    <div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasExample" aria-labelledby="offcanvasExampleLabel">
+    <div class="offcanvas offcanvas-start" tabindex="-1" id="appMenu" aria-labelledby="appMenuLabel">
         <div class="offcanvas-header">
-            <h4 class="offcanvas-title text-primary" id="offcanvasExampleLabel">
+            <h4 class="offcanvas-title text-primary" id="appMenuLabel">
                 <i class="bi bi-file-earmark-pdf-fill"></i>
                 Simple PDF Reader
             </h4>
             <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
         </div>
-        <div class="offcanvas-body">
+        <div class="offcanvas-body pb-0">
             <div class="d-flex">
                 <ul class="nav flex-column">
                     <li class="nav-item" v-for="group in menuGroups" :key="group">

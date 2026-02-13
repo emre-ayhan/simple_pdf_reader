@@ -267,6 +267,7 @@ export function useHistory(fileId, strokesPerPage, drawingCanvases, drawingConte
             temporaryState.value = false;
             return;
         }
+
         history.value = [];
         historyStep.value = -1;
         savedHistoryStep.value = -1;

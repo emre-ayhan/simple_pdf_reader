@@ -2,7 +2,6 @@
 import { ref, computed, nextTick, onMounted, onUnmounted, onBeforeUnmount } from "vue";
 import { Electron } from "../composables/useElectron";
 import { useFile } from "../composables/useFile";
-import { useDrop } from "../composables/useDrop";
 import { useDraw } from "../composables/useDraw";
 import { useHistory } from "../composables/useHistory";
 import { fileDataCache } from "../composables/useTabs";
@@ -97,14 +96,6 @@ const {
     showDocumentProperties,
     rotatePage,
 } = useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallback, fileSavedCallback);
-
-// Drag and Drop Handlers
-const {
-    isDraggingFile,
-    onDrop,
-    onDragEnter,
-    onDragLeave,
-} = useDrop(loadFile);
 
 // Drawing Management
 const strokeChangeCallback = (action) => {
@@ -691,349 +682,342 @@ defineExpose({
     scrollToLastPage,
     resetAllTools,
     showDocumentProperties,
+    loadFile,
 })
 </script>
 <template>
-    <div class="container-fluid bg-dark" @dragenter.prevent="onDragEnter" @dragleave.prevent="onDragLeave" @dragover.prevent @drop.prevent="onDrop">
-        <nav :class="`navbar navbar-expand navbar-dark bg-dark p-1 fixed-${toolbarPosition}`">
-            <template v-if="isFileLoaded">
-                <ul class="navbar-nav">
-                    <!-- Thumbnail Sidebar -->
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" :title="$t('Thumbnail Sidebar')" @click.prevent="toggleThumbnailSidebar" :class="{ active: isThumbnailSidebarVisible }">
-                            <i class="bi bi-layout-sidebar-inset"></i>
-                        </a>
-                    </li>
-                    <!-- Search -->
-                    <Search :pageTextContent="pageTextContent" :disabled="textActionsDisabled" :scrollToPage="scrollToPage" />
-                </ul>
-                
-                <!-- Toolbar -->
-                <ul ref="toolbar" class="navbar-nav mx-auto">
-                    <!-- Drawing -->
-                    <template v-if="isDrawing || isTextInputMode || isTextHighlightMode">
-                        <li class="nav-item" v-for="(strokeStyle, index) in initialStrokeStyles">
-                            <a class="nav-link" href="#" @click.prevent="handleStrokeStyleButtonClick(index)" :class="{ active: strokeStyle.color === drawColor }">
-                                <i class="bi bi-circle-fill" :style="{ color: strokeStyle.color }"></i>
+    <div class="container-fluid bg-dark-accent" v-if="isFileLoaded">
+        <nav :class="`navbar navbar-expand-lg navbar-dark p-1 fixed-${toolbarPosition}`">
+            <ul class="navbar-nav flex-row">
+                <!-- Thumbnail Sidebar -->
+                <li class="nav-item">
+                    <a class="nav-link" href="#" :title="$t('Thumbnail Sidebar')" @click.prevent="toggleThumbnailSidebar" :class="{ active: isThumbnailSidebarVisible }">
+                        <i class="bi bi-layout-sidebar-inset"></i>
+                    </a>
+                </li>
+                <!-- Search -->
+                <Search :pageTextContent="pageTextContent" :disabled="textActionsDisabled" :scrollToPage="scrollToPage" />
+            </ul>
+            <button class="nav-link d-lg-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasNavbar" aria-controls="offcanvasNavbar" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasNavbar" aria-labelledby="offcanvasNavbarLabel">
+                <div class="offcanvas-body">
+                    <!-- Toolbar -->
+                    <ul ref="toolbar" class="navbar-nav mx-auto">
+                        <!-- Drawing -->
+                        <template v-if="isDrawing || isTextInputMode || isTextHighlightMode">
+                            <li class="nav-item" v-for="(strokeStyle, index) in initialStrokeStyles">
+                                <a class="nav-link" href="#" @click.prevent="handleStrokeStyleButtonClick(index)" :class="{ active: strokeStyle.color === drawColor }">
+                                    <i class="bi bi-circle-fill" :style="{ color: strokeStyle.color }"></i>
+                                </a>
+                            </li>
+                            <li class="nav-item btn-group">
+                                <a href="#" role="button" class="nav-link" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                                    <i class="bi bi-palette-fill"></i>
+                                </a>
+                                <div class="dropdown-menu dropdown-menu-dark rounded-3 mt-2 p-3">
+                                    <div class="mb-3">
+                                        <div class="form-label">{{ $t('Color') }}</div>
+                                        <div class="row row-cols-5">
+                                            <template v-for="color in colors">
+                                                <div class="col" v-if="!initialStrokeStyles.find(el => el.color === color)">
+                                                    <div role="button" class="fs-3" :style="{ color }" @click="setInitialStrokeColor(color)" :title="color">
+                                                        <i class="bi bi-circle-fill"></i>
+                                                    </div>
+                                                </div>
+                                            </template>
+                                        </div>
+                                        <div class="mb-2">
+                                            <svg width="100%" height="40" viewBox="0 0 200 40" preserveAspectRatio="none">
+                                                <path 
+                                                    d="M 0,20 Q 25,5 50,20 T 100,20 T 150,20 T 200,20" 
+                                                    fill="none" 
+                                                    :stroke="activeStrokeStyle?.color" 
+                                                    :stroke-width="activeStrokeStyle?.thickness" 
+                                                    stroke-linecap="round"
+                                                />
+                                            </svg>
+                                        </div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">{{ $t('Thickness') }}</label>
+                                        <div class="d-flex align-items-center">
+                                            <input type="range" class="form-range" min="1" max="10" :value="activeStrokeStyle?.thickness" @input="setInitialStrokeThickness($event.target.value)" />
+                                            <input type="text" class="form-control-plaintext" min="1" max="10" :value="activeStrokeStyle?.thickness" readonly />
+                                        </div>
+                                    </div>
+                                </div>
+                            </li>
+                            <li class="nav-item vr bg-white mx-2"></li>
+                        </template>
+                        <li class="nav-item" v-if="drawMode === 'pen' && isDrawing">
+                            <a class="nav-link" href="#" @click.prevent="selectEraser" :class="{ active: isEraser }" :title="$t('Eraser') + ' (E)'">
+                                <i class="bi bi-eraser-fill"></i>
                             </a>
                         </li>
                         <li class="nav-item btn-group">
-                            <a href="#" role="button" class="nav-link" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
-                                <i class="bi bi-palette-fill"></i>
+                            <a class="nav-link" href="#" @click.prevent="selectDrawingTool(drawMode)" :class="{ active: isDrawing }" :title="$t(activeDrawingTool.title) + ` (${activeDrawingTool.shortcut})`">
+                                <i :class="`bi bi-${activeDrawingTool.icon}`"></i>
                             </a>
-                            <div class="dropdown-menu dropdown-menu-dark rounded-3 mt-2 p-3">
-                                <div class="mb-3">
-                                    <div class="form-label">{{ $t('Color') }}</div>
-                                    <div class="row row-cols-5">
-                                        <template v-for="color in colors">
-                                            <div class="col" v-if="!initialStrokeStyles.find(el => el.color === color)">
-                                                <div role="button" class="fs-3" :style="{ color }" @click="setInitialStrokeColor(color)" :title="color">
-                                                    <i class="bi bi-circle-fill"></i>
-                                                </div>
-                                            </div>
-                                        </template>
-                                    </div>
-                                    <div class="mb-2">
-                                        <svg width="100%" height="40" viewBox="0 0 200 40" preserveAspectRatio="none">
-                                            <path 
-                                                d="M 0,20 Q 25,5 50,20 T 100,20 T 150,20 T 200,20" 
-                                                fill="none" 
-                                                :stroke="activeStrokeStyle?.color" 
-                                                :stroke-width="activeStrokeStyle?.thickness" 
-                                                stroke-linecap="round"
-                                            />
-                                        </svg>
-                                    </div>
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label">{{ $t('Thickness') }}</label>
-                                    <div class="d-flex align-items-center">
-                                        <input type="range" class="form-range" min="1" max="10" :value="activeStrokeStyle?.thickness" @input="setInitialStrokeThickness($event.target.value)" />
-                                        <input type="text" class="form-control-plaintext" min="1" max="10" :value="activeStrokeStyle?.thickness" readonly />
-                                    </div>
-                                </div>
-                            </div>
-                        </li>
-                        <li class="nav-item vr bg-white mx-2"></li>
-                    </template>
-                    <li class="nav-item" v-if="drawMode === 'pen' && isDrawing">
-                        <a class="nav-link" href="#" @click.prevent="selectEraser" :class="{ active: isEraser }" :title="$t('Eraser') + ' (E)'">
-                            <i class="bi bi-eraser-fill"></i>
-                        </a>
-                    </li>
-                    <li class="nav-item btn-group">
-                        <a class="nav-link" href="#" @click.prevent="selectDrawingTool(drawMode)" :class="{ active: isDrawing }" :title="$t(activeDrawingTool.title) + ` (${activeDrawingTool.shortcut})`">
-                            <i :class="`bi bi-${activeDrawingTool.icon}`"></i>
-                        </a>
-                        <a class="nav-link dropdown-toggle dropdown-toggle-split" href="#" data-bs-toggle="dropdown" aria-expanded="false">
-                            <span class="visually-hidden">Toggle Dropdown</span>
-                        </a>
-                        <div class="dropdown-menu dropdown-menu-dark rounded-3 mt-2">
-                            <template v-for="(tool, key) in dravingTools">
-                                <a class="dropdown-item d-flex align-items-center" href="#" @click.prevent="selectDrawingTool(key)">
-                                    <i :class="`bi bi-${tool.icon} me-2`"></i>
-                                    <span>{{ $t(tool.title) }} ({{ tool.shortcut }})</span>
-                                    <i class="bi bi-check-circle-fill ms-auto" v-if="key === drawMode"></i>
-                                </a>
-                            </template>
-                        </div>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="toggleTextHighlightMode" :class="{ active: isTextHighlightMode, disabled: textActionsDisabled }" :title="$t('Highlight Text') + ' (H)'">
-                            <i class="bi bi-highlighter"></i>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="selectText" :class="{ active: isTextInputMode }" :title="$t('Add Text') + ' (T)'">
-                            <i class="bi bi-textarea-t"></i>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="importImage" :title="$t('Import Image') + ' (I)'">
-                            <i class="bi bi-image"></i>
-                        </a>
-                    </li>
-                    <li class="nav-item vr bg-white mx-2"></li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="selectStrokeMode" :class="{ active: isSelectModeActive }" :title="$t('Stroke Selection') + ' (P)'">
-                            <i class="bi bi-cursor-fill"></i>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="toggleTextSelection" :class="{ active: isTextSelectionMode && !isTextHighlightMode, disabled: textActionsDisabled }" :title="$t('Text Selection') + ' (S)'">
-                            <i class="bi bi-cursor-text"></i>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="toggleHandTool" :class="{ active: handToolActive }" :title="$t('Hand Tool')">
-                            <i class="bi bi-hand-index-thumb-fill"></i>
-                        </a>
-                    </li>
-
-                    <!-- Capture Image Tool -->
-                    <li class="nav-item">
-                        <a class="nav-link" href="#" @click.prevent="captureSelection" :class="{ active: isSelectionMode }" :title="$t('Select Area to Whiteboard')">
-                            <i class="bi bi-scissors"></i>
-                        </a>
-                    </li>
-                    
-                    <!-- Pagination -->
-                    <li class="nav-item vr bg-white mx-2"></li>
-                    <li class="nav-item">
-                        <div class="input-group flex-nowrap">
-                            <input type="text" class="form-control-plaintext" v-model="pageNum" @input="handlePageNumberInput" />
-                        </div>
-                    </li>
-                    <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex - 1)" :class="{ disabled: isFirstPage }" :title="$t('Previous Page')">
-                            <i class="bi bi-chevron-up"></i>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex + 1)" :class="{ disabled: isLastPage }" :title="$t('Next Page')">
-                            <i class="bi bi-chevron-down"></i>
-                        </a>
-                    </li>
-                </ul>
-            </template>
-        </nav>
-        <div id="pdf-reader" ref="pdfReader" :class="`pdf-reader toolbar-${toolbarPosition} ${isViewLocked ? 'overflow-hidden' : ''}`">
-            <EmptyState v-if="!isFileLoaded" @open-file="handleFileOpen" />
-
-            <template v-else>
-                <ThumbnailSidebar 
-                    v-if="isThumbnailSidebarVisible"
-                    :pageCount="pageCount"
-                    :deletedPages="deletedPages"
-                    :renderedPages="renderedPages"
-                    :pdfCanvases="pdfCanvases"
-                    :pageIndex="pageIndex"
-                    :scrollToPage="scrollToPage"
-                    :renderPageThumbnail="renderPageThumbnail"
-                />
-                <div class="pages-container flex-grow-1" ref="pagesContainer" :style="{ width: `${zoomPercentage}%` }">
-                    <template v-for="page in pageCount" :key="page">
-                        <div  class="page-container" :data-page="page" v-show="!deletedPages.has(page)">
-                            <div class="canvas-container" :class="{ 'canvas-loading': !renderedPages.has(page) }">
-                                <canvas class="pdf-canvas" :ref="el => { if (el) pdfCanvases[page - 1] = el }"></canvas>
-                                <div class="text-layer" :class="{ 'text-selectable': isTextSelectionMode }" :ref="el => { if (el) textLayerDivs[page - 1] = el }"></div>
-                                <canvas 
-                                    :ref="el => { if (el) drawingCanvases[page - 1] = el }"
-                                    class="drawing-canvas"
-                                    @pointerdown="startDrawing"
-                                    @pointermove="onPointerMove"
-                                    @pointerup="stopDrawing"
-                                    @pointerleave="onPointerLeave"
-                                    @pointercancel="stopDrawing"
-                                    @click="handleStrokeMenu"
-                                    :style="{
-                                        cursor: cursorStyle,
-                                        pointerEvents: 'auto',
-                                        touchAction: touchAction,
-                                        zIndex: isTextSelectionMode ? 1 : 3
-                                    }"
-                                    :data-color="drawColor"
-                                ></canvas>
-                            </div>
-                        </div>
-                    </template>
-                </div>
-
-                <!-- Text Input Box -->
-                <div v-if="isTextInputMode && textboxPosition" 
-                     class="text-input-box" 
-                     :style="{ 
-                         left: textboxPosition.x + 'px', 
-                         top: textboxPosition.y + 'px'
-                     }">
-                    <input 
-                        id="textInputField"
-                        ref="textInputField"
-                        type="text" 
-                        v-model="textInput" 
-                        class="text-input-field" 
-                        :placeholder="$t('Type text...')" 
-                        @keydown.enter="confirmText()"
-                        @keydown.esc="cancelText()"
-                        @blur="handleTextboxBlur()"
-                        :style="{ 
-                            fontSize: fontSize + 'px',
-                            color: drawColor,
-                            minWidth: '150px'
-                        }"
-                        autofocus
-                    />
-                </div>
-    
-                <!-- Stroke Menu -->
-                <div v-if="showStrokeMenu && selectedStroke" 
-                     ref="strokeMenu"
-                     class="stroke-menu" 
-                     :style="{ 
-                         left: strokeMenuPosition.x + 'px', 
-                         top: strokeMenuPosition.y + 'px'
-                     }">
-                    <div class="stroke-menu-content">
-                        <div class="stroke-menu-section">
-                            <div class="stroke-menu-colors dropdown-center">
-                                <template v-if="!isSelectedStrokeType('image')">
-                                    <button
-                                        type="button"
-                                        class="btn-color"
-                                        data-bs-toggle="dropdown"
-                                        aria-expanded="false"
-                                        :style="{ backgroundColor: selectedStroke?.stroke[0]?.color || 'transparent' }"
-                                    ></button>
-                                    <div class="dropdown-menu dropdown-menu-dark color-menu px-2">
-                                        <button 
-                                            v-for="strokeStyle in initialStrokeStyles"
-                                            class="btn-color dropdown-item mb-1"
-                                            :style="{ backgroundColor: strokeStyle.color }"
-                                            :title="strokeStyle.color"
-                                            @click="changeStrokeColor(strokeStyle.color)"
-                                        ></button>
-                                    </div>
-                                    <div class="vr bg-primary"></div>
-                                </template>
-                                <button type="button" class="btn btn-link link-secondary btn-stroke-menu border-0 p-0" :title="$t('Copy')" @click.stop="copySelectedStroke()">
-                                    <i class="bi bi-clipboard-fill"></i>
-                                </button>
-                                <button type="button" class="btn btn-link link-secondary btn-stroke-menu border-0 p-0" :title="$t('Delete')" @click.stop="deleteSelectedStroke()">
-                                    <i class="bi bi-trash-fill"></i>
-                                </button>
-                            </div>
-                        </div>
-                        <template v-if="!isSelectedStrokeType('image')">
-                            <div v-if="isSelectedStrokeType('text')" class="stroke-menu-section">
-                                <input 
-                                    type="text" 
-                                    class="form-control form-control-sm" 
-                                    :value="selectedStroke?.stroke[0]?.text || ''"
-                                    @input="changeStrokeText($event.target.value)"
-                                    @click.stop
-                                    :placeholder="$t('Enter text')"
-                                />
-                            </div>
-                            <!-- <div class="stroke-menu-section" v-else-if="!isSelectedStrokeType('highlight-rect')">
-                                <div class="d-flex align-items-center gap-1">
-                                    <input type="range" class="form-range" min="1" max="10" @input="changeStrokeThickness($event.target.value)" :value="selectedStroke?.stroke[0]?.thickness || 1" />
-                                    <input type="text" class="form-control-plaintext" min="1" max="10" :value="selectedStroke?.stroke[0]?.thickness || 1" readonly />
-                                </div>
-                            </div> -->
-                        </template>
-                    </div>
-                </div>
-    
-                <!-- Custom Print Modal (Electron silent printing) -->
-                <PrintModal
-                    ref="printModal"
-                    :isFileLoaded="isFileLoaded"
-                    :pageCount="pageCount"
-                    :activePages="activePages"
-                    :pdfCanvases="pdfCanvases"
-                    :drawingCanvases="drawingCanvases"
-                    :renderPdfPage="renderPdfPage"
-                />
-
-                <PageNumber
-                    :pageNum="pageNum"
-                    :totalPages="pageCount - deletedPages.size"
-                />
-                
-                <context-menu parent="#pdf-reader" @menu-item-click="handleToolClick" @show="getFromClipboard">
-                    <div class="d-flex">
-                        <template v-for="item in [editSelectStroke, editSelectText, editHandTool, editCapture, editPaste]">
-                            <ToolItem class="dropdown-item" hide-label :item="item" @tool-click="handleToolClick" />
-                        </template>
-                    </div>
-                    <div class="dropdown-divider"></div>
-                    <div class="d-flex">
-                        <template v-for="item in [viewLock, viewZoomIn, viewZoomOut]">
-                            <ToolItem class="dropdown-item" hide-label :item="item" @tool-click="handleToolClick" />
-                        </template>
-                        <div class="dropend">
-                            <a href="#" class="dropdown-item dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false" @click.prevent.stop :title="$t('Change Zoom Level')">
-                                {{ zoomPercentage }}
-                                <i class="bi bi-percent"></i>
+                            <a class="nav-link dropdown-toggle dropdown-toggle-split" href="#" data-bs-toggle="dropdown" aria-expanded="false">
+                                <span class="visually-hidden">Toggle Dropdown</span>
                             </a>
-                            <div class="dropdown-menu dropdown-menu-dark rounded-3">
-                                <a href="#" class="dropdown-item" @click.prevent="toggleZoomMode('fit-height')">
-                                    <i :class="`bi bi-${!zoomLevels.includes(zoomPercentage) ? 'check-circle-fill' : 'circle'} me-1`"></i>
-                                    {{ $t('Fit Height') }}
-                                </a>
-                                <a href="#" class="dropdown-item" @click.prevent="toggleZoomMode('fit-width')">
-                                    <i class="bi bi-circle me-1"></i>
-                                    {{ $t('Fit Width') }}
-                                </a>
-                                <template v-for="level in zoomLevels">
-                                    <a href="#" class="dropdown-item" @click.prevent="handleZoomLevel(level)">
-                                        <i :class="`bi bi-${level === zoomPercentage ? 'check-circle-fill' : 'circle'} me-1`"></i>
-                                        {{ level }}
-                                        <i class="bi bi-percent"></i>
+                            <div class="dropdown-menu dropdown-menu-dark rounded-3 mt-2">
+                                <template v-for="(tool, key) in dravingTools">
+                                    <a class="dropdown-item d-flex align-items-center" href="#" @click.prevent="selectDrawingTool(key)">
+                                        <i :class="`bi bi-${tool.icon} me-2`"></i>
+                                        <span>{{ $t(tool.title) }} ({{ tool.shortcut }})</span>
+                                        <i class="bi bi-check-circle-fill ms-auto" v-if="key === drawMode"></i>
                                     </a>
                                 </template>
                             </div>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" @click.prevent="toggleTextHighlightMode" :class="{ active: isTextHighlightMode, disabled: textActionsDisabled }" :title="$t('Highlight Text') + ' (H)'">
+                                <i class="bi bi-highlighter"></i>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="#" class="nav-link" @click.prevent="selectText" :class="{ active: isTextInputMode }" :title="$t('Add Text') + ' (T)'">
+                                <i class="bi bi-textarea-t"></i>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="#" class="nav-link" @click.prevent="importImage" :title="$t('Import Image') + ' (I)'">
+                                <i class="bi bi-image"></i>
+                            </a>
+                        </li>
+                        <li class="nav-item vr bg-white mx-2"></li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" @click.prevent="selectStrokeMode" :class="{ active: isSelectModeActive }" :title="$t('Stroke Selection') + ' (P)'">
+                                <i class="bi bi-cursor-fill"></i>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" @click.prevent="toggleTextSelection" :class="{ active: isTextSelectionMode && !isTextHighlightMode, disabled: textActionsDisabled }" :title="$t('Text Selection') + ' (S)'">
+                                <i class="bi bi-cursor-text"></i>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" @click.prevent="toggleHandTool" :class="{ active: handToolActive }" :title="$t('Hand Tool')">
+                                <i class="bi bi-hand-index-thumb-fill"></i>
+                            </a>
+                        </li>
+    
+                        <!-- Capture Image Tool -->
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" @click.prevent="captureSelection" :class="{ active: isSelectionMode }" :title="$t('Select Area to Whiteboard')">
+                                <i class="bi bi-scissors"></i>
+                            </a>
+                        </li>
+                        
+                        <!-- Pagination -->
+                        <li class="nav-item vr bg-white mx-2"></li>
+                        <li class="nav-item">
+                            <div class="input-group flex-nowrap">
+                                <input type="text" class="form-control-plaintext" v-model="pageNum" @input="handlePageNumberInput" />
+                            </div>
+                        </li>
+                        <li class="nav-item">
+                            <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex - 1)" :class="{ disabled: isFirstPage }" :title="$t('Previous Page')">
+                                <i class="bi bi-chevron-up"></i>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex + 1)" :class="{ disabled: isLastPage }" :title="$t('Next Page')">
+                                <i class="bi bi-chevron-down"></i>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+        <div id="pdf-reader" ref="pdfReader" :class="`pdf-reader toolbar-${toolbarPosition} ${isViewLocked ? 'overflow-hidden' : ''}`">
+            <ThumbnailSidebar 
+                v-if="isThumbnailSidebarVisible"
+                :pageCount="pageCount"
+                :deletedPages="deletedPages"
+                :renderedPages="renderedPages"
+                :pdfCanvases="pdfCanvases"
+                :pageIndex="pageIndex"
+                :scrollToPage="scrollToPage"
+                :renderPageThumbnail="renderPageThumbnail"
+            />
+            <div class="pages-container flex-grow-1" ref="pagesContainer" :style="{ width: `${zoomPercentage}%` }">
+                <template v-for="page in pageCount" :key="page">
+                    <div  class="page-container" :data-page="page" v-show="!deletedPages.has(page)">
+                        <div class="canvas-container" :class="{ 'canvas-loading': !renderedPages.has(page) }">
+                            <canvas class="pdf-canvas" :ref="el => { if (el) pdfCanvases[page - 1] = el }"></canvas>
+                            <div class="text-layer" :class="{ 'text-selectable': isTextSelectionMode }" :ref="el => { if (el) textLayerDivs[page - 1] = el }"></div>
+                            <canvas 
+                                :ref="el => { if (el) drawingCanvases[page - 1] = el }"
+                                class="drawing-canvas"
+                                @pointerdown="startDrawing"
+                                @pointermove="onPointerMove"
+                                @pointerup="stopDrawing"
+                                @pointerleave="onPointerLeave"
+                                @pointercancel="stopDrawing"
+                                @click="handleStrokeMenu"
+                                :style="{
+                                    cursor: cursorStyle,
+                                    pointerEvents: 'auto',
+                                    touchAction: touchAction,
+                                    zIndex: isTextSelectionMode ? 1 : 3
+                                }"
+                                :data-color="drawColor"
+                            ></canvas>
                         </div>
                     </div>
-                    <template v-for="(groupItems, group, index) in contextMenuItems">
-                        <div class="dropdown-divider"></div>
-                        <template v-for="item in groupItems">
-                            <ToolItem class="dropdown-item"  :item="item" @tool-click="handleToolClick" />
-                        </template>
-                    </template>
-                </context-menu>
-            </template>
-        </div>
-
-
-        <input ref="fileInput" type="file"  accept="application/pdf,image/*" class="d-none" @change="loadFile" />
-        <input ref="imageInput" type="file" accept="image/*" class="d-none" @change="handleImageImport" />
-
-        <div v-if="isDraggingFile" class="drag-overlay">
-            <div class="drag-message">
-                <i class="bi bi-file-earmark-pdf-fill display-1"></i>
-                <h3>{{ $t('Drop PDF here to open') }}</h3>
+                </template>
             </div>
+
+            <!-- Text Input Box -->
+            <div v-if="isTextInputMode && textboxPosition" 
+                 class="text-input-box" 
+                 :style="{ 
+                     left: textboxPosition.x + 'px', 
+                     top: textboxPosition.y + 'px'
+                 }">
+                <input 
+                    id="textInputField"
+                    ref="textInputField"
+                    type="text" 
+                    v-model="textInput" 
+                    class="text-input-field" 
+                    :placeholder="$t('Type text...')" 
+                    @keydown.enter="confirmText()"
+                    @keydown.esc="cancelText()"
+                    @blur="handleTextboxBlur()"
+                    :style="{ 
+                        fontSize: fontSize + 'px',
+                        color: drawColor,
+                        minWidth: '150px'
+                    }"
+                    autofocus
+                />
+            </div>
+
+            <!-- Stroke Menu -->
+            <div v-if="showStrokeMenu && selectedStroke" 
+                 ref="strokeMenu"
+                 class="stroke-menu" 
+                 :style="{ 
+                     left: strokeMenuPosition.x + 'px', 
+                     top: strokeMenuPosition.y + 'px'
+                 }">
+                <div class="stroke-menu-content">
+                    <div class="stroke-menu-section">
+                        <div class="stroke-menu-colors dropdown-center">
+                            <template v-if="!isSelectedStrokeType('image')">
+                                <button
+                                    type="button"
+                                    class="btn-color"
+                                    data-bs-toggle="dropdown"
+                                    aria-expanded="false"
+                                    :style="{ backgroundColor: selectedStroke?.stroke[0]?.color || 'transparent' }"
+                                ></button>
+                                <div class="dropdown-menu dropdown-menu-dark color-menu px-2">
+                                    <button 
+                                        v-for="strokeStyle in initialStrokeStyles"
+                                        class="btn-color dropdown-item mb-1"
+                                        :style="{ backgroundColor: strokeStyle.color }"
+                                        :title="strokeStyle.color"
+                                        @click="changeStrokeColor(strokeStyle.color)"
+                                    ></button>
+                                </div>
+                                <div class="vr bg-primary"></div>
+                            </template>
+                            <button type="button" class="btn btn-link link-secondary btn-stroke-menu border-0 p-0" :title="$t('Copy')" @click.stop="copySelectedStroke()">
+                                <i class="bi bi-clipboard-fill"></i>
+                            </button>
+                            <button type="button" class="btn btn-link link-secondary btn-stroke-menu border-0 p-0" :title="$t('Delete')" @click.stop="deleteSelectedStroke()">
+                                <i class="bi bi-trash-fill"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <template v-if="!isSelectedStrokeType('image')">
+                        <div v-if="isSelectedStrokeType('text')" class="stroke-menu-section">
+                            <input 
+                                type="text" 
+                                class="form-control form-control-sm" 
+                                :value="selectedStroke?.stroke[0]?.text || ''"
+                                @input="changeStrokeText($event.target.value)"
+                                @click.stop
+                                :placeholder="$t('Enter text')"
+                            />
+                        </div>
+                        <!-- <div class="stroke-menu-section" v-else-if="!isSelectedStrokeType('highlight-rect')">
+                            <div class="d-flex align-items-center gap-1">
+                                <input type="range" class="form-range" min="1" max="10" @input="changeStrokeThickness($event.target.value)" :value="selectedStroke?.stroke[0]?.thickness || 1" />
+                                <input type="text" class="form-control-plaintext" min="1" max="10" :value="selectedStroke?.stroke[0]?.thickness || 1" readonly />
+                            </div>
+                        </div> -->
+                    </template>
+                </div>
+            </div>
+
+            <!-- Custom Print Modal (Electron silent printing) -->
+            <PrintModal
+                ref="printModal"
+                :pageCount="pageCount"
+                :activePages="activePages"
+                :pdfCanvases="pdfCanvases"
+                :drawingCanvases="drawingCanvases"
+                :renderPdfPage="renderPdfPage"
+            />
+
+            <PageNumber
+                :pageNum="pageNum"
+                :totalPages="pageCount - deletedPages.size"
+            />
+            
+            <context-menu parent="#pdf-reader" @menu-item-click="handleToolClick" @show="getFromClipboard">
+                <div class="d-flex">
+                    <template v-for="item in [editSelectStroke, editSelectText, editHandTool, editCapture, editPaste]">
+                        <ToolItem class="dropdown-item" hide-label :item="item" @tool-click="handleToolClick" />
+                    </template>
+                </div>
+                <div class="dropdown-divider"></div>
+                <div class="d-flex">
+                    <template v-for="item in [viewLock, viewZoomIn, viewZoomOut]">
+                        <ToolItem class="dropdown-item" hide-label :item="item" @tool-click="handleToolClick" />
+                    </template>
+                    <div class="dropend">
+                        <a href="#" class="dropdown-item dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false" @click.prevent.stop :title="$t('Change Zoom Level')">
+                            {{ zoomPercentage }}
+                            <i class="bi bi-percent"></i>
+                        </a>
+                        <div class="dropdown-menu dropdown-menu-dark rounded-3">
+                            <a href="#" class="dropdown-item" @click.prevent="toggleZoomMode('fit-height')">
+                                <i :class="`bi bi-${!zoomLevels.includes(zoomPercentage) ? 'check-circle-fill' : 'circle'} me-1`"></i>
+                                {{ $t('Fit Height') }}
+                            </a>
+                            <a href="#" class="dropdown-item" @click.prevent="toggleZoomMode('fit-width')">
+                                <i class="bi bi-circle me-1"></i>
+                                {{ $t('Fit Width') }}
+                            </a>
+                            <template v-for="level in zoomLevels">
+                                <a href="#" class="dropdown-item" @click.prevent="handleZoomLevel(level)">
+                                    <i :class="`bi bi-${level === zoomPercentage ? 'check-circle-fill' : 'circle'} me-1`"></i>
+                                    {{ level }}
+                                    <i class="bi bi-percent"></i>
+                                </a>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+                <template v-for="(groupItems, group, index) in contextMenuItems">
+                    <div class="dropdown-divider"></div>
+                    <template v-for="item in groupItems">
+                        <ToolItem class="dropdown-item"  :item="item" @tool-click="handleToolClick" />
+                    </template>
+                </template>
+            </context-menu>
         </div>
+
+        <input ref="imageInput" type="file" accept="image/*" class="d-none" @change="handleImageImport" />
     </div>
+
+    <input ref="fileInput" type="file"  accept="application/pdf,image/*" class="d-none" @change="loadFile" />
 </template>

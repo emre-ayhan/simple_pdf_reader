@@ -4,10 +4,6 @@ import { ref, computed, nextTick, onMounted } from 'vue';
 import { Electron } from '../composables/useElectron';
 
 const props = defineProps({
-    isFileLoaded: {
-        type: Boolean,
-        required: true,
-    },
     pageCount: {
         type: Number,
         required: true,
@@ -32,8 +28,6 @@ const props = defineProps({
 
 // Ensure all pages are rendered before printing.
 const renderAllPagesForPrint = async () => {
-    if (!isFileLoaded.value) return;
-
     // Ensure refs/canvases exist
     await nextTick();
 

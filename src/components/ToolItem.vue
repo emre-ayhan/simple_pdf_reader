@@ -8,7 +8,7 @@ defineProps({
 });
 </script>
 <template>
-<a href="#" :class="{ disabled: item.disabled.value }" @click.stop="$emit('tool-click', item)" :title="$t(item.label.text)">
+<a href="#" :class="{ disabled: item.disabled.value }" @click.stop.prevent="$emit('tool-click', item)" :title="$t(item.label.text)">
     <div class="d-flex align-items-center" :class="{ 'gap-2': !hideLabel, 'justify-content-center': hideLabel }">
         <i v-if="item.icon" :class="`bi bi-${item.icon.value}`"></i>
         <template v-if="!hideLabel">

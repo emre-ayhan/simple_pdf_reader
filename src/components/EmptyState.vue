@@ -7,6 +7,7 @@ const openFile = () => emit('open-file');
 </script>
 
 <template>
+<div class="empty-state">
     <div class="container h-100">
       <div class="row h-100">
         <div class="col-12 my-auto">
@@ -90,6 +91,7 @@ const openFile = () => emit('open-file');
         </div>
       </div>
     </div>
+</div>
 </template>
 
 
