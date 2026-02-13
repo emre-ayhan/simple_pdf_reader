@@ -82,11 +82,6 @@ onMounted(() => {
     document.querySelector(props.parent).addEventListener('click', handleContextMenu);
 });
 
-onUnmounted(() => {
-    document.querySelector(props.parent).removeEventListener('contextmenu', handleContextMenu);
-    document.querySelector(props.parent).removeEventListener('click', handleContextMenu);
-});
-
 </script>
 <template>
     <div ref="menuRef" class="dropdown-menu dropdown-menu-dark position-absolute rounded-3 show" :style="style" v-if="show">
