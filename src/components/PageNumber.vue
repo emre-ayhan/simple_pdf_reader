@@ -3,7 +3,7 @@ import { ref, watch } from 'vue';
 import { toolbarPosition } from '../composables/useAppPreferences';
 
 const props = defineProps({
-    page: { type: Object, required: true },
+    pageNum: { type: Number, required: true },
     total: { type: Number, required: true },
 });
 
@@ -17,7 +17,7 @@ const hidePageNumber = () => {
 
 let timer = hidePageNumber();
 
-watch(() => props.page, () => {
+watch(() => props.pageNum, () => {
     show.value = true;
     clearTimeout(timer);
     timer = hidePageNumber();
@@ -27,7 +27,7 @@ watch(() => props.page, () => {
 <template>
 <div :class="`card bg-dark text-secondary position-fixed end-0 my-3 mx-4 ${toolbarPosition === 'top' ? 'bottom-0' : 'top-0'}`" v-if="show">
     <div class="card-body d-flex justify-content-center align-items-center gap-2">
-        <div class="text-primary">{{ page?.index*1 + 1 }}</div>
+        <div class="text-primary">{{ pageNum }}</div>
         <div class="vr"></div>
         <div>{{ total }}</div>
     </div>

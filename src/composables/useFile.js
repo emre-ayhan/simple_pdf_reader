@@ -210,10 +210,10 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
     const pageCount = ref(0);
     const pageIndex = ref(0);
     const pageNum = ref(1);
-    const activePageCount = computed(() => pages.value.filter(page => !page.deleted).length);
+    const activePages = computed(() => pages.value.filter(page => !page.deleted));
 
     const activePage = computed(() => {
-        return pages.value[pageIndex.value] || {};
+        return activePages.value[pageIndex.value] || {};
     });
 
     const setPages = (length) => {
@@ -232,7 +232,6 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
 
     watch(pageIndex, (newIndex) => {
         pageNum.value = newIndex + 1;
-        activePage.value.canvas.scrollIntoView({ block: 'start' });
         storePageIndex(filename.value, newIndex);
     });
 
@@ -241,7 +240,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
     });
 
     const isLastPage = computed(() => {
-        return pageNum.value >= activePageCount.value;
+        return pageNum.value >= activePages.value.length;
     });
 
     const handlePageNumberInput = (event) => {
@@ -253,7 +252,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             return;
         }
 
-        const lastPageNum = activePageCount.value;
+        const lastPageNum = activePages.value.length;
 
         if (pageNo > lastPageNum) {
             pageNum.value = lastPageNum;
@@ -323,9 +322,13 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
                 if (Number.isNaN(visiblePageIndex)) return;
 
                 const page = pages.value[visiblePageIndex];
-                if (page && !page.deleted && visiblePageIndex !== pageIndex.value) {
-                    pageIndex.value = visiblePageIndex;
-                    storePageIndex();
+
+                if (page && !page.deleted) {
+                    const activeIndex = activePages.value.findIndex(p => p.index === visiblePageIndex);
+                    if (activeIndex !== -1 && activeIndex !== pageIndex.value) {
+                        pageIndex.value = activeIndex;
+                        storePageIndex();
+                    }
                 }
             }
         }, options);
@@ -355,9 +358,12 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
     
     const scrollToPage = (targetPageIndex) => {
         if (isNaN(targetPageIndex)) return;
-        const maxIndex = Math.max(0, pages.value.length - 1);
+        const maxIndex = Math.max(0, activePages.value.length - 1);
         const normalizedIndex = Math.min(Math.max(0, targetPageIndex), maxIndex);
         pageIndex.value = normalizedIndex;
+        const page = activePages.value[normalizedIndex];
+        if (!page || !page.canvas) return;
+        page.canvas.scrollIntoView({ block: 'start' });
     };
 
     const scrollToFirstPage = () => {
@@ -365,7 +371,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
     };
 
     const scrollToLastPage = () => {
-        const lastIndex = activePageCount.value - 1;
+        const lastIndex = activePages.value.length - 1;
         scrollToPage(lastIndex);
     };
 
@@ -1259,7 +1265,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         filepath,
         imagePage,
         pageCount,
-        activePageCount,
+        activePages,
         activePage,
         pageNum,
         pageIndex,

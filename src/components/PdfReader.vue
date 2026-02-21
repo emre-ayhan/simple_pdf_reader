@@ -77,7 +77,7 @@ const {
     scrollToFirstPage,
     scrollToLastPage,
     activePage,
-    activePageCount,
+    activePages,
     deletePage,
     insertBlankPage,
     openNewBlankPage,
@@ -957,7 +957,7 @@ defineExpose({
                 :renderPdfPage="renderPdfPage"
             />
 
-            <PageNumber :page="activePage" :total="activePageCount"/>
+            <PageNumber :page-num="pageNum" :total="activePages.length"/>
             
             <context-menu parent="#pdf-reader" @menu-item-click="handleToolClick" @show="getFromClipboard">
                 <div class="d-flex">
