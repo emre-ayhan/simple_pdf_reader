@@ -17,7 +17,7 @@ const activeSessionId = computed(() => {
     return Object.values(sessions.value).find(session => session.active)?.id || null;
 });
 
-export function useHistory(fileId, strokesPerPage, drawingCanvases, drawingContexts, deletedPages, redrawAllStrokes) {
+export function useHistory(fileId, redrawAllStrokes) {
     // Allow global-only access when called without args
     if (fileId === undefined || fileId === null) {
         return {
@@ -113,11 +113,11 @@ export function useHistory(fileId, strokesPerPage, drawingCanvases, drawingConte
         if (!canUndo.value) return;
 
         const action = temporaryState.value ? temporaryHistory.value[temporaryHistoryStep.value] : history.value[historyStep.value];
-
-        const page = action.page != null ? action.page : (action.canvasIndex != null ? action.canvasIndex + 1 : undefined);
+        const page = action.page;
 
         if (action.type === 'add') {
-            const strokes = page != null ? strokesPerPage.value[page] : undefined;
+            const strokes = page.strokes || [];
+
             if (strokes) {
                 const targetId = action.id || action.strokeId || (action.stroke && action.stroke[0] && action.stroke[0].id);
                 let index = -1;
@@ -130,25 +130,25 @@ export function useHistory(fileId, strokesPerPage, drawingCanvases, drawingConte
                     strokes.splice(index, 1);
                 }
             }
-            if (page != null) redrawAllStrokes(page - 1);
+            if (page != null) redrawAllStrokes(page.index);
         } else if (action.type === 'erase') {
-            const strokes = page != null ? strokesPerPage.value[page] : undefined;
+            const strokes = page.strokes;
             if (strokes) {
                 const toRestore = [...action.strokes].sort((a, b) => a.index - b.index);
                 toRestore.forEach(item => { strokes.splice(item.index, 0, item.data); });
             }
-            if (page != null) redrawAllStrokes(page - 1);
+            if (page != null) redrawAllStrokes(page.index);
         } else if (action.type === 'move') {
             if (action.previousStroke) {
-                const strokes = page != null ? strokesPerPage.value[page] : undefined;
+                const strokes = page.strokes;
                 if (strokes && strokes[action.strokeIndex]) {
                     strokes[action.strokeIndex] = JSON.parse(JSON.stringify(action.previousStroke));
                 }
-                if (page != null) redrawAllStrokes(page - 1);
+                if (page != null) redrawAllStrokes(page.index);
             }
         } else if (action.type === 'rotate') {
             if (action.previousStroke) {
-                const strokes = page != null ? strokesPerPage.value[page] : undefined;
+                const strokes = page.strokes;
                 if (strokes) {
                     let idx = action.strokeIndex;
                     const prevId = action.previousStroke[0] && action.previousStroke[0].id;
@@ -159,29 +159,26 @@ export function useHistory(fileId, strokesPerPage, drawingCanvases, drawingConte
                         strokes[idx] = JSON.parse(JSON.stringify(action.previousStroke));
                     }
                 }
-                if (page != null) redrawAllStrokes(page - 1);
+                if (page != null) redrawAllStrokes(page.index);
             }
         } else if (action.type === 'color-change') {
             if (action.previousStroke) {
-                const strokes = page != null ? strokesPerPage.value[page] : undefined;
+                const strokes = page.strokes;
                 if (strokes && strokes[action.strokeIndex]) {
                     strokes[action.strokeIndex] = JSON.parse(JSON.stringify(action.previousStroke));
                 }
-                if (page != null) redrawAllStrokes(page - 1);
+                if (page != null) redrawAllStrokes(page.index);
             }
         } else if (action.type === 'resize') {
             if (action.previousStroke) {
-                const strokes = page != null ? strokesPerPage.value[page] : undefined;
+                const strokes = page.strokes;
                 if (strokes && strokes[action.strokeIndex]) {
                     strokes[action.strokeIndex] = JSON.parse(JSON.stringify(action.previousStroke));
                 }
-                if (page != null) redrawAllStrokes(page - 1);
+                if (page != null) redrawAllStrokes(page.index);
             }
-        } else if (action.type === 'clear') {
-            strokesPerPage.value = JSON.parse(JSON.stringify(action.previousState));
-            for (let i = 0; i < drawingCanvases.value.length; i++) { redrawAllStrokes(i); }
         } else if (action.type === 'delete-page') {
-            deletedPages.value.delete(action.page);
+            action.page.deleted = false;
         }
 
         if (temporaryState.value) { temporaryHistoryStep.value--; return; }
@@ -200,30 +197,30 @@ export function useHistory(fileId, strokesPerPage, drawingCanvases, drawingConte
             action = history.value[historyStep.value];
         }
 
-        const page = action.page != null ? action.page : (action.canvasIndex != null ? action.canvasIndex + 1 : undefined);
+        const page = action.page;
 
         if (action.type === 'add') {
             if (page == null) return;
-            if (!strokesPerPage.value[page]) strokesPerPage.value[page] = [];
-            strokesPerPage.value[page].push(action.stroke);
-            redrawAllStrokes(page - 1);
+            if (!page.strokes) page.strokes = [];
+            page.strokes.push(action.stroke);
+            redrawAllStrokes(page.index);
         } else if (action.type === 'erase') {
-            const strokes = page != null ? strokesPerPage.value[page] : undefined;
+            const strokes = page.strokes;
             if (strokes) {
                 action.strokes.forEach(item => {
                     const index = strokes.indexOf(item.data);
                     if (index > -1) { strokes.splice(index, 1); }
                 });
             }
-            if (page != null) redrawAllStrokes(page - 1);
+            if (page != null) redrawAllStrokes(page.index);
         } else if (action.type === 'move') {
-            const strokes = page != null ? strokesPerPage.value[page] : undefined;
+            const strokes = page.strokes;
             if (strokes && strokes[action.strokeIndex]) {
                 strokes[action.strokeIndex] = JSON.parse(JSON.stringify(action.stroke));
             }
-            if (page != null) redrawAllStrokes(page - 1);
+            if (page != null) redrawAllStrokes(page.index);
         } else if (action.type === 'rotate') {
-            const strokes = page != null ? strokesPerPage.value[page] : undefined;
+            const strokes = page.strokes;
             if (strokes) {
                 let idx = action.strokeIndex;
                 const targetId = (action.stroke && action.stroke[0] && action.stroke[0].id) || action.id || action.strokeId;
@@ -234,28 +231,21 @@ export function useHistory(fileId, strokesPerPage, drawingCanvases, drawingConte
                     strokes[idx] = JSON.parse(JSON.stringify(action.stroke));
                 }
             }
-            if (page != null) redrawAllStrokes(page - 1);
+            if (page != null) redrawAllStrokes(page.index);
         } else if (action.type === 'color-change') {
-            const strokes = page != null ? strokesPerPage.value[page] : undefined;
+            const strokes = page.strokes;
             if (strokes && strokes[action.strokeIndex]) {
                 strokes[action.strokeIndex] = JSON.parse(JSON.stringify(action.stroke));
             }
-            if (page != null) redrawAllStrokes(page - 1);
+            if (page != null) redrawAllStrokes(page.index);
         } else if (action.type === 'resize') {
-            const strokes = page != null ? strokesPerPage.value[page] : undefined;
+            const strokes = page.strokes;
             if (strokes && strokes[action.strokeIndex]) {
                 strokes[action.strokeIndex] = JSON.parse(JSON.stringify(action.stroke));
             }
-            if (page != null) redrawAllStrokes(page - 1);
-        } else if (action.type === 'clear') {
-            strokesPerPage.value = {};
-            for (let i = 0; i < drawingCanvases.value.length; i++) {
-                const canvas = drawingCanvases.value[i];
-                const ctx = drawingContexts.value[i];
-                if (canvas && ctx) { ctx.clearRect(0, 0, canvas.width, canvas.height); }
-            }
-        } else if (action.type === 'delete-page') {
-            deletedPages.value.add(action.page);
+            if (page != null) redrawAllStrokes(page.index);
+        }  else if (action.type === 'delete-page') {
+            action.page.deleted = true;
         }
     };
 

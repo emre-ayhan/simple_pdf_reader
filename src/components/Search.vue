@@ -4,7 +4,7 @@ import { ref, watch, computed } from 'vue';
 // Define props to receive the necessary data from parent
 const props = defineProps({
     disabled: Boolean,
-    pageTextContent: { type: Object, required: true },
+    pages: { type: Object, required: true },
     scrollToPage: { type: Function }
 });
 
@@ -34,7 +34,7 @@ const performSearch = (resetIndex = true) => {
     const searchTerm = search.value;
     if (!searchTerm) return;
 
-    const pageIndices = Object.keys(props.pageTextContent).map(Number).sort((a, b) => a - b);
+    const pageIndices = Object.keys(props.pages).map(Number).sort((a, b) => a - b);
 
     // Prepare Regex
     let regex;
@@ -49,7 +49,7 @@ const performSearch = (resetIndex = true) => {
 
     // Search through the extracted text data
     for (const pageIndex of pageIndices) {
-        const content = props.pageTextContent[pageIndex];
+        const content = props.pages[pageIndex].textContent;
         if (!content || !content.items) continue;
 
         let spanIndex = 0;
@@ -255,7 +255,7 @@ const goToPreviousMatch = () => {
 };
 
 watch([search, caseSensitive, wholeWords], () => performSearch(true));
-watch(() => props.pageTextContent, () => {
+watch(() => props.pages, () => {
     // If text content loads late, re-run search if we have a term, but preserve position
     if (search.value) performSearch(false);
 }, { deep: true });

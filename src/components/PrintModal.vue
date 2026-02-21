@@ -8,15 +8,7 @@ const props = defineProps({
         type: Number,
         required: true,
     },
-    activePages: {
-        type: Array,
-        required: true,
-    },
-    pdfCanvases: {
-        type: Array,
-        required: true,
-    },
-    drawingCanvases: {
+    pages: {
         type: Array,
         required: true,
     },
@@ -33,8 +25,8 @@ const renderAllPagesForPrint = async () => {
 
     if (!pageCount.value || typeof props.renderPdfPage !== 'function') return;
 
-    for (let page = 1; page <= pageCount.value; page++) {
-        if (deletedPages.value.has(page)) continue;
+    for (const page of props.pages) {
+        if (page.deleted) continue;
         await props.renderPdfPage(page);
         await nextTick();
     }
@@ -102,7 +94,7 @@ const parsePageRange = (rangeText) => {
 };
 
 const compositePageToDataUrl = (pageNumber) => {
-    const pdfCanvas = props.pdfCanvases?.[pageNumber - 1];
+    const pdfCanvas = props.pages?.[pageNumber - 1]?.canvas;
     if (!pdfCanvas) return null;
 
     const out = document.createElement('canvas');
@@ -115,7 +107,7 @@ const compositePageToDataUrl = (pageNumber) => {
     ctx.drawImage(pdfCanvas, 0, 0);
 
     if (printIncludeAnnotations.value) {
-        const drawCanvas = props.drawingCanvases?.[pageNumber - 1];
+        const drawCanvas = props.pages?.[pageNumber - 1]?.drawingCanvas;
         if (drawCanvas) {
             ctx.drawImage(drawCanvas, 0, 0);
         }
@@ -155,8 +147,10 @@ const updatePrintPreview = async () => {
     if (printPreviewPageIndex.value > maxIndex) printPreviewPageIndex.value = maxIndex;
 
     const pageNumber = pages[printPreviewPageIndex.value];
+
     try {
-        await props.renderPdfPage(pageNumber)
+        const page = props.pages?.[pageNumber - 1];
+        await props.renderPdfPage(page)
         await nextTick();
         printPreviewDataUrl.value = compositePageToDataUrl(pageNumber) || '';
     } catch (error) {
@@ -223,7 +217,8 @@ const doSilentPrint = async () => {
     try {
         // Ensure all pages to be printed are rendered sequentially
         for (const pageNumber of pages) {
-            await props.renderPdfPage(pageNumber)
+            const page = props.pages?.[pageNumber - 1];
+            await props.renderPdfPage(page)
         }
         await nextTick();
 

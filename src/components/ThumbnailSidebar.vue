@@ -2,13 +2,11 @@
 import { ref, watch, computed, onMounted, onBeforeUnmount } from 'vue';
 
 const props = defineProps({
-  pageCount: { type: Number, required: true },
-  deletedPages: { type: Object, required: true }, // Set<number>
-  renderedPages: { type: Object, required: true }, // Set<number>
-  pdfCanvases: { type: Array, required: true },
-  pageIndex: { type: Number, required: true }, // 0-based
-  scrollToPage: { type: Function, required: true },
-  renderPageThumbnail: { type: Function, required: false },
+    pageCount: { type: Number, required: true },
+    pages: { type: Array, required: true },
+    pageIndex: { type: Number, required: true }, // 0-based
+    scrollToPage: { type: Function, required: true },
+    renderPageThumbnail: { type: Function, required: false },
 });
 
 const thumbs = ref(new Map()); // Map<number, string dataURL>
@@ -16,7 +14,7 @@ const observer = ref(null);
 const itemRefs = new Map();
 
 const buildThumbnail = (page) => {
-  const canvas = props.pdfCanvases[page - 1];
+  const canvas = props.pages[page - 1]?.canvas;
   if (!canvas) return;
   try {
     const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
@@ -30,7 +28,7 @@ const loadThumbnail = (page) => {
   if (thumbs.value.has(page)) return;
 
   // Prefer taking existing render from main view
-  if (props.renderedPages.has(page)) {
+  if (props.pages[page - 1]?.rendered) {
     buildThumbnail(page);
   } else if (props.renderPageThumbnail) {
     // Slow path: offscreen render
@@ -55,9 +53,9 @@ const onIntersect = (entries) => {
 
 const checkRenderedPages = () => {
   // If a page becomes rendered in main view, grab its thumbnail (if missing)
-  props.renderedPages.forEach((page) => {
-    if (!thumbs.value.has(page)) {
-      buildThumbnail(page);
+  props.pages.forEach((page, index) => {
+    if (page.rendered && !thumbs.value.has(index + 1)) {
+      buildThumbnail(index + 1);
     }
   });
 };
@@ -94,7 +92,7 @@ onBeforeUnmount(() => {
   }
 });
 
-watch(() => props.renderedPages.size, checkRenderedPages);
+watch(() => props.pages, checkRenderedPages);
 
 // Active page is 1-based for display
 const activePage = computed(() => props.pageIndex + 1);
@@ -109,7 +107,7 @@ const goTo = (page) => {
     <div class="p-2 fw-bold">Thumbnails</div>
     <div class="thumbs-list">
       <template v-for="page in pageCount" :key="page">
-        <div v-if="!deletedPages.has(page)" 
+        <div v-if="!props.pages[page - 1]?.deleted" 
              class="thumbnail-item" 
              :class="{ active: activePage === page }" 
              :data-page="page"

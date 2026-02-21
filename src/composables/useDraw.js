@@ -6,7 +6,7 @@ import { enableTouchDrawing } from './useAppPreferences.js';
 const copiedStroke = ref(null);
 const copiedStrokes = ref([]); // For multi-selection copy
 
-export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPage, drawingCanvases, drawingContexts, strokeChangeCallback) {
+export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
     const { get: storeGet, set: storeSet } = useStore();
     
     // Image cache to prevent reloading on every redraw
@@ -149,8 +149,8 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         selectionEnd.value = { x, y };
         
         // Draw selection rectangle
-        const canvas = drawingCanvases.value[selectionStart.value.canvasIndex];
-        const ctx = drawingContexts.value[selectionStart.value.canvasIndex];
+        const canvas = activePage.value.drawingCanvas;
+        const ctx = activePage.value.drawingContext;
         if (canvas && ctx) {
             // Scale coordinates to canvas size
             const scaleX = canvas.width / rect.width;
@@ -303,37 +303,14 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     }
 
     // Insert Copied Stroke
-    const insertCopiedStroke = (pageIndex) => {
+    const insertCopiedStroke = () => {
         if (!copiedStroke.value) return;
 
-        let targetPageIndex = typeof pageIndex === 'number' ? pageIndex : -1;
-        
-        // If passed as event or invalid, try to find the visible page
-        if (targetPageIndex === -1) {
-            targetPageIndex = 0; // Default to first page
-            if (drawingCanvases.value && drawingCanvases.value.length > 0) {
-                const viewportCenterY = window.innerHeight / 2;
-                let minDistance = Infinity;
-                
-                drawingCanvases.value.forEach((canvas, index) => {
-                    if (!canvas) return;
-                    const rect = canvas.getBoundingClientRect();
-                    // Check if canvas is essentially visible
-                    if (rect.bottom > 0 && rect.top < window.innerHeight) {
-                        const canvasCenterY = rect.top + rect.height / 2;
-                        const distance = Math.abs(viewportCenterY - canvasCenterY);
-                        if (distance < minDistance) {
-                            minDistance = distance;
-                            targetPageIndex = index;
-                        }
-                    }
-                });
-            }
-        }
+        let targetPageIndex = activePage.value.index || -1;
 
         // Determine the visible center in canvas coordinates for placement
-        const getVisibleCenterOnCanvas = (canvasIdx) => {
-            const canvas = drawingCanvases.value[canvasIdx];
+        const getVisibleCenterOnCanvas = () => {
+            const canvas = activePage.value.drawingCanvas;
             if (!canvas) return { cx: 0, cy: 0 };
             const rect = canvas.getBoundingClientRect();
             const scaleX = canvas.width / rect.width;
@@ -380,12 +357,8 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             }
         };
 
-        const { cx: visibleCX, cy: visibleCY } = getVisibleCenterOnCanvas(targetPageIndex);
+        const { cx: visibleCX, cy: visibleCY } = getVisibleCenterOnCanvas();
 
-        const pageNumber = targetPageIndex + 1;
-        if (!strokesPerPage.value[pageNumber]) {
-            strokesPerPage.value[pageNumber] = [];
-        }
         // Determine if we copied a group or a single stroke
         const group = copiedStroke.value.strokes;
         if (Array.isArray(group)) {
@@ -417,9 +390,9 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
 
                 translateStroke(newStroke, baseDX, baseDY);
 
-                strokesPerPage.value[pageNumber].push(newStroke);
-                strokeChangeCallback({ id: newId, type: 'add', page: pageNumber, stroke: newStroke });
-                const strokeIndex = strokesPerPage.value[pageNumber].length - 1;
+                activePage.value.strokes.push(newStroke);
+                strokeChangeCallback({ id: newId, type: 'add', page: activePage.value, stroke: newStroke });
+                const strokeIndex = activePage.value.strokes.length - 1;
                 newSelections.push({ pageIndex: targetPageIndex, strokeIndex, stroke: newStroke });
             });
 
@@ -456,15 +429,15 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             translateStroke(newStroke, offset, offset);
         }
 
-        strokesPerPage.value[pageNumber].push(newStroke);
+        activePage.value.strokes.push(newStroke);
         strokeChangeCallback({
             id: newId,
             type: 'add',
-            page: pageNumber,
+            page: activePage.value,
             stroke: newStroke
         });
 
-        const strokeIndex = strokesPerPage.value[pageNumber].length - 1;
+        const strokeIndex = activePage.value.strokes.length - 1;
 
         selectedStroke.value = {
             pageIndex: targetPageIndex,
@@ -542,13 +515,10 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     };
 
     const getCanvasIndexFromEvent = (e) => {
-        // Find which canvas the event occurred on
-        const target = e.target;
-        for (let i = 0; i < drawingCanvases.value.length; i++) {
-            if (drawingCanvases.value[i] === target) {
-                return i;
-            }
+        if (activePage.value.drawingCanvas === e.target) {
+            return activePage.value.index;
         }
+
         return -1;
     };
 
@@ -624,7 +594,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         
         // Check text strokes
         if (first.type === 'text') {
-                 const ctx = drawingContexts.value[0];
+            const ctx = activePage.value.drawingContext;
             if (!ctx) return false;
             ctx.font = `${first.fontSize}px Arial`;
             const metrics = ctx.measureText(first.text);
@@ -697,8 +667,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     };
 
     const findStrokeAtPoint = (x, y, canvasIndex) => {
-        const pageNumber = canvasIndex + 1;
-        const strokes = strokesPerPage.value[pageNumber] || [];
+        const strokes = activePage.value.strokes || [];
         
         // Search in reverse order to prioritize top strokes
         for (let i = strokes.length - 1; i >= 0; i--) {
@@ -713,8 +682,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     };
 
     const isAnyStrokeAtPoint = (x, y, canvasIndex) => {
-        const pageNumber = canvasIndex + 1;
-        const strokes = strokesPerPage.value[pageNumber] || [];
+        const strokes = activePage.value.strokes || [];
 
         for (let i = strokes.length - 1; i >= 0; i--) {
             if (isPointNearStroke(x, y, strokes[i])) return true;
@@ -766,7 +734,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             });
             return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
         } else if (first.type === 'text') {
-            const ctx = drawingContexts.value[0];
+            const ctx = activePage.value.drawingContext;
             if (!ctx) return null;
             ctx.font = `${first.fontSize}px Arial`;
             const metrics = ctx.measureText(first.text);
@@ -889,7 +857,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             });
             return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
         } else if (first.type === 'text') {
-            const ctx = drawingContexts.value[0];
+            const ctx = activePage.value.drawingContext;
             if (!ctx) return null;
             ctx.font = `${first.fontSize}px Arial`;
             const metrics = ctx.measureText(first.text);
@@ -991,11 +959,10 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         if (!selectionStart.value || !selectionEnd.value) return;
 
         const canvasIndex = selectionStart.value.canvasIndex;
-        const pageNumber = canvasIndex + 1;
-        const strokes = strokesPerPage.value[pageNumber] || [];
+        const strokes = activePage.value.strokes || [];
 
         // Convert selection box from screen (CSS) coords to canvas coords
-        const canvas = drawingCanvases.value[canvasIndex];
+        const canvas = activePage.value.drawingCanvas || null;
         if (!canvas) return;
         const rect = canvas.getBoundingClientRect();
         const scaleX = canvas.width / rect.width;
@@ -1052,8 +1019,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             const scrollEl = getScrollContainer();
             if (!scrollEl) return;
 
-            const canvasIndex = getCanvasIndexFromEvent(e);
-            const canvas = drawingCanvases.value?.[canvasIndex] || null;
+            const canvas = activePage.value?.drawingCanvas || null;
 
             isHandToolPanning.value = true;
             handPanPointerId.value = e.pointerId;
@@ -1089,10 +1055,10 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         if (isSelectModeActive.value) {
             // Handle drag mode
             if (isStrokeHovering.value || selectedStroke.value) {
-                const canvasIndex = getCanvasIndexFromEvent(e);
+                const canvasIndex = activePage.value.index;
                 if (canvasIndex === -1) return;
-                
-                const canvas = drawingCanvases.value[canvasIndex];
+
+                const canvas = activePage.value?.drawingCanvas || null;
                 const pt = getCanvasPointFromEvent(canvas, e);
                 if (!pt) return;
                 const { x, y } = pt;
@@ -1242,13 +1208,13 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
 
             if (canvasIndex === -1) return;
             
-            const canvas = drawingCanvases.value[canvasIndex];
+            const canvas = activePage.value.drawingCanvas || null;
             const pt = getCanvasPointFromEvent(canvas, e);
             if (!pt) return;
             const { x, y, clientX, clientY } = pt;
             
             textPosition.value = { x, y };
-            textCanvasIndex.value = canvasIndex;
+            textCanvasIndex.value = activePage.value.index;
             textInput.value = '';
             
             // Set textbox position in screen coordinates (relative to viewport)
@@ -1282,9 +1248,9 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         // Determine which canvas this event is for
         currentCanvasIndex = getCanvasIndexFromEvent(e);
         if (currentCanvasIndex === -1) return;
-        
-        const canvas = drawingCanvases.value[currentCanvasIndex];
-        const drawingContext = drawingContexts.value[currentCanvasIndex];
+
+        const canvas = activePage.value.drawingCanvas || null;
+        const drawingContext = activePage.value.drawingContext || null;
         
         if (!canvas || !drawingContext) return;
         
@@ -1303,12 +1269,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         lastY = pt.y;
         startX = lastX;
         startY = lastY;
-        
-        const pageIndex = currentCanvasIndex + 1;
-        if (!strokesPerPage.value[pageIndex]) {
-            strokesPerPage.value[pageIndex] = [];
-        }
-        
+
         if (shouldErase) {
             eraseAtPoint(lastX, lastY, currentCanvasIndex);
         } else if (drawMode.value === 'pen') {
@@ -1355,13 +1316,12 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             // Handle rotation
             if (isRotating.value && selectedStroke.value && (resizeHandle.value === 'rotate' || resizeHandle.value === 'ne')) {
                 if (e.pointerId !== activePointerId.value) return;
-                const canvas = drawingCanvases.value[currentCanvasIndex];
+                const canvas = activePage.value.drawingCanvas || null;
                 const pt = getCanvasPointFromEvent(canvas, e);
                 if (!pt) return;
                 const currentX = pt.x;
                 const currentY = pt.y;
-                const pageNumber = currentCanvasIndex + 1;
-                const strokes = strokesPerPage.value[pageNumber];
+                const strokes = activePage.value.strokes || [];
                 const stroke = strokes[selectedStroke.value.strokeIndex];
                 const first = stroke[0];
                 const origFirst = selectedStroke.value.originalStroke[0];
@@ -1380,7 +1340,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             if (isResizing.value && selectedStroke.value && resizeHandle.value) {
                 if (e.pointerId !== activePointerId.value) return;
                 
-                const canvas = drawingCanvases.value[currentCanvasIndex];
+                const canvas = activePage.value?.drawingCanvas || null;
                 const pt = getCanvasPointFromEvent(canvas, e);
                 if (!pt) return;
                 const currentX = pt.x;
@@ -1389,8 +1349,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 let dx = currentX - dragStartPos.value.x;
                 let dy = currentY - dragStartPos.value.y;
                 
-                const pageNumber = currentCanvasIndex + 1;
-                const strokes = strokesPerPage.value[pageNumber];
+                const strokes = activePage.value.strokes || [];
                 const stroke = strokes[selectedStroke.value.strokeIndex];
                 
                 if (stroke && resizeStartBounds.value) {
@@ -1578,7 +1537,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 // Only continue with the same pointer that started
                 if (e.pointerId !== activePointerId.value) return;
                 
-                const canvas = drawingCanvases.value[currentCanvasIndex];
+                const canvas = activePage.value.drawingCanvas || null;
                 const pt = getCanvasPointFromEvent(canvas, e);
                 if (!pt) return;
                 const currentX = pt.x;
@@ -1587,8 +1546,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 const dx = currentX - lastX;
                 const dy = currentY - lastY;
                 
-                const pageNumber = currentCanvasIndex + 1;
-                const strokes = strokesPerPage.value[pageNumber];
+                const strokes = activePage.value.strokes || [];
 
                 const moveStrokeBy = (s) => {
                     const first = s[0];
@@ -1631,8 +1589,8 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 }
 
                 // Redraw to show the drag preview (combined bbox if multi)
-                redrawAllStrokes(currentCanvasIndex);
-                drawSelectionBoundingBox(currentCanvasIndex, selectedStroke.value.strokeIndex);
+                redrawAllStrokes(activePage.value.index);
+                drawSelectionBoundingBox(activePage.value.index, selectedStroke.value.strokeIndex);
                 
                 lastX = currentX;
                 lastY = currentY;
@@ -1643,7 +1601,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             else if (isMouseDown.value && selectedStroke.value) {
                 if (e.pointerId !== activePointerId.value) return;
                 
-                const canvas = drawingCanvases.value[currentCanvasIndex];
+                const canvas = activePage.value.drawingCanvas || null;
                 const pt = getCanvasPointFromEvent(canvas, e);
                 if (!pt) return;
                 const currentX = pt.x;
@@ -1687,8 +1645,8 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         
         if (currentCanvasIndex === -1) return;
         
-        const canvas = drawingCanvases.value[currentCanvasIndex];
-        const drawingContext = drawingContexts.value[currentCanvasIndex];
+        const canvas = activePage.value.drawingCanvas || null;
+        const drawingContext = activePage.value.drawingContext || null;
         
         if (!canvas || !drawingContext) return;
         
@@ -1765,8 +1723,9 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         if (isSelectModeActive.value && (isStrokeHovering.value || isDragging.value || isResizing.value || isRotating.value) && isMouseDown.value && selectedStroke.value) {
             // Only stop if it's the same pointer
             if (e && e.pointerId !== activePointerId.value) return;
+
+            const canvas = activePage.value.drawingCanvas || null;
             
-            const canvas = drawingCanvases.value[currentCanvasIndex];
             if (canvas && e && e.pointerId !== undefined) {
                 try {
                     canvas.releasePointerCapture(e.pointerId);
@@ -1775,12 +1734,11 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 }
             }
             
-            const pageNumber = currentCanvasIndex + 1;
-            const stroke = strokesPerPage.value[pageNumber][selectedStroke.value.strokeIndex];
+            const stroke = activePage.value.strokes[selectedStroke.value.strokeIndex];
             
             // Save to history if resized, dragged, or rotated
             if (isResizing.value || isDragging.value || isRotating.value) {
-                const canvas = drawingCanvases.value[currentCanvasIndex];
+                const canvas = activePage.value.drawingCanvas || null;
                 const pt = getCanvasPointFromEvent(canvas, e);
                 if (!pt) return;
                 const currentX = pt.x;
@@ -1794,12 +1752,12 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                         // Emit history for each moved stroke on this canvas
                         selectedStrokes.value.forEach(sel => {
                             if (sel.pageIndex !== currentCanvasIndex) return;
-                            const s = strokesPerPage.value[pageNumber][sel.strokeIndex];
+                            const s = activePage.value.strokes[sel.strokeIndex];
                             if (!s) return;
                             strokeChangeCallback({
                                 id: s[0].id,
                                 type: 'move',
-                                page: pageNumber,
+                                page: activePage.value,
                                 strokeIndex: sel.strokeIndex,
                                 stroke: JSON.parse(JSON.stringify(s)),
                                 previousStroke: sel.originalStroke || JSON.parse(JSON.stringify(s))
@@ -1812,7 +1770,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                         strokeChangeCallback({
                             id: stroke[0].id,
                             type: changeType,
-                            page: pageNumber,
+                            page: activePage.value,
                             strokeIndex: selectedStroke.value.strokeIndex,
                             stroke: JSON.parse(JSON.stringify(stroke)),
                             previousStroke: selectedStroke.value.originalStroke
@@ -1831,7 +1789,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                         // Update originals for all selections on this canvas
                         selectedStrokes.value.forEach(sel => {
                             if (sel.pageIndex !== currentCanvasIndex) return;
-                            const s = strokesPerPage.value[currentCanvasIndex + 1][sel.strokeIndex];
+                            const s = activePage.value.strokes[sel.strokeIndex];
                             if (s) {
                                 // Keep live reference for stroke, snapshot original for future operations
                                 sel.stroke = s;
@@ -1872,7 +1830,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         if (currentCanvasIndex === -1) return;
         
         // Release pointer capture
-        const canvas = drawingCanvases.value[currentCanvasIndex];
+        const canvas = activePage.value.drawingCanvas || null;
         if (canvas && e && e.pointerId !== undefined) {
             try {
                 canvas.releasePointerCapture(e.pointerId);
@@ -1884,8 +1842,6 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         isMouseDown.value = false;
         activePointerId.value = null;
         activePointerType.value = null;
-        
-        const pageIndex = currentCanvasIndex + 1;
         
         let newStroke = null;
         if (isDrawing.value && drawMode.value !== 'pen' && canvasSnapshot) {
@@ -1903,15 +1859,15 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                     thickness: drawThickness.value
                 };
                 newStroke = [shape];
-                strokesPerPage.value[pageIndex].push(newStroke);
+                activePage.value.strokes.push(newStroke);
             } else {
-                const ctx = drawingContexts.value[currentCanvasIndex];
+                const ctx = activePage.value?.drawingContext || null;
                 if (ctx) ctx.putImageData(canvasSnapshot, 0, 0);
             }
             canvasSnapshot = null;
         } else if (isDrawing.value && currentStroke.value.length > 1) {
             newStroke = [...currentStroke.value];
-            strokesPerPage.value[pageIndex].push(newStroke);
+            activePage.value.strokes.push(newStroke);
             currentStroke.value = [];
         } else {
             // Discard single point pen strokes or empty shapes
@@ -1922,14 +1878,14 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             strokeChangeCallback({
                 id: currentStrokeId.value,
                 type: 'add',
-                page: pageIndex,
+                page: activePage.value,
                 stroke: newStroke
             });
 
             currentStrokeId.value = null;
         }
         
-        const drawingContext = drawingContexts.value[currentCanvasIndex];
+        const drawingContext = activePage.value?.drawingContext || null;
         if (drawingContext) {
             drawingContext.closePath();
         }
@@ -1949,9 +1905,9 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     
             // Perform hit detection only when mouse is not down (hovering)
             if (!isMouseDown.value) {
-                const canvasIndex = getCanvasIndexFromEvent(e);
+                const canvasIndex = activePage.value.index;
                 if (canvasIndex !== -1) {
-                    const canvas = drawingCanvases.value[canvasIndex];
+                    const canvas = activePage.value.drawingCanvas || null;
                     const pt = getCanvasPointFromEvent(canvas, e);
                     
                     if (pt) {
@@ -2027,18 +1983,13 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
 
         // Calculate scale factor from canvas to screen to ensure text size matches
         let scale = 1;
-        const canvas = drawingCanvases.value[textCanvasIndex.value];
+        const canvas = activePage.value.drawingCanvas || null;
         if (canvas) {
             const rect = canvas.getBoundingClientRect();
             // Use height ratio to determine font scaling
             if (rect.height > 0) {
                 scale = canvas.height / rect.height;
             }
-        }
-        
-        const pageIndex = textCanvasIndex.value + 1;
-        if (!strokesPerPage.value[pageIndex]) {
-            strokesPerPage.value[pageIndex] = [];
         }
 
         const id = uuid();
@@ -2054,12 +2005,12 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             fontSize: fontSize.value * scale
         }];
         
-        strokesPerPage.value[pageIndex].push(textStroke);
+        activePage.value.strokes.push(textStroke);
         
         strokeChangeCallback({
             id,
             type: 'add',
-            page: pageIndex,
+            page: activePage.value,
             stroke: textStroke
         });
         
@@ -2101,8 +2052,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     const changeStrokeColor = (newColor) => {
         if (!selectedStroke.value) return;
         const pageIndex = selectedStroke.value.pageIndex;
-        const pageNumber = pageIndex + 1;
-        const strokes = strokesPerPage.value[pageNumber];
+        const strokes = activePage.value.strokes || [];
 
         const isMulti = Array.isArray(selectedStrokes.value) && selectedStrokes.value.length > 1;
         if (isMulti) {
@@ -2118,7 +2068,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 strokeChangeCallback({
                     id: s[0].id,
                     type: 'color-change',
-                    page: pageNumber,
+                    page: activePage.value,
                     strokeIndex: sel.strokeIndex,
                     stroke: JSON.parse(JSON.stringify(s)),
                     previousStroke: originalStroke
@@ -2134,7 +2084,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 strokeChangeCallback({
                     id: stroke[0].id,
                     type: 'color-change',
-                    page: pageNumber,
+                    page: activePage.value,
                     strokeIndex: selectedStroke.value.strokeIndex,
                     stroke: JSON.parse(JSON.stringify(stroke)),
                     previousStroke: originalStroke
@@ -2150,8 +2100,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     const changeStrokeThickness = (newThickness) => {
         if (!selectedStroke.value) return;
         const pageIndex = selectedStroke.value.pageIndex;
-        const pageNumber = pageIndex + 1;
-        const strokes = strokesPerPage.value[pageNumber];
+        const strokes = activePage.value.strokes || [];
         const thicknessVal = parseInt(newThickness, 10);
 
         const isMulti = Array.isArray(selectedStrokes.value) && selectedStrokes.value.length > 1;
@@ -2167,7 +2116,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 strokeChangeCallback({
                     id: s[0].id,
                     type: 'thickness-change',
-                    page: pageNumber,
+                    page: activePage.value,
                     strokeIndex: sel.strokeIndex,
                     stroke: JSON.parse(JSON.stringify(s)),
                     previousStroke: originalStroke
@@ -2183,7 +2132,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 strokeChangeCallback({
                     id: stroke[0].id,
                     type: 'thickness-change',
-                    page: pageNumber,
+                    page: activePage.value,
                     strokeIndex: selectedStroke.value.strokeIndex,
                     stroke: JSON.parse(JSON.stringify(stroke)),
                     previousStroke: originalStroke
@@ -2198,8 +2147,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     const changeStrokeText = (newText) => {
         if (!selectedStroke.value) return;
         const pageIndex = selectedStroke.value.pageIndex;
-        const pageNumber = pageIndex + 1;
-        const strokes = strokesPerPage.value[pageNumber];
+        const strokes = activePage.value.strokes || [];
 
         const isMulti = Array.isArray(selectedStrokes.value) && selectedStrokes.value.length > 1;
         if (isMulti) {
@@ -2212,7 +2160,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 strokeChangeCallback({
                     id: s[0].id,
                     type: 'text-change',
-                    page: pageNumber,
+                    page: activePage.value,
                     strokeIndex: sel.strokeIndex,
                     stroke: JSON.parse(JSON.stringify(s)),
                     previousStroke: originalStroke
@@ -2226,7 +2174,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 strokeChangeCallback({
                     id: stroke[0].id,
                     type: 'text-change',
-                    page: pageNumber,
+                    page: activePage.value,
                     strokeIndex: selectedStroke.value.strokeIndex,
                     stroke: JSON.parse(JSON.stringify(stroke)),
                     previousStroke: originalStroke
@@ -2252,8 +2200,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             });
 
             pages.forEach((indices, pageIdx) => {
-                const pageNumber = pageIdx + 1;
-                const strokes = strokesPerPage.value[pageNumber];
+                const strokes = activePage.value.strokes || [];
                 const sorted = [...indices].sort((a, b) => b - a);
                 const removals = sorted.map(index => ({ index, data: strokes[index] }));
                 // Splice descending to avoid reindexing issues
@@ -2261,7 +2208,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 strokeChangeCallback({
                     id: removals[0]?.data?.[0]?.id,
                     type: 'erase',
-                    page: pageNumber,
+                    page: activePage.value,
                     strokes: removals
                 });
                 redrawAllStrokes(pageIdx);
@@ -2274,15 +2221,14 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         }
 
         // Single deletion
-        const pageNumber = selectedStroke.value.pageIndex + 1;
-        const strokes = strokesPerPage.value[pageNumber];
+        const strokes = activePage.value.strokes || [];
         const stroke = strokes[selectedStroke.value.strokeIndex];
         if (stroke) {
             strokes.splice(selectedStroke.value.strokeIndex, 1);
             strokeChangeCallback({
                 id: stroke[0].id,
                 type: 'erase',
-                page: pageNumber,
+                page: activePage.value,
                 strokes: [{ index: selectedStroke.value.strokeIndex, data: stroke }]
             });
             redrawAllStrokes(selectedStroke.value.pageIndex);
@@ -2292,11 +2238,6 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     };
 
     const createHighlightRectangle = (pageIndex, rectsOrX, y, width, height) => {
-        const pageNumber = pageIndex + 1;
-        if (!strokesPerPage.value[pageNumber]) {
-            strokesPerPage.value[pageNumber] = [];
-        }
-        
         const id = uuid();
         
         // Check if we received an array of rects or individual values
@@ -2321,12 +2262,12 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             }];
         }
         
-        strokesPerPage.value[pageNumber].push(highlightStroke);
+        activePage.value.strokes.push(highlightStroke);
         
         strokeChangeCallback({
             id,
             type: 'add',
-            page: pageNumber,
+            page: activePage.value,
             stroke: highlightStroke
         });
         
@@ -2350,28 +2291,26 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
             if (rect.width < 1 || rect.height < 1) return;
             
             // Find which page this rect belongs to
-            for (let i = 0; i < drawingCanvases.value.length; i++) {
-                const canvas = drawingCanvases.value[i];
-                const canvasRect = canvas.getBoundingClientRect();
+            const canvas = activePage.value.drawingCanvas || null;
+            const canvasIndex = activePage.value.index;
+            const canvasRect = canvas.getBoundingClientRect();
+            
+            // Check if rect overlaps with canvas
+            if (rect.bottom > canvasRect.top && rect.top < canvasRect.bottom &&
+                rect.right > canvasRect.left && rect.left < canvasRect.right) {
                 
-                // Check if rect overlaps with canvas
-                if (rect.bottom > canvasRect.top && rect.top < canvasRect.bottom &&
-                    rect.right > canvasRect.left && rect.left < canvasRect.right) {
-                    
-                    const scaleX = canvas.width / canvasRect.width;
-                    const scaleY = canvas.height / canvasRect.height;
-                    
-                    const x = (rect.left - canvasRect.left) * scaleX;
-                    const y = (rect.top - canvasRect.top) * scaleY;
-                    const width = rect.width * scaleX;
-                    const height = rect.height * scaleY;
-                    
-                    if (!rectsByPage.has(i)) {
-                        rectsByPage.set(i, []);
-                    }
-                    rectsByPage.get(i).push({ x, y, width, height });
-                    break;
+                const scaleX = canvas.width / canvasRect.width;
+                const scaleY = canvas.height / canvasRect.height;
+                
+                const x = (rect.left - canvasRect.left) * scaleX;
+                const y = (rect.top - canvasRect.top) * scaleY;
+                const width = rect.width * scaleX;
+                const height = rect.height * scaleY;
+                
+                if (!rectsByPage.has(canvasIndex)) {
+                    rectsByPage.set(canvasIndex, []);
                 }
+                rectsByPage.get(canvasIndex).push({ x, y, width, height });
             }
         });
         
@@ -2426,12 +2365,13 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         const canvasIndex = getCanvasIndexFromEvent(e);
         if (canvasIndex === -1) return;
         
-        const canvas = drawingCanvases.value[canvasIndex];
+        const canvas = activePage.value.drawingCanvas || null;
+        if (!canvas) return;
         const pt = getCanvasPointFromEvent(canvas, e);
         if (!pt) return;
         const { x, y, clientX, clientY } = pt;
         
-        const found = findStrokeAtPoint(x, y, canvasIndex);
+        const found = findStrokeAtPoint(x, y, activePage.value.index);
 
         if (found) {
             selectedStroke.value = {
@@ -2462,12 +2402,10 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     };
 
     const drawSelectionBoundingBox = (canvasIndex, strokeIndex) => {
-        const canvas = drawingCanvases.value[canvasIndex];
-        const ctx = drawingContexts.value[canvasIndex];
+        const canvas = activePage.value.drawingCanvas || null;
+        const ctx = activePage.value.drawingContext || null;
         if (!canvas || !ctx) return;
-        
-        const pageNumber = canvasIndex + 1;
-        const strokes = strokesPerPage.value[pageNumber] || [];
+        const strokes = activePage.value.strokes || [];
         const multi = Array.isArray(selectedStrokes.value) && selectedStrokes.value.filter(s => s.pageIndex === canvasIndex).length > 1;
         const stroke = strokes[strokeIndex];
         
@@ -2619,28 +2557,9 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         }, 150);
     };
 
-    const clearDrawing = () => {
-        strokeChangeCallback({
-            type: 'clear',
-            previousState: JSON.parse(JSON.stringify(strokesPerPage.value))
-        });
-
-        // Clear all drawings on all pages
-        for (let i = 0; i < drawingCanvases.value.length; i++) {
-            const canvas = drawingCanvases.value[i];
-            const ctx = drawingContexts.value[i];
-            if (canvas && ctx) {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-            }
-        }
-        strokesPerPage.value = {};
-        currentStroke.value = [];
-    };
-
     const eraseAtPoint = (x, y, canvasIndex) => {
         const eraserRadius = 10;
-        const pageNumber = canvasIndex + 1;
-        const strokes = strokesPerPage.value[pageNumber] || [];
+        const strokes = activePage.value.strokes || [];
         
         const strokesToRemove = [];
         const keptStrokes = [];
@@ -2666,11 +2585,11 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         });
         
         if (strokesToRemove.length > 0) {
-            strokesPerPage.value[pageNumber] = keptStrokes;
+            activePage.value.strokes = keptStrokes;
             strokeChangeCallback({
                 id: strokeId,
                 type: 'erase',
-                page: pageNumber,
+                page: activePage.value,
                 strokes: strokesToRemove
             });
             redrawAllStrokes(canvasIndex);
@@ -2678,12 +2597,11 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     };
 
     const redrawAllStrokes = (pageIndex) => {
-        const canvas = drawingCanvases.value[pageIndex];
-        const drawingContext = drawingContexts.value[pageIndex];
+        const canvas = activePage.value.drawingCanvas || null;
+        const drawingContext = activePage.value.drawingContext || null;
         if (!canvas || !drawingContext) return;
-        
-        const pageNumber = pageIndex + 1;
-        const strokes = strokesPerPage.value[pageNumber] || [];
+    
+        const strokes = activePage.value.strokes || [];
         
         drawingContext.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -2870,8 +2788,8 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         if (!selectionStart.value || !selectionEnd.value) return;
         
         const canvasIndex = selectionStart.value.canvasIndex;
-        const pdfCanvas = pdfCanvases.value[canvasIndex];
-        const drawCanvas = drawingCanvases.value[canvasIndex];
+        const pdfCanvas = activePage.value.canvas;
+        const drawCanvas = activePage.value.drawingCanvas;
         
         if (!pdfCanvas || !drawCanvas) return;
         
@@ -2935,10 +2853,9 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     };
 
      const drawImageCanvas = async (src) => {
-        strokesPerPage.value = { 1: strokesPerPage.value[1] || [] };
         await nextTick();
-        const canvas = pdfCanvases.value[0];
-        const drawCanvas = drawingCanvases.value[0];
+        const canvas = activePage.value.canvas;
+        const drawCanvas = activePage.value.drawingCanvas;
         if (canvas && drawCanvas) {
             const img = new Image();
             img.onload = () => {
@@ -2964,9 +2881,9 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                 ctx.clearRect(0, 0, canvasWidth * pixelRatio, canvasHeight * pixelRatio);
                 ctx.drawImage(img, 0, 0, canvasWidth * pixelRatio, canvasHeight * pixelRatio);
 
-                drawingContexts.value[0] = drawCanvas.getContext('2d', { willReadFrequently: true });
+                activePage.value.drawingContext = drawCanvas.getContext('2d', { willReadFrequently: true });
                 redrawAllStrokes(0);
-                renderedPages.value.add(1);
+                activePage.value.rendered = true;
             };
             img.src = src;
         }
@@ -2991,8 +2908,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         let preferredY = strokeMenuPosition.value.y;
 
         if (selectedStroke?.value) {
-            const canvasIdx = selectedStroke.value.pageIndex;
-            const canvas = drawingCanvases.value[canvasIdx];
+            const canvas = activePage.value.drawingCanvas || null;
             if (canvas) {
                 const cRect = canvas.getBoundingClientRect();
                 const scaleXToClient = cRect.width / canvas.width;
@@ -3021,7 +2937,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
                         maxY = Math.max(maxY, rect.y + rect.height);
                     });
                 } else if (first.type === 'text') {
-                    const ctx = drawingContexts.value[canvasIdx];
+                    const ctx = activePage.value.drawingContext || null;
                     if (ctx) {
                         ctx.font = `${first.fontSize}px Arial`;
                         const metrics = ctx.measureText(first.text || '');
@@ -3107,11 +3023,7 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
     };
 
     return {
-        pdfCanvases,
-        strokesPerPage,
         currentStroke,
-        drawingCanvases,
-        drawingContexts,
         isTextHighlightMode,
         isTextSelectionMode,
         isSelectModeActive,
@@ -3152,7 +3064,6 @@ export function useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPa
         cancelText,
         resetToolState,
         handleTextboxBlur,
-        clearDrawing,
         redrawAllStrokes,
         drawImageCanvas,
         changeStrokeColor,

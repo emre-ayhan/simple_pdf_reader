@@ -56,17 +56,11 @@ const createNewBlankPage = (imageData) => {
 
 const {
     fileId,
-    pdfCanvases,
-    textLayerDivs,
-    strokesPerPage,
-    drawingCanvases,
-    drawingContexts,
+    pages,
     isFileLoaded,
     pdfReader,
     pagesContainer,
-    pageTextContent,
     fileInput,
-    renderedPages,
     pageCount,
     pageIndex,
     pageNum,
@@ -82,8 +76,8 @@ const {
     scrollToPage,
     scrollToFirstPage,
     scrollToLastPage,
-    deletedPages,
-    activePages,
+    activePage,
+    activePageCount,
     deletePage,
     insertBlankPage,
     openNewBlankPage,
@@ -154,7 +148,7 @@ const {
     isSelectedStrokeType,
     copiedStroke,
     copiedStrokes,
-} = useDraw(pagesContainer, pdfCanvases, renderedPages, strokesPerPage, drawingCanvases, drawingContexts, strokeChangeCallback);
+} = useDraw(pagesContainer, activePage, strokeChangeCallback);
 
 // History management
 const { 
@@ -167,7 +161,7 @@ const {
     canRedo,
     resetHistory, 
     saveCurrentHistoryStep,
-} = useHistory(fileId, strokesPerPage, drawingCanvases, drawingContexts, deletedPages, redrawAllStrokes);
+} = useHistory(fileId, redrawAllStrokes);
 
 startSession();
 
@@ -177,7 +171,7 @@ const handleImageImport = createImageImportHandler(redrawAllStrokes, addToHistor
 
 
 // Toolbar Actions
-const textActionsDisabled = computed(() => Object.values(pageTextContent.value).map(page => page.items.length).reduce((a, b) => a + b, 0) === 0);
+const textActionsDisabled = computed(() => Object.values(pages.value).map(page => page.textContent?.items.length || 0).reduce((a, b) => a + b, 0) === 0);
 
 const touchAction = computed(() => {
     if (isViewLocked.value || isPenHovering.value || isSelectModeActive.value || isSelectionMode.value || (enableTouchDrawing.value && hasActiveTool.value)) {
@@ -672,6 +666,7 @@ onUnmounted(() => {
     }
 });
 
+
 defineExpose({
     openNewBlankPage: createNewBlankPage,
     openFile: handleFileOpen,
@@ -695,7 +690,7 @@ defineExpose({
                     </a>
                 </li>
                 <!-- Search -->
-                <Search :pageTextContent="pageTextContent" :disabled="textActionsDisabled" :scrollToPage="scrollToPage" />
+                <Search :pages="pages" :disabled="textActionsDisabled" :scrollToPage="scrollToPage" />
             </ul>
             <button class="nav-link d-lg-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasNavbar" aria-controls="offcanvasNavbar" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
@@ -836,21 +831,19 @@ defineExpose({
             <ThumbnailSidebar 
                 v-if="isThumbnailSidebarVisible"
                 :pageCount="pageCount"
-                :deletedPages="deletedPages"
-                :renderedPages="renderedPages"
-                :pdfCanvases="pdfCanvases"
+                :pages="pages"
                 :pageIndex="pageIndex"
                 :scrollToPage="scrollToPage"
                 :renderPageThumbnail="renderPageThumbnail"
             />
             <div class="pages-container flex-grow-1" ref="pagesContainer" :style="{ width: `${zoomPercentage}%` }">
-                <template v-for="page in pageCount" :key="page">
-                    <div  class="page-container" :data-page="page" v-show="!deletedPages.has(page)">
-                        <div class="canvas-container" :class="{ 'canvas-loading': !renderedPages.has(page) }">
-                            <canvas class="pdf-canvas" :ref="el => { if (el) pdfCanvases[page - 1] = el }"></canvas>
-                            <div class="text-layer" :class="{ 'text-selectable': isTextSelectionMode }" :ref="el => { if (el) textLayerDivs[page - 1] = el }"></div>
+                <template v-for="page in pages" :key="`page-${page.index}`">
+                    <div class="page-container" :data-page="page.index" v-show="!page.deleted">
+                        <div class="canvas-container" :class="{ 'canvas-loading': !page.rendered }">
+                            <canvas class="pdf-canvas" :ref="el => page.canvas = el"></canvas>
+                            <div class="text-layer" :class="{ 'text-selectable': isTextSelectionMode }" :ref="el => page.textLayer = el"></div>
                             <canvas 
-                                :ref="el => { if (el) drawingCanvases[page - 1] = el }"
+                                :ref="el => page.drawingCanvas = el"
                                 class="drawing-canvas"
                                 @pointerdown="startDrawing"
                                 @pointermove="onPointerMove"
@@ -960,16 +953,11 @@ defineExpose({
             <PrintModal
                 ref="printModal"
                 :pageCount="pageCount"
-                :activePages="activePages"
-                :pdfCanvases="pdfCanvases"
-                :drawingCanvases="drawingCanvases"
+                :pages="pages"
                 :renderPdfPage="renderPdfPage"
             />
 
-            <PageNumber
-                :pageNum="pageNum"
-                :totalPages="pageCount - deletedPages.size"
-            />
+            <PageNumber :page="activePage" :total="activePageCount"/>
             
             <context-menu parent="#pdf-reader" @menu-item-click="handleToolClick" @show="getFromClipboard">
                 <div class="d-flex">

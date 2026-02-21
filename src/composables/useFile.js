@@ -18,30 +18,30 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
     // Prevent concurrent render() calls per page/canvas
     const pageRenderPromises = new Map();
 
-    const renderPdfPage = async (pageNumber) => {
+    const renderPdfPage = async (index) => {
         if (!pdfDoc) return;
         if (imagePage.value) return;
-        if (!pageNumber || pageNumber < 1) return;
-        if (renderedPages.value.has(pageNumber)) return;
 
-        if (pageRenderPromises.has(pageNumber)) {
-            return pageRenderPromises.get(pageNumber);
+        const page = pages.value[index];
+        if (page?.rendered || page.index < 0) return;
+
+        if (pageRenderPromises.has(page.index)) {
+            return pageRenderPromises.get(page.index);
         }
 
         const promise = (async () => {
-            const pageIndex = pageNumber - 1;
-            const page = await pdfDoc.getPage(pageNumber);
+            const pdfPage = await pdfDoc.getPage(page.index + 1); // pdf-lib is 1-indexed
 
             const pixelRatio = window.devicePixelRatio || 1;
             const containerWidth = pdfReader.value?.clientWidth || window.innerWidth;
             const zoomFactor = Math.max(zoomPercentage.value, 100) / 100;
             const desiredDisplayWidth = containerWidth * zoomFactor;
-            const unscaledViewport = page.getViewport({ scale: 1 });
+            const unscaledViewport = pdfPage.getViewport({ scale: 1 });
             const scale = Math.max((desiredDisplayWidth * pixelRatio) / unscaledViewport.width, 3);
-            const viewport = page.getViewport({ scale });
+            const viewport = pdfPage.getViewport({ scale });
 
-            const canvas = pdfCanvases.value[pageIndex];
-            const drawCanvas = drawingCanvases.value[pageIndex];
+            const canvas = page?.canvas;
+            const drawCanvas = page?.drawingCanvas;
             if (!canvas || !drawCanvas) return;
 
             canvas.style.width = '';
@@ -56,16 +56,17 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             drawCanvas.height = viewport.height;
             drawCanvas.width = viewport.width;
 
-            drawingContexts.value[pageIndex] = drawCanvas.getContext('2d', { willReadFrequently: true });
+            page.drawingContext = drawCanvas.getContext('2d', { willReadFrequently: true });
 
             const renderContext = {
                 canvasContext: ctx,
                 viewport,
             };
 
-            await page.render(renderContext).promise;
+            await pdfPage.render(renderContext).promise;
 
-            const textLayerDiv = textLayerDivs.value[pageIndex];
+            const textLayerDiv = page?.textLayer;
+
             if (textLayerDiv) {
                 textLayerDiv.innerHTML = '';
 
@@ -78,8 +79,8 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
                 textLayerDiv.style.height = `${canvas.height}px`;
                 textLayerDiv.style.transform = `scale(${scaleX}, ${scaleY})`;
 
-                const textContent = await page.getTextContent();
-                pageTextContent.value[pageIndex] = textContent;
+                const textContent = await pdfPage.getTextContent();
+                page.textContent = textContent;
 
                 for (const item of textContent.items) {
                     if (!item.str) continue;
@@ -144,16 +145,16 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
                 }
             }
 
-            renderedPages.value.add(pageNumber);
-            lazyLoadCallback(pageIndex);
+            page.rendered = true;
+            lazyLoadCallback(page.index);
         })();
 
-        pageRenderPromises.set(pageNumber, promise);
+        pageRenderPromises.set(page.index, promise);
 
         try {
             await promise;
         } finally {
-            pageRenderPromises.delete(pageNumber);
+            pageRenderPromises.delete(page.index);
         }
     };
 
@@ -191,21 +192,9 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
     const filepath = ref(null);
     const internalFileSize = ref(0);
     const pagesContainer = ref(null);
-    const renderedPages = ref(new Set());
     const pdfReader = ref(null);
-    const pdfCanvases = ref([]); // Reference to PDF canvases for selection capture
-    const textLayerDivs = ref([]); // Reference to text layer divs for text selection
-    const pageTextContent = ref({}); // Store text content by page index
     const isFileLoaded = ref(false);
     const originalPdfData = ref(null);
-
-    // Deleted Pages Set
-    const deletedPages = ref(new Set());
-
-    // Drawing State Variables
-    const strokesPerPage = ref({}); // Store strokes per page
-    const drawingCanvases = ref([]); // Array of drawing canvas elements
-    const drawingContexts = ref([]); // Array of drawing contexts
     
     // when opening images as a single page
     const imagePage = ref(null);
@@ -217,19 +206,33 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
     const fileRecentlySaved = ref(false);
 
     // Pagination State Variables
+    const pages = ref([]);
     const pageCount = ref(0);
     const pageIndex = ref(0);
     const pageNum = ref(1);
-    const activePages = computed(() => {
-        return Array.from({ length: pageCount.value }, (_, i) => i + 1).filter(p => !deletedPages.value.has(p));
-    });
+    const activePageCount = computed(() => pages.value.filter(page => !page.deleted).length);
 
     const activePage = computed(() => {
-        return activePages.value[pageIndex.value] || 1;
+        return pages.value[pageIndex.value] || {};
     });
+
+    const setPages = (length) => {
+        pageCount.value = length;
+        pages.value = Array.from({ length }, (_, index) => ({
+            index,
+            rendered: false,
+            canvas: null,
+            textLayer: null,
+            drawingCanvas: null,
+            drawingContext: null,
+            strokes: [],
+            deleted: false
+        }));
+    }
 
     watch(pageIndex, (newIndex) => {
         pageNum.value = newIndex + 1;
+        activePage.value.canvas.scrollIntoView({ block: 'start' });
         storePageIndex(filename.value, newIndex);
     });
 
@@ -238,26 +241,26 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
     });
 
     const isLastPage = computed(() => {
-        return pageNum.value >= (pageCount.value - deletedPages.value.size);
+        return pageNum.value >= activePageCount.value;
     });
 
     const handlePageNumberInput = (event) => {
-        const page = parseInt(event.target.value);
+        const pageNo = parseInt(event.target.value);
         
-        if (isNaN(page) || page < 1) {
+        if (isNaN(pageNo) || pageNo < 1) {
             // Invalid page number
             pageNum.value = 1;
             return;
         }
 
-        const lastPageNum = pageCount.value - deletedPages.value.size;
+        const lastPageNum = activePageCount.value;
 
-        if (page > lastPageNum) {
+        if (pageNo > lastPageNum) {
             pageNum.value = lastPageNum;
             return;
         }
 
-        scrollToPage(page - 1);
+        scrollToPage(pageNo - 1);
     }
 
     const setupLazyLoadObserver = () => {
@@ -275,9 +278,9 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         lazyLoadObserver.value = new IntersectionObserver((entries) => {
             entries.forEach(async entry => {
                 if (entry.isIntersecting) {
-                    const pageNumber = parseInt(entry.target.getAttribute('data-page'));
+                    const index = parseInt(entry.target.getAttribute('data-page'));
                     if (!pdfDoc) return;
-                    await renderPdfPage(pageNumber);
+                    await renderPdfPage(index);
                 }
             });
         }, options);
@@ -316,9 +319,12 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             });
             
             if (mostVisiblePage) {
-                const pageNumber = parseInt(mostVisiblePage.getAttribute('data-page'));
-                if (pageNumber && pageNumber !== activePage.value) {
-                    pageIndex.value = activePages.value.indexOf(pageNumber);
+                const visiblePageIndex = parseInt(mostVisiblePage.getAttribute('data-page'));
+                if (Number.isNaN(visiblePageIndex)) return;
+
+                const page = pages.value[visiblePageIndex];
+                if (page && !page.deleted && visiblePageIndex !== pageIndex.value) {
+                    pageIndex.value = visiblePageIndex;
                     storePageIndex();
                 }
             }
@@ -341,26 +347,17 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
 
     const getStoredPageIndex = () => {
         storeGet(filename.value).then(data => {
-            if (data?.pageIndex) {
+            if (Number.isInteger(data?.pageIndex) && data.pageIndex >= 0) {
                 pageIndex.value = data.pageIndex;
             }
         })
     }
     
     const scrollToPage = (targetPageIndex) => {
-        if (!isNaN(targetPageIndex)) {
-            pageIndex.value = targetPageIndex;
-        }
-
-        const page = activePage.value;
-        if (!isFileLoaded.value || deletedPages.value.has(page)) return;
-
-        if (page >= 1 && page <= pageCount.value) {
-            const canvasIndex = page - 1;
-            const canvas = pdfCanvases.value[canvasIndex];
-            if (!canvas) return;
-            canvas.scrollIntoView({ block: 'start' });
-        }
+        if (isNaN(targetPageIndex)) return;
+        const maxIndex = Math.max(0, pages.value.length - 1);
+        const normalizedIndex = Math.min(Math.max(0, targetPageIndex), maxIndex);
+        pageIndex.value = normalizedIndex;
     };
 
     const scrollToFirstPage = () => {
@@ -368,13 +365,14 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
     };
 
     const scrollToLastPage = () => {
-        scrollToPage(activePages.value.length - 1);
+        const lastIndex = activePageCount.value - 1;
+        scrollToPage(lastIndex);
     };
 
     // File Loaded Event Emitter
     const handleFileLoadEvent = (type, page_count) => {
         isFileLoaded.value = true;
-        pageCount.value = page_count || 1;
+        setPages(page_count || 1);
         getStoredPageIndex();
 
         setCurrentTab({
@@ -393,12 +391,14 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
 
         for (let i = 1; i <= numPages; i++) {
             // Check if we already have it
-            if (pageTextContent.value[i-1]) continue;
+            if (pages.value[i-1]?.textContent) continue;
 
             promises.push(
                 pdfDoc.getPage(i).then(async (page) => {
                     const textContent = await page.getTextContent();
-                    pageTextContent.value[i-1] = textContent;
+                    if (pages.value[i-1]) {
+                        pages.value[i-1].textContent = textContent;
+                    }
                 })
             );
         }
@@ -409,7 +409,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
 
     const renderAllPages = async () => {
         if (imagePage.value) {
-            pageCount.value = 1;
+            setPages(1);
             await renderImageFileCallback(imagePage.value);
             pageIndex.value = 0;
             return;
@@ -418,14 +418,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         if (!pdfDoc) return;
         
         const numPages = pdfDoc.numPages;
-        pageCount.value = numPages;
-        
-        // Initialize strokes for each page
-        for (let i = 1; i <= numPages; i++) {
-            if (!strokesPerPage.value[i]) {
-                strokesPerPage.value[i] = [];
-            }
-        }
+        setPages(numPages);
 
         // Start extracting text for search capability (non-blocking)
         extractAllText();
@@ -441,12 +434,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         const reader = new FileReader();
         reader.onload = () => {
             loadFileCallback();
-            renderedPages.value.clear();
-            drawingContexts.value = [];
-            pageTextContent.value = {};
-            
             imagePage.value = reader.result;
-            strokesPerPage.value = { 1: [] };
             
             handleFileLoadEvent('image');
 
@@ -471,10 +459,6 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
 
     const getDocumentCallback = (pdfDoc_) => {
         loadFileCallback();
-        strokesPerPage.value = {};
-        renderedPages.value.clear();
-        drawingContexts.value = [];
-        pageTextContent.value = {};
         pdfDoc = pdfDoc_;
         imagePage.value = null;
         handleFileLoadEvent('pdf', pdfDoc.numPages);
@@ -542,12 +526,9 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             const dataUrl = `data:${result.mimeType};base64,${result.content}`;
 
             loadFileCallback();
-            renderedPages.value.clear();
-            drawingContexts.value = [];
-            pageTextContent.value = {};
+            pages.value = []; // Clear pages structure since we're in image mode
             
             imagePage.value = dataUrl;
-            strokesPerPage.value = { 1: [] };
             handleFileLoadEvent('image');
 
             nextTick(() => {
@@ -595,15 +576,15 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             const pdfLibDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
 
             // Process each page with annotations
-            for (let pageNo = 1; pageNo <= pageCount.value; pageNo++) {
-                const strokes = strokesPerPage.value[pageNo];
+            for (const page of pages.value) {
+                const strokes = page.strokes || [];
                 if (!strokes || strokes.length === 0) continue;
 
-                const page = pdfLibDoc.getPage(pageNo - 1);
-                const { width, height } = page.getSize();
+                const pdfPage = pdfLibDoc.getPage(page.index);
+                const { width, height } = pdfPage.getSize();
 
                 // Get the canvas dimensions for scaling
-                const canvas = pdfCanvases.value[pageNo - 1];
+                const canvas = page.canvas;
                 if (!canvas) continue;
 
                 const scaleX = width / canvas.width;
@@ -763,10 +744,11 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             }
 
             // Remove any pages that were deleted by the user before saving
-            if (deletedPages.value && deletedPages.value.size > 0) {
+            const deletedPages = new Set(pages.value.map((p, i) => p.deleted ? i + 1 : null).filter(p => p));
+            if (deletedPages.size > 0) {
                 try {
                     // Convert deleted page numbers to zero-based indexes and sort descending
-                    const indices = Array.from(deletedPages.value)
+                    const indices = Array.from(deletedPages)
                         .map(p => p - 1)
                         .filter(i => Number.isInteger(i) && i >= 0)
                         .sort((a, b) => b - a);
@@ -884,13 +866,13 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
     };
 
     const deletePage = async (index, callback) => {
-        const page = activePages.value[index];
+        const page = pages.value[index];
         if (!pdfDoc || !page) return;
         
-        const confirmed = await showModal(`Are you sure you want to delete page \{${page}\}?`, true);
+        const confirmed = await showModal(`Are you sure you want to delete page ${index + 1}?`, true);
         if (!confirmed) return;
 
-        deletedPages.value.add(page);
+        page.deleted = true;
 
         if (typeof callback !== 'function') return;
         callback({ type: 'delete-page', page });
@@ -924,10 +906,6 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             filename.value = `Document_${Date.now()}.pdf`;
             filepath.value = null;
             loadFileCallback();
-            strokesPerPage.value = { 1: [] };
-            renderedPages.value.clear();
-            drawingContexts.value = [];
-            pageTextContent.value = {};
             pdfDoc = pdfDoc_;
             imagePage.value = null;
             handleFileLoadEvent('pdf', pdfDoc.numPages);
@@ -957,8 +935,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         if (!pdfDoc) return;
 
         const rotationChange = direction === 'clockwise' ? 90 : -90;
-        const pageNum = activePage.value;
-        const pageIdx = pageNum - 1;
+        const pageIdx = activePage.value?.index || 0;
 
         // We can't easily rotate the page in the viewer client-side without re-rendering everything
         // So we'll rotate it in the PDF document model (pdf-lib) and reload the document.
@@ -996,9 +973,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             const pdfDoc_ = await getDocument({ data: pdfBytes }).promise;
             
             // Re-initialize viewer state
-             renderedPages.value.clear();
-             drawingContexts.value = [];
-             pageTextContent.value = {};
+             pages.value = [{ canvas: null, drawingCanvas: null, textLayer: null, drawingContext: null }]; // Reset pages structure for single page
              pdfDoc = pdfDoc_;
              
              // Strokes might need adjustment if logic was relative to unrotated coordinates
@@ -1023,26 +998,9 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
     const insertBlankPage = async () => {
         if (!pdfDoc) return;
         
-        // Get the current page number where we want to insert after
-        const currentPageNum = activePage.value;
-        
         // Increment page count
-        const newPageNumber = pageCount.value + 1;
-        pageCount.value = newPageNumber;
-        
-        // Shift all strokes from pages after the current page
-        const newStrokesPerPage = {};
-        for (let i = 1; i <= currentPageNum; i++) {
-            newStrokesPerPage[i] = strokesPerPage.value[i] || [];
-        }
-        // Insert blank page with no strokes
-        newStrokesPerPage[currentPageNum + 1] = [];
-        // Shift remaining pages
-        for (let i = currentPageNum + 1; i < newPageNumber; i++) {
-            newStrokesPerPage[i + 1] = strokesPerPage.value[i] || [];
-        }
-        strokesPerPage.value = newStrokesPerPage;
-        
+        setPages(pageCount.value + 1);
+
         // Load the original PDF and add a blank page
         let arrayBuffer;
         if (originalPdfData.value) {
@@ -1083,9 +1041,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         // Reload the PDF
         getDocument({ data: pdfBytes }).promise.then(async (pdfDoc_) => {
             pdfDoc = pdfDoc_;
-            renderedPages.value.clear();
-            drawingContexts.value = [];
-            pageTextContent.value = {};
+            pages.value = [{ canvas: null, drawingCanvas: null, textLayer: null, drawingContext: null }]; // Reset pages structure for single page
             
             await nextTick();
             await renderAllPages();
@@ -1094,10 +1050,10 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             
             // Scroll to the newly inserted page
             await nextTick();
-            scrollToPage(currentPageNum);
+            scrollToPage(pageIndex.value);
             
             if (typeof callback === 'function') {
-                callback({ type: 'insert-blank-page', pageNumber: currentPageNum + 1 });
+                callback({ type: 'insert-blank-page', pageNumber: pageNum.value });
             }
         }).catch(async error => {
             console.error('Error reloading PDF after blank page insertion:', error);
@@ -1111,7 +1067,8 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         img.onload = () => {
             // Add image to current page in visible viewport
             const canvasIndex = pageIndex.value;
-            const canvas = drawingCanvases.value[canvasIndex];
+            const page = pages.value[canvasIndex];
+            const canvas = page?.drawingCanvas;
             
             if (!canvas) return;
             
@@ -1168,10 +1125,11 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             // Assign a stable id to the image stroke for history ops
             imageStroke[0].id = strokeId;
             const pageNumber = pageIndex.value + 1;
-            if (!strokesPerPage.value[pageNumber]) {
-                strokesPerPage.value[pageNumber] = [];
+            if (!page.strokes) {
+                page.strokes = [];
             }
-            strokesPerPage.value[pageNumber].push(imageStroke);
+
+            page.strokes.push(imageStroke);
             
             redrawAllStrokesCallback(canvasIndex);
             // Use unified history action shape
@@ -1217,13 +1175,10 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
     const resyncRenderedTextLayers = async () => {
         if (!isFileLoaded.value) return;
         await nextTick();
-
-        const pages = Array.from(renderedPages.value || new Set());
-        for (const pageNumber of pages) {
-            if (deletedPages.value?.has?.(pageNumber)) continue;
-            const index = pageNumber - 1;
-            const canvas = pdfCanvases.value?.[index];
-            const textLayerDiv = textLayerDivs.value?.[index];
+        for (const page of pages.value) {
+            if (page.deleted) continue;
+            const canvas = page.canvas;
+            const textLayerDiv = page.textLayer;
             if (!canvas || !textLayerDiv) continue;
 
             const cssWidth = canvas.offsetWidth;
@@ -1294,14 +1249,8 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
 
     return {
         fileId,
+        pages,
         pagesContainer,
-        pdfCanvases,
-        textLayerDivs,
-        pageTextContent,
-        strokesPerPage,
-        drawingCanvases,
-        drawingContexts,
-        renderedPages,
         pdfReader,
         isFileLoaded,
         originalPdfData,
@@ -1310,9 +1259,10 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         filepath,
         imagePage,
         pageCount,
+        activePageCount,
+        activePage,
         pageNum,
         pageIndex,
-        activePages,
         isFirstPage,
         isLastPage,
         zoomPercentage,
@@ -1339,7 +1289,6 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         scrollToLastPage,
         storePageIndex,
         getStoredPageIndex,
-        deletedPages,
         deletePage,
         createBlankPage,
         openNewBlankPage,
