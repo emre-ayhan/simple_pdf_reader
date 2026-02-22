@@ -13,7 +13,6 @@ import ThumbnailSidebar from "./ThumbnailSidebar.vue";
 import PageNumber from "./PageNumber.vue";
 import ContextMenu from "./ContextMenu.vue";
 import ToolItem from "./ToolItem.vue";
-import { useTools } from "../composables/useTools";
 
 // Cursor Style
 const cursorStyle = computed(() => {
@@ -240,32 +239,55 @@ const importImage = () => {
     imageInput.value?.click();
 };
 
-const dravingTools = {
-    pen: {
-        icon: 'pencil-fill',
-        title: 'Draw',
-        shortcut: 'D',
-    },
-    line: {
-        icon: 'slash-lg',
-        title: 'Line',
-        shortcut: 'L',
-    },
-    rectangle: {
-        icon: 'square',
-        title: 'Rectangle',
-        shortcut: 'R',
-    },
-    circle: {
-        icon: 'circle',
-        title: 'Circle',
-        shortcut: 'O',
-    },
-}
+// const dravingTools = {
+//     pen: {
+//         icon: 'pencil-fill',
+//         label: 'Draw',
+//         shortcut: 'D',
+//     },
+//     line: {
+//         icon: 'slash-lg',
+//         label: 'Line',
+//         shortcut: 'L',
+//     },
+//     rectangle: {
+//         icon: 'square',
+//         label: 'Rectangle',
+//         shortcut: 'R',
+//     },
+//     circle: {
+//         icon: 'circle',
+//         label: 'Circle',
+//         shortcut: 'O',
+//     },
+// }
 
-const activeDrawingTool = computed(() => {
-    return dravingTools[drawMode.value] || dravingTools['pen'];
-});
+const dravingTools = [
+    {
+        icon: 'pencil-fill',
+        label: 'Draw',
+        shortcut: 'D',
+        value: 'pen',
+    },
+    {
+        icon: 'slash-lg',
+        label: 'Line',
+        shortcut: 'L',
+        value: 'line',
+    },
+    {
+        icon: 'square',
+        label: 'Rectangle',
+        shortcut: 'R',
+        value: 'rectangle',
+    },
+    {
+        icon: 'circle',
+        label: 'Circle',
+        shortcut: 'O',
+        value: 'circle',
+    },
+]
 
 const selectDrawingTool = (mode) => {
     if (!isFileLoaded.value) return;
@@ -329,7 +351,7 @@ const toggleZoomMode = (mode) => {
     if (!isFileLoaded.value) return;
     
     if (mode === 'fit-height') {
-        const pageContainer = document.querySelector(`.page-container[data-page="${pageIndex.value + 1}"]`);
+        const pageContainer = document.querySelector(`.page-container[data-page="${pageIndex.value}"]`);        
         const percentage = pdfReader.value.clientHeight * zoomPercentage.value / pageContainer.clientHeight;
         zoomPercentage.value = Math.ceil(percentage);
     } else {
@@ -367,7 +389,7 @@ const handleZoomLevel = (percentage) => {
 };
 
 const onZoomLevelChange = (event) => {
-    let percentage = parseInt(event.target.value);
+    let percentage = event.target.value;    
     handleZoomLevel(percentage);
 }
 
@@ -377,19 +399,7 @@ const zoom = (direction) => {
     handleZoomLevel(newZoom);
 }
 
-const { 
-    handleToolClick,
-    viewLock,
-    viewZoomIn,
-    viewZoomOut,
-    editUndo,
-    editRedo,
-    editPaste,
-    editCapture,
-    editHandTool,
-    editSelectStroke,
-    editSelectText,
-} = useTools({
+const pdfActions = {
     lockView,
     zoomIn:  () => zoom(1),
     zoomOut: () => zoom(-1),
@@ -404,20 +414,7 @@ const {
     selectStrokeMode,
     toggleTextSelection,
     toggleHandTool,
-});
-
-const contextMenuItems = {
-    edit: [
-        editUndo,
-        editRedo,
-    ]
 }
-
-viewZoomIn.disabled = computed(() => zoomPercentage.value >= maxZoom);
-viewZoomOut.disabled = computed(() => zoomPercentage.value <= minZoom);
-editUndo.disabled = computed(() => !canUndo.value);
-editRedo.disabled = computed(() => !canRedo.value);
-editPaste.disabled = computed(() => !copiedStroke.value);
 
 const hasActiveTool = computed(() => {
     return isDrawing.value || isEraser.value || isTextInputMode.value || isSelectionMode.value || isTextHighlightMode.value;
@@ -701,10 +698,8 @@ defineExpose({
                     <ul ref="toolbar" class="navbar-nav mx-auto">
                         <!-- Drawing -->
                         <template v-if="isDrawing || isTextInputMode || isTextHighlightMode">
-                            <li class="nav-item" v-for="(strokeStyle, index) in initialStrokeStyles">
-                                <a class="nav-link" href="#" @click.prevent="handleStrokeStyleButtonClick(index)" :class="{ active: strokeStyle.color === drawColor }">
-                                    <i class="bi bi-circle-fill" :style="{ color: strokeStyle.color }"></i>
-                                </a>
+                            <li class="nav-item" v-for="({ color }, index) in initialStrokeStyles">
+                                <ToolItem class="nav-link" icon="circle-fill" :action="handleStrokeStyleButtonClick" :value="index" :active="color === drawColor" :style="`color: ${color} !important`" />
                             </li>
                             <li class="nav-item btn-group">
                                 <a href="#" role="button" class="nav-link" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
@@ -745,83 +740,77 @@ defineExpose({
                             </li>
                             <li class="nav-item vr bg-white mx-2"></li>
                         </template>
-                        <li class="nav-item" v-if="drawMode === 'pen' && isDrawing">
-                            <a class="nav-link" href="#" @click.prevent="selectEraser" :class="{ active: isEraser }" :title="$t('Eraser') + ' (E)'">
-                                <i class="bi bi-eraser-fill"></i>
-                            </a>
+                        <li class="nav-item" v-if="isDrawing || isEraser">
+                            <ToolItem class="nav-link" label="Eraser" label-class="d-lg-none" shortcut="E" icon="eraser-fill" :active="isEraser" :disabled="drawMode !== 'pen'" :action="selectEraser" />
                         </li>
-                        <li class="nav-item btn-group">
-                            <a class="nav-link" href="#" @click.prevent="selectDrawingTool(drawMode)" :class="{ active: isDrawing }" :title="$t(activeDrawingTool.title) + ` (${activeDrawingTool.shortcut})`">
-                                <i :class="`bi bi-${activeDrawingTool.icon}`"></i>
-                            </a>
-                            <a class="nav-link dropdown-toggle dropdown-toggle-split" href="#" data-bs-toggle="dropdown" aria-expanded="false">
-                                <span class="visually-hidden">Toggle Dropdown</span>
-                            </a>
-                            <div class="dropdown-menu dropdown-menu-dark rounded-3 mt-2">
-                                <template v-for="(tool, key) in dravingTools">
-                                    <a class="dropdown-item d-flex align-items-center" href="#" @click.prevent="selectDrawingTool(key)">
-                                        <i :class="`bi bi-${tool.icon} me-2`"></i>
-                                        <span>{{ $t(tool.title) }} ({{ tool.shortcut }})</span>
-                                        <i class="bi bi-check-circle-fill ms-auto" v-if="key === drawMode"></i>
-                                    </a>
-                                </template>
-                            </div>
+                        <template v-for="tool in dravingTools">
+                            <li class="nav-item" v-if="isDrawing || isEraser || tool.value === 'pen'">
+                                <ToolItem class="nav-link" v-bind="tool" :action="selectDrawingTool" :active="drawMode === tool.value && isDrawing" label-class="d-lg-none" />
+                            </li>
+                        </template>
+                        <li class="nav-item">
+                            <ToolItem class="nav-link" label="Highlight Text" label-class="d-lg-none" shortcut="H" icon="highlighter" :active="isTextHighlightMode" :disabled="textActionsDisabled" :action="toggleTextHighlightMode" />
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="#" @click.prevent="toggleTextHighlightMode" :class="{ active: isTextHighlightMode, disabled: textActionsDisabled }" :title="$t('Highlight Text') + ' (H)'">
-                                <i class="bi bi-highlighter"></i>
-                            </a>
+                            <ToolItem class="nav-link" label="Add Text" label-class="d-lg-none" shortcut="T" icon="textarea-t" :active="isTextInputMode" :action="selectText" />
                         </li>
                         <li class="nav-item">
-                            <a href="#" class="nav-link" @click.prevent="selectText" :class="{ active: isTextInputMode }" :title="$t('Add Text') + ' (T)'">
-                                <i class="bi bi-textarea-t"></i>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="#" class="nav-link" @click.prevent="importImage" :title="$t('Import Image') + ' (I)'">
-                                <i class="bi bi-image"></i>
-                            </a>
+                            <ToolItem class="nav-link" label="Import Image" label-class="d-lg-none" shortcut="I" icon="image" :action="importImage" />
                         </li>
                         <li class="nav-item vr bg-white mx-2"></li>
                         <li class="nav-item">
-                            <a class="nav-link" href="#" @click.prevent="selectStrokeMode" :class="{ active: isSelectModeActive }" :title="$t('Stroke Selection') + ' (P)'">
-                                <i class="bi bi-cursor-fill"></i>
-                            </a>
+                            <ToolItem class="nav-link" label="Stroke Selection" label-class="d-lg-none" shortcut="P" icon="cursor-fill" :active="isSelectModeActive" :action="selectStrokeMode" />
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="#" @click.prevent="toggleTextSelection" :class="{ active: isTextSelectionMode && !isTextHighlightMode, disabled: textActionsDisabled }" :title="$t('Text Selection') + ' (S)'">
-                                <i class="bi bi-cursor-text"></i>
-                            </a>
+                            <ToolItem class="nav-link" label="Text Selection" label-class="d-lg-none" shortcut="S" icon="cursor-text" :active="isTextSelectionMode && !isTextHighlightMode" :disabled="textActionsDisabled" :action="toggleTextSelection" />
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="#" @click.prevent="toggleHandTool" :class="{ active: handToolActive }" :title="$t('Hand Tool')">
-                                <i class="bi bi-hand-index-thumb-fill"></i>
-                            </a>
+                            <ToolItem class="nav-link" label="Hand Tool" label-class="d-lg-none" icon="hand-index-thumb-fill" :active="handToolActive" :action="toggleHandTool" />
                         </li>
     
                         <!-- Capture Image Tool -->
                         <li class="nav-item">
-                            <a class="nav-link" href="#" @click.prevent="captureSelection" :class="{ active: isSelectionMode }" :title="$t('Select Area to Whiteboard')">
-                                <i class="bi bi-scissors"></i>
-                            </a>
+                            <ToolItem class="nav-link" label="Select Area to Whiteboard" label-class="d-lg-none" icon="scissors" :active="isSelectionMode" :action="captureSelection" />
                         </li>
                         
                         <!-- Pagination -->
                         <li class="nav-item vr bg-white mx-2"></li>
                         <li class="nav-item">
-                            <div class="input-group flex-nowrap">
+                            <div class="input-group align-items-center flex-nowrap">
                                 <input type="text" class="form-control-plaintext" v-model="pageNum" @input="handlePageNumberInput" />
+                                <span class="text-secondary pe-1">/ {{ activePages.length }}</span>
                             </div>
                         </li>
                         <li class="nav-item">
-                            <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex - 1)" :class="{ disabled: isFirstPage }" :title="$t('Previous Page')">
-                                <i class="bi bi-chevron-up"></i>
-                            </a>
+                            <ToolItem class="nav-link" label="Previous Page" label-class="d-lg-none" shortcut="ArrowLeft" icon="chevron-up" :action="scrollToPage" :value="pageIndex - 1" :disabled="isFirstPage" />
                         </li>
                         <li class="nav-item">
-                            <a href="#" class="nav-link" @click.prevent="scrollToPage(pageIndex + 1)" :class="{ disabled: isLastPage }" :title="$t('Next Page')">
-                                <i class="bi bi-chevron-down"></i>
-                            </a>
+                            <ToolItem class="nav-link" label="Next Page" label-class="d-lg-none" shortcut="ArrowRight" icon="chevron-down" :action="scrollToPage" :value="pageIndex + 1" :disabled="isLastPage" />
+                        </li>
+
+                        <!-- History -->
+                        <li class="nav-item vr bg-white mx-2"></li>
+                        <li class="nav-item">
+                            <ToolItem class="nav-link" label="Undo" label-class="d-lg-none" shortcut="Ctrl+Z" icon="arrow-counterclockwise" :action="undo" :disabled="!canUndo" />
+                        </li>
+                        <li class="nav-item">
+                            <ToolItem class="nav-link" label="Redo" label-class="d-lg-none" shortcut="Ctrl+Y" icon="arrow-clockwise" :action="redo" :disabled="!canRedo" />
+                        </li>
+
+                        <!-- Zoom -->
+                        <li class="nav-item vr bg-white mx-2"></li>
+                        <li class="nav-item">
+                            <ToolItem class="nav-link" label="Zoom In" label-class="d-lg-none" icon="zoom-in" :disabled="zoomPercentage === maxZoom" :action="zoom" :value="1" />
+                        </li>
+                        <li class="nav-item">
+                            <ToolItem class="nav-link" label="Zoom Out" label-class="d-lg-none" icon="zoom-out" :disabled="zoomPercentage === minZoom" :action="zoom" :value="-1" />
+                        </li>
+                        <li class="nav-item">
+                            <select class="form-control-plaintext" @change="onZoomLevelChange">
+                                <option value="fit-width" :selected="zoomPercentage === 100">{{ $t('Fit Width') }}</option>
+                                <option value="fit-height" :selected="false">{{ $t('Fit Height') }}</option>
+                                <option v-for="level in zoomLevels" :value="level" :selected="level === zoomPercentage">{{ level }}%</option>
+                            </select>
                         </li>
                     </ul>
                 </div>
@@ -959,47 +948,8 @@ defineExpose({
 
             <PageNumber :page-num="pageNum" :total="activePages.length"/>
             
-            <context-menu parent="#pdf-reader" @menu-item-click="handleToolClick" @show="getFromClipboard">
-                <div class="d-flex">
-                    <template v-for="item in [editSelectStroke, editSelectText, editHandTool, editCapture, editPaste]">
-                        <ToolItem class="dropdown-item" hide-label :item="item" @tool-click="handleToolClick" />
-                    </template>
-                </div>
-                <div class="dropdown-divider"></div>
-                <div class="d-flex">
-                    <template v-for="item in [viewLock, viewZoomIn, viewZoomOut]">
-                        <ToolItem class="dropdown-item" hide-label :item="item" @tool-click="handleToolClick" />
-                    </template>
-                    <div class="dropend">
-                        <a href="#" class="dropdown-item dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false" @click.prevent.stop :title="$t('Change Zoom Level')">
-                            {{ zoomPercentage }}
-                            <i class="bi bi-percent"></i>
-                        </a>
-                        <div class="dropdown-menu dropdown-menu-dark rounded-3">
-                            <a href="#" class="dropdown-item" @click.prevent="toggleZoomMode('fit-height')">
-                                <i :class="`bi bi-${!zoomLevels.includes(zoomPercentage) ? 'check-circle-fill' : 'circle'} me-1`"></i>
-                                {{ $t('Fit Height') }}
-                            </a>
-                            <a href="#" class="dropdown-item" @click.prevent="toggleZoomMode('fit-width')">
-                                <i class="bi bi-circle me-1"></i>
-                                {{ $t('Fit Width') }}
-                            </a>
-                            <template v-for="level in zoomLevels">
-                                <a href="#" class="dropdown-item" @click.prevent="handleZoomLevel(level)">
-                                    <i :class="`bi bi-${level === zoomPercentage ? 'check-circle-fill' : 'circle'} me-1`"></i>
-                                    {{ level }}
-                                    <i class="bi bi-percent"></i>
-                                </a>
-                            </template>
-                        </div>
-                    </div>
-                </div>
-                <template v-for="(groupItems, group, index) in contextMenuItems">
-                    <div class="dropdown-divider"></div>
-                    <template v-for="item in groupItems">
-                        <ToolItem class="dropdown-item"  :item="item" @tool-click="handleToolClick" />
-                    </template>
-                </template>
+            <context-menu parent="#pdf-reader" @show="getFromClipboard">
+                menuitems
             </context-menu>
         </div>
 
