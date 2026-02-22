@@ -3,8 +3,8 @@ import { ref, watch } from 'vue';
 import { toolbarPosition } from '../composables/useAppPreferences';
 
 const props = defineProps({
-    pageNum: { type: Number, required: true },
-    total: { type: Number, required: true },
+    pageNum: [Number, String],
+    total: [Number, String],
 });
 
 const show = ref(true);
