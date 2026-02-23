@@ -100,5 +100,8 @@
     "Rotate Counterclockwise": "Saat Yönünün Tersine Döndür",
     "Properties": "Özellikler",
     "Change Zoom Level": "Yakınlaştırma Düzeyini Değiştir",
-    "Paste": "Yapıştır"
+    "Paste": "Yapıştır",
+    "Capture Selection": "Seçimi Yakala",
+    "Copy": "Kopyala",
+    "Hand Tool": "El Aracı"
 }

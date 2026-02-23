@@ -20,10 +20,13 @@ const onClick = () => {
 }
 </script>
 <template>
-<a href="#" :class="{ disabled, active }" @click.stop.prevent="onClick" :title="$t(label) + (shortcut ? ` (${shortcut})` : '')">
-    <div class="d-flex align-items-center gap-2">
+<a href="#" :class="{ disabled, active }" @click.prevent="onClick" :title="$t(label) + (shortcut ? ` (${shortcut})` : '')">
+    <div class="d-flex align-items-center">
         <i v-if="icon" :class="`bi bi-${icon}${iconActive && active ? '-fill' : ''}`"></i>
-        <span :class="labelClass || ''" v-if="label">{{ $t(label) }} <span v-if="shortcut">({{ shortcut }})</span></span>
+        <div :class="`d-flex align-items-start flex-fill ms-2 gap-2 ${labelClass}`" v-if="label">
+            {{ $t(label) }}
+            <small class="text-secondary ms-auto" v-if="shortcut">{{ shortcut }}</small>
+        </div>
     </div>
 </a>
 </template>

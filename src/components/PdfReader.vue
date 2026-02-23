@@ -239,36 +239,7 @@ const importImage = () => {
     imageInput.value?.click();
 };
 
-// const dravingTools = {
-//     pen: {
-//         icon: 'pencil-fill',
-//         label: 'Draw',
-//         shortcut: 'D',
-//     },
-//     line: {
-//         icon: 'slash-lg',
-//         label: 'Line',
-//         shortcut: 'L',
-//     },
-//     rectangle: {
-//         icon: 'square',
-//         label: 'Rectangle',
-//         shortcut: 'R',
-//     },
-//     circle: {
-//         icon: 'circle',
-//         label: 'Circle',
-//         shortcut: 'O',
-//     },
-// }
-
 const dravingTools = [
-    {
-        icon: 'pencil-fill',
-        label: 'Draw',
-        shortcut: 'D',
-        value: 'pen',
-    },
     {
         icon: 'slash-lg',
         label: 'Line',
@@ -286,6 +257,12 @@ const dravingTools = [
         label: 'Circle',
         shortcut: 'O',
         value: 'circle',
+    },
+    {
+        icon: 'pencil-fill',
+        label: 'Draw',
+        shortcut: 'D',
+        value: 'pen',
     },
 ]
 
@@ -335,6 +312,16 @@ const captureSelection = () => {
     resetToolState();
     isSelectionMode.value = !wasActive;
 };
+
+const copySelection = () => {
+    copySelectedStroke();
+    const selection = window.getSelection();
+
+    if (selection) {
+        window.navigator.clipboard.writeText(selection.toString());
+        selection.removeAllRanges();
+    }
+}
 
 // Zoom Management
 const minZoom = 25;
@@ -758,7 +745,7 @@ defineExpose({
                             <ToolItem class="nav-link" label="Import Image" label-class="d-lg-none" shortcut="I" icon="image" :action="importImage" />
                         </li>
                         <li class="nav-item">
-                            <ToolItem class="nav-link" label="Select Area to Whiteboard" label-class="d-lg-none" icon="scissors" :active="isSelectionMode" :action="captureSelection" />
+                            <ToolItem class="nav-link" label="Capture Selection" label-class="d-lg-none" icon="scissors" :active="isSelectionMode" :action="captureSelection" />
                         </li>
                         <li class="nav-item vr bg-white mx-2"></li>
                         <li class="nav-item">
@@ -910,7 +897,7 @@ defineExpose({
                                 <div class="vr bg-primary"></div>
                             </template>
                             <button type="button" class="btn btn-link link-secondary btn-stroke-menu border-0 p-0" :title="$t('Copy')" @click.stop="copySelectedStroke()">
-                                <i class="bi bi-clipboard-fill"></i>
+                                <i class="bi bi-copy"></i>
                             </button>
                             <button type="button" class="btn btn-link link-secondary btn-stroke-menu border-0 p-0" :title="$t('Delete')" @click.stop="deleteSelectedStroke()">
                                 <i class="bi bi-trash-fill"></i>
@@ -949,7 +936,18 @@ defineExpose({
             <PageNumber :page-num="pageNum" :total="activePages.length"/>
             
             <context-menu parent="#pdf-reader" @show="getFromClipboard">
-                menuitems
+                <ToolItem class="dropdown-item" label="Stroke Selection" shortcut="P" icon="cursor-fill" :active="isSelectModeActive" :action="selectStrokeMode" />
+                <ToolItem class="dropdown-item" label="Text Selection" shortcut="S" icon="cursor-text" :active="isTextSelectionMode && !isTextHighlightMode" :disabled="textActionsDisabled" :action="toggleTextSelection" />
+                <ToolItem class="dropdown-item" label="Hand Tool" icon="hand-index-thumb-fill" :active="handToolActive" :action="toggleHandTool" />
+                <li><hr class="dropdown-divider"></li>
+                <ToolItem class="dropdown-item" label="Capture Selection" shortcut="Ctrl+X" icon="scissors" :action="captureSelection" />
+                <ToolItem class="dropdown-item" label="Copy" shortcut="Ctrl+C" icon="copy" :action="copySelection" />
+                <ToolItem class="dropdown-item" label="Paste" shortcut="Ctrl+V" icon="clipboard" :action="insertCopiedStroke" />
+                <li><hr class="dropdown-divider"></li>
+                <ToolItem class="dropdown-item" label="First Page" :disabled="isFirstPage" shortcut="Home" icon="chevron-double-up" :action="scrollToFirstPage" />
+                <ToolItem class="dropdown-item" label="Last Page" :disabled="isLastPage" shortcut="End" icon="chevron-double-down" :action="scrollToLastPage" />
+                <li><hr class="dropdown-divider"></li>
+                <ToolItem class="dropdown-item" label="Properties" shortcut="Ctrl+I" icon="info-circle" :action="showDocumentProperties" />
             </context-menu>
         </div>
 
