@@ -84,7 +84,7 @@ onMounted(() => {
 
 </script>
 <template>
-    <div ref="menuRef" class="dropdown-menu dropdown-menu-dark position-absolute rounded-3 show" :style="style" v-if="show">
+    <div ref="menuRef" class="dropdown-menu dropdown-menu-dark position-absolute rounded-3 d-print-none show" :style="style" v-if="show">
         <slot></slot>
     </div>
 </template>

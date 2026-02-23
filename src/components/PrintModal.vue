@@ -23,11 +23,11 @@ const renderAllPagesForPrint = async () => {
     // Ensure refs/canvases exist
     await nextTick();
 
-    if (!pageCount.value || typeof props.renderPdfPage !== 'function') return;
+    if (!props.pageCount || typeof props.renderPdfPage !== 'function') return;
 
     for (const page of props.pages) {
         if (page.deleted) continue;
-        await props.renderPdfPage(page);
+        await props.renderPdfPage(page.index);
         await nextTick();
     }
 
@@ -183,7 +183,6 @@ const schedulePrintPreview = () => {
 };
 
 const openPrintModal = async () => {
-    if (!props.isFileLoaded) return;
     printError.value = '';
 
     if (!printPageRange.value) {
@@ -199,7 +198,6 @@ const openPrintModal = async () => {
 };
 
 const doSilentPrint = async () => {
-    if (!props.isFileLoaded) return;
     if (!Electron.value?.printImages) {
         printError.value = 'Silent print is not available.';
         return;
@@ -252,8 +250,6 @@ const doSilentPrint = async () => {
 };
 
 const printPage = async () => {
-    if (!props.isFileLoaded) return;
-
     // Prefer custom in-app print modal when available.
     if (canSilentPrint.value) {
         await openPrintModal();

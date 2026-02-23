@@ -947,6 +947,7 @@ defineExpose({
                 <ToolItem class="dropdown-item" label="First Page" :disabled="isFirstPage" shortcut="Home" icon="chevron-double-up" :action="scrollToFirstPage" />
                 <ToolItem class="dropdown-item" label="Last Page" :disabled="isLastPage" shortcut="End" icon="chevron-double-down" :action="scrollToLastPage" />
                 <li><hr class="dropdown-divider"></li>
+                <ToolItem class="dropdown-item" label="Print" shortcut="Ctrl+P" icon="printer" :action="printPage" />
                 <ToolItem class="dropdown-item" label="Properties" shortcut="Ctrl+I" icon="info-circle" :action="showDocumentProperties" />
             </context-menu>
         </div>
