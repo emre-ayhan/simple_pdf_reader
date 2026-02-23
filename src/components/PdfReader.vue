@@ -757,6 +757,9 @@ defineExpose({
                         <li class="nav-item">
                             <ToolItem class="nav-link" label="Import Image" label-class="d-lg-none" shortcut="I" icon="image" :action="importImage" />
                         </li>
+                        <li class="nav-item">
+                            <ToolItem class="nav-link" label="Select Area to Whiteboard" label-class="d-lg-none" icon="scissors" :active="isSelectionMode" :action="captureSelection" />
+                        </li>
                         <li class="nav-item vr bg-white mx-2"></li>
                         <li class="nav-item">
                             <ToolItem class="nav-link" label="Stroke Selection" label-class="d-lg-none" shortcut="P" icon="cursor-fill" :active="isSelectModeActive" :action="selectStrokeMode" />
@@ -767,12 +770,6 @@ defineExpose({
                         <li class="nav-item">
                             <ToolItem class="nav-link" label="Hand Tool" label-class="d-lg-none" icon="hand-index-thumb-fill" :active="handToolActive" :action="toggleHandTool" />
                         </li>
-    
-                        <!-- Capture Image Tool -->
-                        <li class="nav-item">
-                            <ToolItem class="nav-link" label="Select Area to Whiteboard" label-class="d-lg-none" icon="scissors" :active="isSelectionMode" :action="captureSelection" />
-                        </li>
-                        
                         <!-- Pagination -->
                         <li class="nav-item vr bg-white mx-2"></li>
                         <li class="nav-item">
@@ -800,17 +797,20 @@ defineExpose({
                         <!-- Zoom -->
                         <li class="nav-item vr bg-white mx-2"></li>
                         <li class="nav-item">
-                            <ToolItem class="nav-link" label="Zoom In" label-class="d-lg-none" icon="zoom-in" :disabled="zoomPercentage === maxZoom" :action="zoom" :value="1" />
+                            <ToolItem class="nav-link" label="Zoom In" label-class="d-lg-none" icon="zoom-in" :disabled="zoomPercentage === maxZoom || isViewLocked" :action="zoom" :value="1" />
                         </li>
                         <li class="nav-item">
-                            <ToolItem class="nav-link" label="Zoom Out" label-class="d-lg-none" icon="zoom-out" :disabled="zoomPercentage === minZoom" :action="zoom" :value="-1" />
+                            <ToolItem class="nav-link" label="Zoom Out" label-class="d-lg-none" icon="zoom-out" :disabled="zoomPercentage === minZoom || isViewLocked" :action="zoom" :value="-1" />
                         </li>
-                        <li class="nav-item">
-                            <select class="form-control-plaintext" @change="onZoomLevelChange">
+                        <li class="nav-item pe-1">
+                            <select class="form-control-plaintext" @change="onZoomLevelChange" :disabled="isViewLocked">
                                 <option value="fit-width" :selected="zoomPercentage === 100">{{ $t('Fit Width') }}</option>
                                 <option value="fit-height" :selected="false">{{ $t('Fit Height') }}</option>
                                 <option v-for="level in zoomLevels" :value="level" :selected="level === zoomPercentage">{{ level }}%</option>
                             </select>
+                        </li>
+                        <li class="nav-item">
+                            <ToolItem class="nav-link" label="Lock View" label-class="d-lg-none" icon="lock" icon-active :active="isViewLocked" :action="lockView" />
                         </li>
                     </ul>
                 </div>
