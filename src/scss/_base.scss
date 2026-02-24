@@ -79,13 +79,8 @@ body {
                 color: $text-light !important;
             }
 
-            .list-group-item {
-                color: $text-light !important;
-                background-color: transparent !important;
-
-                label {
-                    cursor: pointer !important;
-                }
+            label {
+                cursor: pointer !important;
             }
         }
     }

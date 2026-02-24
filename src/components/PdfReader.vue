@@ -654,7 +654,7 @@ defineExpose({
 <template>
     <div class="container-fluid bg-dark-accent" v-if="isFileLoaded">
         <nav :class="`navbar navbar-expand-lg navbar-dark p-1 fixed-${toolbarPosition}`">
-            <ul class="navbar-nav flex-row">
+            <ul class="navbar-nav">
                 <!-- Thumbnail Sidebar -->
                 <li class="nav-item">
                     <a class="nav-link" href="#" :title="$t('Thumbnail Sidebar')" @click.prevent="toggleThumbnailSidebar" :class="{ active: isThumbnailSidebarVisible }">
@@ -783,7 +783,7 @@ defineExpose({
                     <ToolItem class="nav-link" label="Lock View" label-class="d-lg-none" icon="lock" icon-active :active="isViewLocked" :action="lockView" />
                 </li>
             </ul>
-            <ul class="navbar-nav ms-auto">
+            <ul class="navbar-nav">
                 <li class="nav-item">
                     <ToolItem class="nav-link" label="Save File" label-class="d-lg-none" icon="floppy-fill" :action="handleSaveFile" :disabled="historyStep === savedHistoryStep" />
                 </li>
