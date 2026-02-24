@@ -1,47 +1,19 @@
 <script setup>
 import { Electron } from '../composables/useElectron';
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { onBeforeUnmount, onMounted } from 'vue';
 import { openNewTab, closeTab, activeTabIndex, activeTab, tabs, tabHistory, openTabs, markAsActive, isLastTabOnEmptyState, fileHasUnsavedChanges, activePageHasUnsavedChanges, handleElectronButtonClick, fileDataCache } from '../composables/useTabs';
-import { enableTouchDrawing, toolbarPosition, currentLocale } from '../composables/useAppPreferences.js';
+import { toolbarPosition } from '../composables/useAppPreferences.js';
 import EmptyState from './EmptyState.vue';
+import ToolItem from './ToolItem.vue';
 
 const emit = defineEmits([
     'menu-item-click'
 ]);
 
-
-const onMenuItemClick = (action, value) => {
-    emit('menu-item-click', action, value);
-};
-
-const menuGroups = ['file', 'document', 'preferences'];
-const documentGroups = ['document'];
-
-const activeGroup = ref('file');
-
-const menuItems = computed(() => ({
-    file: [
-        { label: 'New Blank Page', action: 'openNewBlankPage', icon: 'file-earmark-fill' },
-        { label: 'Open', action: 'openFile', icon: 'folder-fill', shortcut: 'Ctrl+O' },
-        { label: 'Save', action: 'saveFile', icon: 'floppy-fill', shortcut: 'Ctrl+S', disabled: !activePageHasUnsavedChanges.value },
-    ],
-    document: [
-        { label: 'First Page', action: 'scrollToFirstPage', icon: 'chevron-double-up', shortcut: 'Home' },
-        { label: 'Last Page', action: 'scrollToLastPage', icon: 'chevron-double-down', shortcut: 'End' },
-        { label: 'Print', action: 'printPage', icon: 'printer', shortcut: 'Ctrl+P' },
-        { label: 'Properties', action: 'showDocumentProperties', icon: 'info-circle' }
-    ],
-    preferences: [
-        { label: 'Language', icon: 'translate', items: [
-                { label: 'English', action: 'changeLocale', value: 'en', icon: currentLocale.value === 'en' ? 'check-circle-fill' : 'circle' },
-                { label: 'Portuguese', action: 'changeLocale', value: 'pt', icon: currentLocale.value === 'pt' ? 'check-circle-fill' : 'circle' },
-                { label: 'Turkish', action: 'changeLocale', value: 'tr', icon: currentLocale.value === 'tr' ? 'check-circle-fill' : 'circle' },
-            ]
-        },
-        { label: enableTouchDrawing.value ? 'Disable Touch Drawing' : 'Enable Touch Drawing', action: 'toggleTouchDrawing', icon: enableTouchDrawing.value ? 'hand-index-thumb-fill' : 'hand-index-thumb' },
-        { label: `Move Toolbar to ${toolbarPosition.value === 'top' ? 'Bottom' : 'Top'}`, action: 'toggleToolbarPosition', icon: toolbarPosition.value === 'top' ? 'arrow-down-square' : 'arrow-up-square' },
-    ]
-}));
+const fileActions = [
+    { label: 'Open File', action: () => emit('menu-item-click', 'openFile'), icon: 'folder-fill' },
+    { label: 'Blank Page', action: () => emit('menu-item-click', 'openNewBlankPage'), icon: 'file-earmark-fill' },
+]
 
 const showDivider = (index) => {
     return activeTabIndex.value !== index && activeTabIndex.value !== index - 1 && index;
@@ -83,12 +55,6 @@ onBeforeUnmount(() => {
 </script>
 <template>
     <ul :class="`nav nav-tabs d-print-none fixed-${toolbarPosition} ${activeTab.emptyState ? 'empty-state' : ''}`" id="appTabs" role="tablist">
-        <!-- Nav Menu -->
-        <li class="nav-item">
-            <a href="#" class="nav-link nav-link-menu" data-bs-toggle="offcanvas" data-bs-target="#appMenu" aria-controls="appMenu" :title="$t('Menu')">
-                {{ $t('Menu') }}
-            </a>
-        </li>
         <template v-for="(tab, index) in tabs" :key="tab">
             <template v-if="!tab.closed">
                 <li class="vr bg-secondary" v-if="showDivider(index)"></li>
@@ -122,53 +88,13 @@ onBeforeUnmount(() => {
     <div class="tab-content" id="appTabContent">
         <template v-for="(tab, index) in tabs">
             <div class="tab-pane" :class="{ 'active show': index === activeTabIndex }" tabindex="0" v-if="!tab.closed">
-                <EmptyState v-if="tab.emptyState" @open-file="emit('menu-item-click', 'openFile')" />
+                <empty-state v-if="tab.emptyState">
+                    <template v-for="item in fileActions">
+                        <div class="mb-2"><ToolItem class="text-decoration-none" v-bind="item" /></div>
+                    </template>
+                </empty-state>
                 <slot></slot>
             </div>
         </template>
-    </div>
-    <div class="offcanvas offcanvas-start" tabindex="-1" id="appMenu" aria-labelledby="appMenuLabel">
-        <div class="offcanvas-header">
-            <h4 class="offcanvas-title text-primary" id="appMenuLabel">
-                <i class="bi bi-file-earmark-pdf-fill"></i>
-                Simple PDF Reader
-            </h4>
-            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-        </div>
-        <div class="offcanvas-body pb-0">
-            <div class="d-flex">
-                <ul class="nav flex-column">
-                    <li class="nav-item" v-for="group in menuGroups" :key="group">
-                        <a href="#" class="nav-link text-capitalize" :class="{ active: activeGroup === group, 'text-secondary': activeGroup !== group }" @click.prevent="activeGroup = group">
-                            {{ $t(group) }}
-                        </a>
-                    </li>
-                </ul>
-                <div class="vr me-2"></div>
-                <div class="list-group list-group-flush small flex-fill">
-                    <template v-for="(item, menuItemIndex) in menuItems[activeGroup]">
-                        <a class="list-group-item list-group-item-action" data-bs-dismiss="offcanvas" :class="{ disabled: activeTab.emptyState && documentGroups.includes(activeGroup) || item.disabled }" href="#" @click.prevent="onMenuItemClick(item.action, item.value)" v-if="!item.items">
-                            <i :class="`bi bi-${item.icon} me-1`"></i>
-                            {{ $t(item.label) }} <span v-if="item.shortcut">({{ item.shortcut }})</span>
-                        </a>
-                        <template v-else>
-                            <button class="list-group-item list-group-item-action" type="button"  data-bs-toggle="collapse" :data-bs-target="`#menu_item_${menuItemIndex}`" aria-expanded="false" :aria-controls="`menu_item_${menuItemIndex}`">
-                                <i :class="`bi bi-${item.icon} me-1`"></i>
-                                {{ $t(item.label) }}
-                                <i class="bi bi-caret-down-fill small"></i>
-                            </button>
-                            <div class="collapse small ps-3 pt-1" :id="`menu_item_${menuItemIndex}`">
-                                <template v-for="subItem in item.items">
-                                    <a class="list-group-item list-group-item-action" :class="{ disabled: activeTab.emptyState && documentGroups.includes(activeGroup) || subItem.disabled }" href="#" @click.prevent="onMenuItemClick(subItem.action, subItem.value)">
-                                        <i :class="`bi bi-${subItem.icon} me-1`"></i>
-                                        {{ $t(subItem.label) }} <span v-if="subItem.shortcut">({{ subItem.shortcut }})</span>
-                                    </a>
-                                </template>
-                            </div>
-                        </template>
-                    </template>
-                </div>
-            </div>
-        </div>
     </div>
 </template>
