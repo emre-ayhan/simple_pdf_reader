@@ -387,23 +387,6 @@ const zoom = (direction) => {
     handleZoomLevel(newZoom);
 }
 
-const pdfActions = {
-    lockView,
-    zoomIn:  () => zoom(1),
-    zoomOut: () => zoom(-1),
-    rotateClockwise: () => rotatePage('clockwise'),
-    rotateCounterClockwise: () => rotatePage('counterclockwise'),
-    insertBlankPage: handleInsertBlankPage,
-    deletePage: () => deletePage(pageIndex.value, addToHistory),
-    insertCopiedStroke,
-    undo,
-    redo,
-    captureSelection,
-    selectStrokeMode,
-    toggleTextSelection,
-    toggleHandTool,
-}
-
 const hasActiveTool = computed(() => {
     return isDrawing.value || isEraser.value || isTextInputMode.value || isSelectionMode.value || isTextHighlightMode.value;
 });
@@ -411,13 +394,10 @@ const hasActiveTool = computed(() => {
 let resizeTimeout = null;
 
 const printModal = ref(null);
+
 const printPage = () => {
     printModal.value?.printPage();
 };
-
-const isAnyInputFocused = computed(() => {
-    return (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA' || document.activeElement.isContentEditable) || isTextInputMode.value);
-});
 
 // Page Event Handlers
 useWindowEvents(fileId, {
@@ -439,10 +419,14 @@ useWindowEvents(fileId, {
         }
     },
     keydown: {
+        disabled: () => {
+            return document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA' || document.activeElement.isContentEditable);
+        },
         a: {
             ctrl: true,
-            action: () => {
+            action: (event) => {
                 if (isSelectModeActive.value) {
+                    event.preventDefault();
                     selectStrokes(activePage.value.strokes);
                 }
             }
@@ -455,47 +439,44 @@ useWindowEvents(fileId, {
         },
         d: {
             action: (event) => {
-                if (isAnyInputFocused.value) return;
                 event.preventDefault();
                 selectDrawingTool('pen');
             }
         },
         e: {
             action: (event) => {
-                if (isAnyInputFocused.value) return;
                 event.preventDefault();
                 selectEraser();
             }
         },
         l: {
-            actionAll: (event, ctrl) => {
+            actionAll: (event, ctrl, disabled) => {
                 if (ctrl) {
                     event.preventDefault();
                     lockView();
                     return;
                 }
 
-                if (isAnyInputFocused.value) return;
+                if (disabled) return;
                 event.preventDefault();
                 selectDrawingTool('line');
             }
         },
         r: {
             action: (event) => {
-                if (isAnyInputFocused.value) return;
                 event.preventDefault();
                 selectDrawingTool('rectangle');
             }
         },
         o: {
-            actionAll: (event, ctrl) => {
+            actionAll: (event, ctrl, disabled) => {
                 if (ctrl) {
                     event.preventDefault();
                     handleFileOpen();
                     return;
                 }
 
-                if (isAnyInputFocused.value) return;
+                if (disabled) return;
                 event.preventDefault();
                 selectDrawingTool('circle');
             }
@@ -517,34 +498,31 @@ useWindowEvents(fileId, {
         },
         e: {
             action: (event) => {
-                if (isAnyInputFocused.value) return;
                 event.preventDefault();
                 selectEraser();
             }
         },
         h: {
             action: (event) => {
-                if (isAnyInputFocused.value) return;
                 event.preventDefault();
                 toggleTextHighlightMode();
             }
         },
         t: {
             action: (event) => {
-                if (isAnyInputFocused.value) return;
                 event.preventDefault();
                 selectText();
             }
         },
         s: {
-            actionAll: (event, ctrl) => {
+            actionAll: (event, ctrl, disabled) => {
                 if (ctrl) {
                     event.preventDefault();
                     handleSaveFile();
                     return;
                 }
 
-                if (isAnyInputFocused.value) return;
+                if (disabled) return;
                 event.preventDefault();
                 toggleTextSelection();
             }
@@ -570,7 +548,6 @@ useWindowEvents(fileId, {
         v: {
             ctrl: true,
             action: () => {
-                if (isAnyInputFocused.value) return;
                 insertCopiedStroke();
             }
         },
@@ -587,14 +564,14 @@ useWindowEvents(fileId, {
         },
         Home: {
             action: (event) => {
-                if (isFirstPage.value || isAnyInputFocused.value) return;
+                if (isFirstPage.value) return;
                 event.preventDefault();
                 scrollToFirstPage();
             }
         },
         End: {
             action: (event) => {
-                if (isLastPage.value || isAnyInputFocused.value) return;
+                if (isLastPage.value) return;
                 event.preventDefault();
                 scrollToLastPage();
             }
@@ -608,13 +585,13 @@ useWindowEvents(fileId, {
         },
         ArrowLeft: {
             action: () => {
-                if (isFirstPage.value || isAnyInputFocused.value) return;
+                if (isFirstPage.value) return;
                 scrollToPage(pageIndex.value - 1);
             }
         },
         ArrowRight: {
             action: () => {
-                if (isLastPage.value || isAnyInputFocused.value) return;
+                if (isLastPage.value) return;
                 scrollToPage(pageIndex.value + 1);
             }
         },

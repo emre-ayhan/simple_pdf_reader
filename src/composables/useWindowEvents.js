@@ -1,4 +1,4 @@
-import { onMounted, onUnmounted } from "vue";
+import { computed, onMounted, onUnmounted } from "vue";
 import { useHistory } from "./useHistory";
 
 const { activeSessionId } = useHistory();
@@ -8,15 +8,20 @@ export function useWindowEvents(fileId, eventSettings = {}) {
         keydown(event, options) {
             if (activeSessionId.value !== fileId) return;
             if (Object.keys(options).length === 0) return;
+
+            const isDisabled = computed(typeof options.disabled === "function" ? options.disabled : () => false);
+
             const settings = options[event.key];
 
             if (!settings) return;
 
             const isCtrlPressed = event.ctrlKey || event.metaKey;
             if (settings.actionAll) {
-                settings.actionAll(event, isCtrlPressed);
+                settings.actionAll(event, isCtrlPressed, isDisabled.value);
                 return;
             }
+            
+            if (isDisabled.value) return;
 
             if (!!settings.ctrl === isCtrlPressed) {
                 if (!!settings.ctrl) {
