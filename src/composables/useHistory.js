@@ -26,6 +26,7 @@ export function useHistory(fileId, redrawAllStrokes) {
             markAsActive
         };
     }
+
     const history = ref([]);
     const historyStep = ref(-1);
     const savedHistoryStep = ref(-1);

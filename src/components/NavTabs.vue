@@ -1,7 +1,7 @@
 <script setup>
 import { Electron } from '../composables/useElectron';
 import { onBeforeUnmount, onMounted } from 'vue';
-import { openNewTab, closeTab, activeTabIndex, activeTab, tabs, tabHistory, openTabs, markAsActive, isLastTabOnEmptyState, fileHasUnsavedChanges, activePageHasUnsavedChanges, handleElectronButtonClick, fileDataCache } from '../composables/useTabs';
+import { openNewTab, closeTab, activeTabIndex, activeTab, tabs, tabHistory, openTabs, markAsActive, isLastTabOnEmptyState, fileHasUnsavedChanges, handleElectronButtonClick, fileDataCache } from '../composables/useTabs';
 import { toolbarPosition } from '../composables/useAppPreferences.js';
 import EmptyState from './EmptyState.vue';
 import ToolItem from './ToolItem.vue';

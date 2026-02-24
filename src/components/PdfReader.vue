@@ -161,6 +161,8 @@ const {
     canRedo,
     resetHistory, 
     saveCurrentHistoryStep,
+    savedHistoryStep,
+    historyStep,
 } = useHistory(fileId, redrawAllStrokes);
 
 startSession();
@@ -646,13 +648,6 @@ onUnmounted(() => {
 defineExpose({
     openNewBlankPage: createNewBlankPage,
     openFile: handleFileOpen,
-    saveFile: handleSaveFile,
-    printPage,
-    scrollToFirstPage,
-    scrollToLastPage,
-    resetAllTools,
-    showDocumentProperties,
-    loadFile,
 })
 </script>
 <template>
@@ -668,132 +663,130 @@ defineExpose({
                 <!-- Search -->
                 <Search :pages="pages" :disabled="textActionsDisabled" :scrollToPage="scrollToPage" />
             </ul>
-            <button class="nav-link d-lg-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasNavbar" aria-controls="offcanvasNavbar" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasNavbar" aria-labelledby="offcanvasNavbarLabel">
-                <div class="offcanvas-body">
-                    <!-- Toolbar -->
-                    <ul ref="toolbar" class="navbar-nav mx-auto gap-1">
-                        <!-- Drawing -->
-                        <template v-if="isDrawing || isTextInputMode || isTextHighlightMode">
-                            <li class="nav-item" v-for="({ color }, index) in initialStrokeStyles">
-                                <ToolItem class="nav-link" icon="circle-fill" :action="handleStrokeStyleButtonClick" :value="index" :active="color === drawColor" :style="`color: ${color} !important`" />
-                            </li>
-                            <li class="nav-item btn-group">
-                                <a href="#" role="button" class="nav-link" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
-                                    <i class="bi bi-palette-fill"></i>
-                                </a>
-                                <div class="dropdown-menu dropdown-menu-dark rounded-3 mt-2 p-3">
-                                    <div class="mb-3">
-                                        <div class="form-label">{{ $t('Color') }}</div>
-                                        <div class="row row-cols-5">
-                                            <template v-for="color in colors">
-                                                <div class="col" v-if="!initialStrokeStyles.find(el => el.color === color)">
-                                                    <div role="button" class="fs-3" :style="{ color }" @click="setInitialStrokeColor(color)" :title="color">
-                                                        <i class="bi bi-circle-fill"></i>
-                                                    </div>
-                                                </div>
-                                            </template>
+            <!-- Toolbar -->
+            <ul ref="toolbar" class="navbar-nav mx-auto gap-1">
+                <!-- Drawing -->
+                <template v-if="isDrawing || isTextInputMode || isTextHighlightMode">
+                    <li class="nav-item" v-for="({ color }, index) in initialStrokeStyles">
+                        <ToolItem class="nav-link" icon="circle-fill" :action="handleStrokeStyleButtonClick" :value="index" :active="color === drawColor" :style="`color: ${color} !important`" />
+                    </li>
+                    <li class="nav-item btn-group">
+                        <a href="#" role="button" class="nav-link" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                            <i class="bi bi-palette-fill"></i>
+                        </a>
+                        <div class="dropdown-menu dropdown-menu-dark rounded-3 mt-2 p-3">
+                            <div class="mb-3">
+                                <div class="form-label">{{ $t('Color') }}</div>
+                                <div class="row row-cols-5">
+                                    <template v-for="color in colors">
+                                        <div class="col" v-if="!initialStrokeStyles.find(el => el.color === color)">
+                                            <div role="button" class="fs-3" :style="{ color }" @click="setInitialStrokeColor(color)" :title="color">
+                                                <i class="bi bi-circle-fill"></i>
+                                            </div>
                                         </div>
-                                        <div class="mb-2">
-                                            <svg width="100%" height="40" viewBox="0 0 200 40" preserveAspectRatio="none">
-                                                <path 
-                                                    d="M 0,20 Q 25,5 50,20 T 100,20 T 150,20 T 200,20" 
-                                                    fill="none" 
-                                                    :stroke="activeStrokeStyle?.color" 
-                                                    :stroke-width="activeStrokeStyle?.thickness" 
-                                                    stroke-linecap="round"
-                                                />
-                                            </svg>
-                                        </div>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label class="form-label">{{ $t('Thickness') }}</label>
-                                        <div class="d-flex align-items-center">
-                                            <input type="range" class="form-range" min="1" max="10" :value="activeStrokeStyle?.thickness" @input="setInitialStrokeThickness($event.target.value)" />
-                                            <input type="text" class="form-control-plaintext" min="1" max="10" :value="activeStrokeStyle?.thickness" readonly />
-                                        </div>
-                                    </div>
+                                    </template>
                                 </div>
-                            </li>
-                            <li class="nav-item vr"></li>
-                        </template>
-                        <li class="nav-item" v-if="isDrawing || isEraser">
-                            <ToolItem class="nav-link" label="Eraser" label-class="d-lg-none" shortcut="E" icon="eraser-fill" :active="isEraser" :disabled="drawMode !== 'pen'" :action="selectEraser" />
-                        </li>
-                        <template v-for="tool in dravingTools">
-                            <li class="nav-item" v-if="isDrawing || isEraser || tool.value === 'pen'">
-                                <ToolItem class="nav-link" v-bind="tool" :action="selectDrawingTool" :active="drawMode === tool.value && isDrawing" label-class="d-lg-none" />
-                            </li>
-                        </template>
-                        <li class="nav-item">
-                            <ToolItem class="nav-link" label="Highlight Text" label-class="d-lg-none" shortcut="H" icon="highlighter" :active="isTextHighlightMode" :disabled="textActionsDisabled" :action="toggleTextHighlightMode" />
-                        </li>
-                        <li class="nav-item">
-                            <ToolItem class="nav-link" label="Add Text" label-class="d-lg-none" shortcut="T" icon="textarea-t" :active="isTextInputMode" :action="selectText" />
-                        </li>
-                        <li class="nav-item">
-                            <ToolItem class="nav-link" label="Import Image" label-class="d-lg-none" shortcut="I" icon="image" :action="importImage" />
-                        </li>
-                        <li class="nav-item">
-                            <ToolItem class="nav-link" label="Capture Selection" label-class="d-lg-none" icon="scissors" :active="isSelectionMode" :action="captureSelection" />
-                        </li>
-                        <li class="nav-item vr"></li>
-                        <li class="nav-item">
-                            <ToolItem class="nav-link" label="Stroke Selection" label-class="d-lg-none" shortcut="P" icon="cursor-fill" :active="isSelectModeActive" :action="selectStrokeMode" />
-                        </li>
-                        <li class="nav-item">
-                            <ToolItem class="nav-link" label="Text Selection" label-class="d-lg-none" shortcut="S" icon="cursor-text" :active="isTextSelectionMode && !isTextHighlightMode" :disabled="textActionsDisabled" :action="toggleTextSelection" />
-                        </li>
-                        <li class="nav-item">
-                            <ToolItem class="nav-link" label="Hand Tool" label-class="d-lg-none" icon="hand-index-thumb-fill" :active="handToolActive" :action="toggleHandTool" />
-                        </li>
-                        <!-- Pagination -->
-                        <li class="nav-item vr"></li>
-                        <li class="nav-item">
-                            <div class="input-group align-items-center flex-nowrap">
-                                <input type="text" class="form-control-plaintext" v-model="pageNum" @input="handlePageNumberInput" />
-                                <span class="text-secondary pe-1">/ {{ activePages.length }}</span>
+                                <div class="mb-2">
+                                    <svg width="100%" height="40" viewBox="0 0 200 40" preserveAspectRatio="none">
+                                        <path 
+                                            d="M 0,20 Q 25,5 50,20 T 100,20 T 150,20 T 200,20" 
+                                            fill="none" 
+                                            :stroke="activeStrokeStyle?.color" 
+                                            :stroke-width="activeStrokeStyle?.thickness" 
+                                            stroke-linecap="round"
+                                        />
+                                    </svg>
+                                </div>
                             </div>
-                        </li>
-                        <li class="nav-item">
-                            <ToolItem class="nav-link" label="Previous Page" label-class="d-lg-none" shortcut="ArrowLeft" icon="chevron-up" :action="scrollToPage" :value="pageIndex - 1" :disabled="isFirstPage" />
-                        </li>
-                        <li class="nav-item">
-                            <ToolItem class="nav-link" label="Next Page" label-class="d-lg-none" shortcut="ArrowRight" icon="chevron-down" :action="scrollToPage" :value="pageIndex + 1" :disabled="isLastPage" />
-                        </li>
+                            <div class="mb-3">
+                                <label class="form-label">{{ $t('Thickness') }}</label>
+                                <div class="d-flex align-items-center">
+                                    <input type="range" class="form-range" min="1" max="10" :value="activeStrokeStyle?.thickness" @input="setInitialStrokeThickness($event.target.value)" />
+                                    <input type="text" class="form-control-plaintext" min="1" max="10" :value="activeStrokeStyle?.thickness" readonly />
+                                </div>
+                            </div>
+                        </div>
+                    </li>
+                    <li class="nav-item vr"></li>
+                </template>
+                <li class="nav-item" v-if="isDrawing || isEraser">
+                    <ToolItem class="nav-link" label="Eraser" label-class="d-lg-none" shortcut="E" icon="eraser-fill" :active="isEraser" :disabled="drawMode !== 'pen'" :action="selectEraser" />
+                </li>
+                <template v-for="tool in dravingTools">
+                    <li class="nav-item" v-if="isDrawing || isEraser || tool.value === 'pen'">
+                        <ToolItem class="nav-link" v-bind="tool" :action="selectDrawingTool" :active="drawMode === tool.value && isDrawing" label-class="d-lg-none" />
+                    </li>
+                </template>
+                <li class="nav-item">
+                    <ToolItem class="nav-link" label="Highlight Text" label-class="d-lg-none" shortcut="H" icon="highlighter" :active="isTextHighlightMode" :disabled="textActionsDisabled" :action="toggleTextHighlightMode" />
+                </li>
+                <li class="nav-item">
+                    <ToolItem class="nav-link" label="Add Text" label-class="d-lg-none" shortcut="T" icon="textarea-t" :active="isTextInputMode" :action="selectText" />
+                </li>
+                <li class="nav-item">
+                    <ToolItem class="nav-link" label="Import Image" label-class="d-lg-none" shortcut="I" icon="image" :action="importImage" />
+                </li>
+                <li class="nav-item">
+                    <ToolItem class="nav-link" label="Capture Selection" label-class="d-lg-none" icon="scissors" :active="isSelectionMode" :action="captureSelection" />
+                </li>
+                <li class="nav-item vr"></li>
+                <li class="nav-item">
+                    <ToolItem class="nav-link" label="Stroke Selection" label-class="d-lg-none" shortcut="P" icon="cursor-fill" :active="isSelectModeActive" :action="selectStrokeMode" />
+                </li>
+                <li class="nav-item">
+                    <ToolItem class="nav-link" label="Text Selection" label-class="d-lg-none" shortcut="S" icon="cursor-text" :active="isTextSelectionMode && !isTextHighlightMode" :disabled="textActionsDisabled" :action="toggleTextSelection" />
+                </li>
+                <li class="nav-item">
+                    <ToolItem class="nav-link" label="Hand Tool" label-class="d-lg-none" icon="hand-index-thumb-fill" :active="handToolActive" :action="toggleHandTool" />
+                </li>
+                <!-- Pagination -->
+                <li class="nav-item vr"></li>
+                <li class="nav-item">
+                    <div class="input-group align-items-center flex-nowrap">
+                        <input type="text" class="form-control-plaintext" v-model="pageNum" @input="handlePageNumberInput" />
+                        <span class="text-secondary pe-1">/ {{ activePages.length }}</span>
+                    </div>
+                </li>
+                <li class="nav-item">
+                    <ToolItem class="nav-link" label="Previous Page" label-class="d-lg-none" shortcut="ArrowLeft" icon="chevron-up" :action="scrollToPage" :value="pageIndex - 1" :disabled="isFirstPage" />
+                </li>
+                <li class="nav-item">
+                    <ToolItem class="nav-link" label="Next Page" label-class="d-lg-none" shortcut="ArrowRight" icon="chevron-down" :action="scrollToPage" :value="pageIndex + 1" :disabled="isLastPage" />
+                </li>
 
-                        <!-- History -->
-                        <li class="nav-item vr"></li>
-                        <li class="nav-item">
-                            <ToolItem class="nav-link" label="Undo" label-class="d-lg-none" shortcut="Ctrl+Z" icon="arrow-counterclockwise" :action="undo" :disabled="!canUndo" />
-                        </li>
-                        <li class="nav-item">
-                            <ToolItem class="nav-link" label="Redo" label-class="d-lg-none" shortcut="Ctrl+Y" icon="arrow-clockwise" :action="redo" :disabled="!canRedo" />
-                        </li>
+                <!-- History -->
+                <li class="nav-item vr"></li>
+                <li class="nav-item">
+                    <ToolItem class="nav-link" label="Undo" label-class="d-lg-none" shortcut="Ctrl+Z" icon="arrow-counterclockwise" :action="undo" :disabled="!canUndo" />
+                </li>
+                <li class="nav-item">
+                    <ToolItem class="nav-link" label="Redo" label-class="d-lg-none" shortcut="Ctrl+Y" icon="arrow-clockwise" :action="redo" :disabled="!canRedo" />
+                </li>
 
-                        <!-- Zoom -->
-                        <li class="nav-item vr"></li>
-                        <li class="nav-item">
-                            <ToolItem class="nav-link" label="Zoom In" label-class="d-lg-none" icon="zoom-in" :disabled="zoomPercentage === maxZoom || isViewLocked" :action="zoom" :value="1" />
-                        </li>
-                        <li class="nav-item">
-                            <ToolItem class="nav-link" label="Zoom Out" label-class="d-lg-none" icon="zoom-out" :disabled="zoomPercentage === minZoom || isViewLocked" :action="zoom" :value="-1" />
-                        </li>
-                        <li class="nav-item">
-                            <select class="form-control-plaintext" @change="onZoomLevelChange" :disabled="isViewLocked">
-                                <option value="fit-width" :selected="zoomPercentage === 100">{{ $t('Fit Width') }}</option>
-                                <option value="fit-height" :selected="false">{{ $t('Fit Height') }}</option>
-                                <option v-for="level in zoomLevels" :value="level" :selected="level === zoomPercentage">{{ level }}%</option>
-                            </select>
-                        </li>
-                        <li class="nav-item">
-                            <ToolItem class="nav-link" label="Lock View" label-class="d-lg-none" icon="lock" icon-active :active="isViewLocked" :action="lockView" />
-                        </li>
-                    </ul>
-                </div>
-            </div>
+                <!-- Zoom -->
+                <li class="nav-item vr"></li>
+                <li class="nav-item">
+                    <ToolItem class="nav-link" label="Zoom In" label-class="d-lg-none" icon="zoom-in" :disabled="zoomPercentage === maxZoom || isViewLocked" :action="zoom" :value="1" />
+                </li>
+                <li class="nav-item">
+                    <ToolItem class="nav-link" label="Zoom Out" label-class="d-lg-none" icon="zoom-out" :disabled="zoomPercentage === minZoom || isViewLocked" :action="zoom" :value="-1" />
+                </li>
+                <li class="nav-item">
+                    <select class="form-control-plaintext" @change="onZoomLevelChange" :disabled="isViewLocked">
+                        <option value="fit-width" :selected="zoomPercentage === 100">{{ $t('Fit Width') }}</option>
+                        <option value="fit-height" :selected="false">{{ $t('Fit Height') }}</option>
+                        <option v-for="level in zoomLevels" :value="level" :selected="level === zoomPercentage">{{ level }}%</option>
+                    </select>
+                </li>
+                <li class="nav-item">
+                    <ToolItem class="nav-link" label="Lock View" label-class="d-lg-none" icon="lock" icon-active :active="isViewLocked" :action="lockView" />
+                </li>
+            </ul>
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item">
+                    <ToolItem class="nav-link" label="Save File" label-class="d-lg-none" icon="floppy2" :action="handleSaveFile" :disabled="historyStep === savedHistoryStep" />
+                </li>
+            </ul>
         </nav>
         <div id="pdf-reader" ref="pdfReader" :class="`pdf-reader toolbar-${toolbarPosition} ${isViewLocked ? 'overflow-hidden' : ''}`">
             <ThumbnailSidebar 

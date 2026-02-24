@@ -631,7 +631,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
                         const y = height - (first.y * scaleY);
                         const textSize = (first.fontSize || 16) * scaleX;
                         
-                        page.drawText(first.text, {
+                        pdfPage.drawText(first.text, {
                             x: x,
                             y: y - textSize,
                             size: textSize,
@@ -645,7 +645,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
                         const endX = first.endX * scaleX;
                         const endY = height - (first.endY * scaleY);
 
-                        page.drawLine({
+                        pdfPage.drawLine({
                             start: { x: startX, y: startY },
                             end: { x: endX, y: endY },
                             thickness: thickness,
@@ -658,7 +658,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
                         const w = (first.endX - first.startX) * scaleX;
                         const h = (first.endY - first.startY) * scaleY;
 
-                        page.drawRectangle({
+                        pdfPage.drawRectangle({
                             x: x,
                             y: y - h,
                             width: w,
@@ -675,7 +675,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
                             Math.pow((first.endY - first.startY) * scaleY, 2)
                         );
 
-                        page.drawCircle({
+                        pdfPage.drawCircle({
                             x: centerX,
                             y: centerY,
                             size: radius,
@@ -692,7 +692,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
                             const y = height - (rect.y * scaleY) - h;
                             const w = rect.width * scaleX;
 
-                            page.drawRectangle({
+                            pdfPage.drawRectangle({
                                 x: x,
                                 y: y,
                                 width: w,
@@ -713,7 +713,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
                             const x2 = point2.x * scaleX;
                             const y2 = height - (point2.y * scaleY);
 
-                            page.drawLine({
+                            pdfPage.drawLine({
                                 start: { x: x1, y: y1 },
                                 end: { x: x2, y: y2 },
                                 thickness: (point1.thickness || 2) * scaleX,
@@ -736,7 +736,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
                             const imageWidth = first.width * scaleX;
                             const imageHeight = first.height * scaleY;
                             
-                            page.drawImage(image, {
+                            pdfPage.drawImage(image, {
                                 x: first.x * scaleX,
                                 y: height - (first.y * scaleY) - imageHeight,
                                 width: imageWidth,

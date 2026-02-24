@@ -65,15 +65,21 @@
         padding: 4px 8px !important;
     }
 
-    .nav-item.btn-group {
-        .dropdown-menu {
-            min-width: 256px;
+    .nav-item {
+        &.vr {
+            background-color: $text-description;
+        }
 
-            input[type="color"] {
-                border: none !important;
-                padding: 0 !important;
-                cursor: pointer;
-                outline: none !important;
+        &.btn-group {
+            .dropdown-menu {
+                min-width: 256px;
+
+                input[type="color"] {
+                    border: none !important;
+                    padding: 0 !important;
+                    cursor: pointer;
+                    outline: none !important;
+                }
             }
         }
     }
