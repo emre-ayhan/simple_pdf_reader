@@ -147,6 +147,7 @@ const {
     isSelectedStrokeType,
     copiedStroke,
     copiedStrokes,
+    selectStrokes,
 } = useDraw(pagesContainer, activePage, strokeChangeCallback);
 
 // History management
@@ -376,7 +377,7 @@ const handleZoomLevel = (percentage) => {
 };
 
 const onZoomLevelChange = (event) => {
-    let percentage = event.target.value;    
+    let percentage = event.target.value;
     handleZoomLevel(percentage);
 }
 
@@ -438,6 +439,20 @@ useWindowEvents(fileId, {
         }
     },
     keydown: {
+        a: {
+            ctrl: true,
+            action: () => {
+                if (isSelectModeActive.value) {
+                    selectStrokes(activePage.value.strokes);
+                }
+            }
+        },
+        c: {
+            ctrl: true,
+            action: () => {
+                copySelection();
+            }
+        },
         d: {
             action: (event) => {
                 if (isAnyInputFocused.value) return;
@@ -682,7 +697,7 @@ defineExpose({
             <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasNavbar" aria-labelledby="offcanvasNavbarLabel">
                 <div class="offcanvas-body">
                     <!-- Toolbar -->
-                    <ul ref="toolbar" class="navbar-nav mx-auto">
+                    <ul ref="toolbar" class="navbar-nav mx-auto gap-1">
                         <!-- Drawing -->
                         <template v-if="isDrawing || isTextInputMode || isTextHighlightMode">
                             <li class="nav-item" v-for="({ color }, index) in initialStrokeStyles">
@@ -725,7 +740,7 @@ defineExpose({
                                     </div>
                                 </div>
                             </li>
-                            <li class="nav-item vr bg-white mx-2"></li>
+                            <li class="nav-item vr"></li>
                         </template>
                         <li class="nav-item" v-if="isDrawing || isEraser">
                             <ToolItem class="nav-link" label="Eraser" label-class="d-lg-none" shortcut="E" icon="eraser-fill" :active="isEraser" :disabled="drawMode !== 'pen'" :action="selectEraser" />
@@ -747,7 +762,7 @@ defineExpose({
                         <li class="nav-item">
                             <ToolItem class="nav-link" label="Capture Selection" label-class="d-lg-none" icon="scissors" :active="isSelectionMode" :action="captureSelection" />
                         </li>
-                        <li class="nav-item vr bg-white mx-2"></li>
+                        <li class="nav-item vr"></li>
                         <li class="nav-item">
                             <ToolItem class="nav-link" label="Stroke Selection" label-class="d-lg-none" shortcut="P" icon="cursor-fill" :active="isSelectModeActive" :action="selectStrokeMode" />
                         </li>
@@ -758,7 +773,7 @@ defineExpose({
                             <ToolItem class="nav-link" label="Hand Tool" label-class="d-lg-none" icon="hand-index-thumb-fill" :active="handToolActive" :action="toggleHandTool" />
                         </li>
                         <!-- Pagination -->
-                        <li class="nav-item vr bg-white mx-2"></li>
+                        <li class="nav-item vr"></li>
                         <li class="nav-item">
                             <div class="input-group align-items-center flex-nowrap">
                                 <input type="text" class="form-control-plaintext" v-model="pageNum" @input="handlePageNumberInput" />
@@ -773,7 +788,7 @@ defineExpose({
                         </li>
 
                         <!-- History -->
-                        <li class="nav-item vr bg-white mx-2"></li>
+                        <li class="nav-item vr"></li>
                         <li class="nav-item">
                             <ToolItem class="nav-link" label="Undo" label-class="d-lg-none" shortcut="Ctrl+Z" icon="arrow-counterclockwise" :action="undo" :disabled="!canUndo" />
                         </li>
@@ -782,14 +797,14 @@ defineExpose({
                         </li>
 
                         <!-- Zoom -->
-                        <li class="nav-item vr bg-white mx-2"></li>
+                        <li class="nav-item vr"></li>
                         <li class="nav-item">
                             <ToolItem class="nav-link" label="Zoom In" label-class="d-lg-none" icon="zoom-in" :disabled="zoomPercentage === maxZoom || isViewLocked" :action="zoom" :value="1" />
                         </li>
                         <li class="nav-item">
                             <ToolItem class="nav-link" label="Zoom Out" label-class="d-lg-none" icon="zoom-out" :disabled="zoomPercentage === minZoom || isViewLocked" :action="zoom" :value="-1" />
                         </li>
-                        <li class="nav-item pe-1">
+                        <li class="nav-item">
                             <select class="form-control-plaintext" @change="onZoomLevelChange" :disabled="isViewLocked">
                                 <option value="fit-width" :selected="zoomPercentage === 100">{{ $t('Fit Width') }}</option>
                                 <option value="fit-height" :selected="false">{{ $t('Fit Height') }}</option>
@@ -946,6 +961,9 @@ defineExpose({
                 <li><hr class="dropdown-divider"></li>
                 <ToolItem class="dropdown-item" label="First Page" :disabled="isFirstPage" shortcut="Home" icon="chevron-double-up" :action="scrollToFirstPage" />
                 <ToolItem class="dropdown-item" label="Last Page" :disabled="isLastPage" shortcut="End" icon="chevron-double-down" :action="scrollToLastPage" />
+                <li><hr class="dropdown-divider"></li>
+                <ToolItem class="dropdown-item" label="Rotate Clockwise" icon="arrow-clockwise" :action="rotatePage" value="clockwise" />
+                <ToolItem class="dropdown-item" label="Rotate Counterclockwise" icon="arrow-counterclockwise" :action="rotatePage" value="counterclockwise" />
                 <li><hr class="dropdown-divider"></li>
                 <ToolItem class="dropdown-item" label="Print" shortcut="Ctrl+P" icon="printer" :action="printPage" />
                 <ToolItem class="dropdown-item" label="Properties" shortcut="Ctrl+I" icon="info-circle" :action="showDocumentProperties" />

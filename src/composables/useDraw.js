@@ -302,6 +302,30 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         }
     }
 
+    const selectStrokes = (strokes) => {
+        if (!Array.isArray(strokes) || strokes.length === 0) return;
+        const targetPageIndex = activePage.value.index;
+
+        const selections = strokes.map((stroke, strokeIndex) => {
+            return {
+                pageIndex: targetPageIndex,
+                strokeIndex,
+                stroke,
+                originalStroke: JSON.parse(JSON.stringify(stroke))
+            }
+        })
+
+        selectedStrokes.value = selections;
+        selectedStroke.value = selections[0] || null;
+        showStrokeMenu.value = true;
+
+        redrawAllStrokes(targetPageIndex);
+
+        if (selectedStroke.value) {
+            drawSelectionBoundingBox(targetPageIndex, selectedStroke.value.strokeIndex);
+        }
+    }
+
     // Insert Copied Stroke
     const insertCopiedStroke = () => {
         if (!copiedStroke.value) return;
@@ -3085,6 +3109,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         copySelectedStroke,
         insertCopiedStroke,
         getFromClipboard,
-        isSelectedStrokeType
+        isSelectedStrokeType,
+        selectStrokes,
     };
 }
