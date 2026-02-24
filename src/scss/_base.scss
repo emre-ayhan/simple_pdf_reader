@@ -57,3 +57,37 @@ body {
   width: 100% !important;
 }
 
+.modal-content {
+    background: $dark-bg-gradient !important;
+
+    .nav-tabs {
+        padding-left: 0 !important;
+
+        .nav-link {
+            text-align: center !important;
+        }
+    }
+
+    .tab-pane {
+        &.active {
+            background-color: $dark-bg-accent !important;
+            color: $text-light;
+            height: 512px;
+
+            td, th {
+                background-color: transparent !important;
+                color: $text-light !important;
+            }
+
+            .list-group-item {
+                color: $text-light !important;
+                background-color: transparent !important;
+
+                label {
+                    cursor: pointer !important;
+                }
+            }
+        }
+    }
+}
+

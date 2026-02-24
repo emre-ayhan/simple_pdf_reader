@@ -1,10 +1,18 @@
-import { ref } from "vue";
+import { ref, watch } from "vue";
 import { useStore } from "./useStore";
 
 const store = useStore();
 const enableTouchDrawing = ref(false);
+const moveToolbarBottom = ref(false);
 const toolbarPosition = ref('top');
 const currentLocale = ref('en');
+const availableLocales = ref([{
+    text: 'English',
+    locale: 'en'
+}, {
+    text: 'Türkçe',
+    locale: 'tr'
+}])
 
 // Load preferences from store
 store.get('appPreferences', false).then(preferences => {
@@ -13,7 +21,7 @@ store.get('appPreferences', false).then(preferences => {
     currentLocale.value = preferences?.currentLocale ?? 'en';
 });
 
-const setStore = () => {
+const storePreferences = () => {
     store.set('appPreferences', {
         enableTouchDrawing: enableTouchDrawing.value,
         toolbarPosition: toolbarPosition.value,
@@ -21,27 +29,26 @@ const setStore = () => {
     });
 }
 
-const toggleTouchDrawing = () => {
-    enableTouchDrawing.value = !enableTouchDrawing.value;
-    setStore();
-}
+watch(enableTouchDrawing, (value) => {
+    storePreferences();
+});
 
-const toggleToolbarPosition = () => {
-    const newPosition = toolbarPosition.value === 'top' ? 'bottom' : 'top';
-    toolbarPosition.value = newPosition;
-    setStore();
-}
+watch(moveToolbarBottom, (value) => {
+    toolbarPosition.value = value ? 'bottom' : 'top';
+    storePreferences();
+})
+
 
 const changeLocale = (locale) => {
     currentLocale.value = locale;
-    setStore();
+    storePreferences();
 }
 
 export {
     toolbarPosition,
     enableTouchDrawing,
+    moveToolbarBottom,
     currentLocale,
-    toggleTouchDrawing,
-    toggleToolbarPosition,
+    availableLocales,
     changeLocale
 }

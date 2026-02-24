@@ -2,14 +2,18 @@ import { ref } from "vue";
 const modal = ref(null);
 const message = ref("");
 const mustConfirm = ref(false);
+const modalSize = ref('md')
+const modalTab = ref(null)
 
 let resolver = null;
 
-const showModal = (msg, requireConfirmation) => {
+const showModal = (msg, requireConfirmation, size, tab) => {
     if (modal.value) {
         modal.value.show();
         message.value = msg || "";
         mustConfirm.value = requireConfirmation || false;
+        modalSize.value = size || 'md';
+        modalTab.value = tab || null;
 
         if (mustConfirm.value) {
             return new Promise((resolve) => {
@@ -36,6 +40,8 @@ const confirm = () => {
 
 export {
     modal,
+    modalSize,
+    modalTab,
     message,
     mustConfirm,
     confirm,

@@ -87,6 +87,7 @@ const {
     resyncRenderedTextLayers,
     showDocumentProperties,
     rotatePage,
+    openPreferences,
 } = useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallback, fileSavedCallback);
 
 // Drawing Management
@@ -145,7 +146,6 @@ const {
     insertCopiedStroke,
     getFromClipboard,
     isSelectedStrokeType,
-    copiedStroke,
     copiedStrokes,
     selectStrokes,
 } = useDraw(pagesContainer, activePage, strokeChangeCallback);
@@ -648,6 +648,7 @@ onUnmounted(() => {
 defineExpose({
     openNewBlankPage: createNewBlankPage,
     openFile: handleFileOpen,
+    showDocumentProperties
 })
 </script>
 <template>
@@ -784,7 +785,10 @@ defineExpose({
             </ul>
             <ul class="navbar-nav ms-auto">
                 <li class="nav-item">
-                    <ToolItem class="nav-link" label="Save File" label-class="d-lg-none" icon="floppy2" :action="handleSaveFile" :disabled="historyStep === savedHistoryStep" />
+                    <ToolItem class="nav-link" label="Save File" label-class="d-lg-none" icon="floppy-fill" :action="handleSaveFile" :disabled="historyStep === savedHistoryStep" />
+                </li>
+                <li class="nav-item">
+                    <ToolItem class="nav-link" label="Preferences" label-class="d-lg-none" icon="gear-fill" :action="openPreferences" />
                 </li>
             </ul>
         </nav>

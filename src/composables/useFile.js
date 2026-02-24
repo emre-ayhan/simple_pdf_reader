@@ -1245,12 +1245,16 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
 
             };
 
-            await showModal(properties);
+            await showModal(properties, false, 'lg', 'Properties');
             
         } catch (error) {
             console.error('Error getting document properties:', error);
             await showModal('Failed to retrieve document properties.');
         }
+    };
+
+    const openPreferences = () => {
+        showModal({}, false, 'lg', 'Preferences');
     };
 
     return {
@@ -1303,6 +1307,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         createImage,
         extractAllText,
         showDocumentProperties,
+        openPreferences,
         rotatePage
     }
 }
