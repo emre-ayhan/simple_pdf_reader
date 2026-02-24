@@ -735,7 +735,7 @@ defineExpose({
                 <li class="nav-item vr"></li>
                 <li class="nav-item">
                     <div class="input-group align-items-center flex-nowrap">
-                        <input type="text" class="form-control-plaintext" v-model="pageNum" @input="handlePageNumberInput" />
+                        <input id="page-number" type="text" class="form-control-plaintext" v-model="pageNum" @input="handlePageNumberInput" />
                         <span class="text-secondary">/ {{ activePages.length }}</span>
                     </div>
                 </li>
@@ -764,7 +764,7 @@ defineExpose({
                     <ToolItem class="nav-link" label="Zoom Out" label-class="d-lg-none" icon="zoom-out" :disabled="zoomPercentage === minZoom || isViewLocked" :action="zoom" :value="-1" />
                 </li>
                 <li class="nav-item">
-                    <select class="form-control-plaintext" @change="onZoomLevelChange" :disabled="isViewLocked">
+                    <select id="zoom-level" class="form-control-plaintext" @change="onZoomLevelChange" :disabled="isViewLocked">
                         <option value="fit-width" :selected="zoomPercentage === 100">{{ $t('Fit Width') }}</option>
                         <option value="fit-height" :selected="false">{{ $t('Fit Height') }}</option>
                         <option v-for="level in zoomLevels" :value="level" :selected="level === zoomPercentage">{{ level }}%</option>
