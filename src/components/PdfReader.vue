@@ -730,22 +730,13 @@ defineExpose({
                 <li class="nav-item">
                     <ToolItem class="nav-link" label="Capture Selection" label-class="d-lg-none" icon="scissors" :active="isSelectionMode" :action="captureSelection" />
                 </li>
-                <li class="nav-item vr"></li>
-                <li class="nav-item">
-                    <ToolItem class="nav-link" label="Stroke Selection" label-class="d-lg-none" shortcut="P" icon="cursor-fill" :active="isSelectModeActive" :action="selectStrokeMode" />
-                </li>
-                <li class="nav-item">
-                    <ToolItem class="nav-link" label="Text Selection" label-class="d-lg-none" shortcut="S" icon="cursor-text" :active="isTextSelectionMode && !isTextHighlightMode" :disabled="textActionsDisabled" :action="toggleTextSelection" />
-                </li>
-                <li class="nav-item">
-                    <ToolItem class="nav-link" label="Hand Tool" label-class="d-lg-none" icon="hand-index-thumb-fill" :active="handToolActive" :action="toggleHandTool" />
-                </li>
+
                 <!-- Pagination -->
                 <li class="nav-item vr"></li>
                 <li class="nav-item">
                     <div class="input-group align-items-center flex-nowrap">
                         <input type="text" class="form-control-plaintext" v-model="pageNum" @input="handlePageNumberInput" />
-                        <span class="text-secondary pe-1">/ {{ activePages.length }}</span>
+                        <span class="text-secondary">/ {{ activePages.length }}</span>
                     </div>
                 </li>
                 <li class="nav-item">
