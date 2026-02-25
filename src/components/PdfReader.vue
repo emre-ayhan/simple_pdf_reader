@@ -2,6 +2,7 @@
 import { ref, computed, nextTick, onMounted, onUnmounted, onBeforeUnmount } from "vue";
 import { Electron } from "../composables/useElectron";
 import { useFile } from "../composables/useFile";
+import { useFormFill } from "../composables/useFormFill";
 import { useDraw } from "../composables/useDraw";
 import { useHistory } from "../composables/useHistory";
 import { fileDataCache } from "../composables/useTabs";
@@ -32,9 +33,23 @@ const cursorStyle = computed(() => {
     return 'default';
 });
 
+// Form Fill
+const {
+    isFormFillMode,
+    formValues,
+    pageAnnotations,
+    hasFormFields,
+    setPageAnnotations,
+    resetForm,
+    toggleFormFillMode,
+    flattenToPdfLib,
+} = useFormFill();
+
 // File Management
 const loadFileCallback = () => {
     resetHistory();
+    // Clear form annotations when a new file is loaded
+    pageAnnotations.clear();
 }
 
 const renderImageFileCallback = (image) => {
@@ -88,7 +103,7 @@ const {
     showDocumentProperties,
     rotatePage,
     openPreferences,
-} = useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallback, fileSavedCallback);
+} = useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallback, fileSavedCallback, setPageAnnotations, flattenToPdfLib);
 
 // Drawing Management
 const strokeChangeCallback = (action) => {
@@ -657,12 +672,20 @@ defineExpose({
             <ul class="navbar-nav">
                 <!-- Thumbnail Sidebar -->
                 <li class="nav-item">
-                    <a class="nav-link" href="#" :title="$t('Thumbnail Sidebar')" @click.prevent="toggleThumbnailSidebar" :class="{ active: isThumbnailSidebarVisible }">
-                        <i class="bi bi-layout-sidebar-inset"></i>
-                    </a>
+                    <ToolItem class="nav-link" label="Thumbnail Sidebar" label-class="d-lg-none" icon="layout-sidebar-inset" :active="isThumbnailSidebarVisible" :action="toggleThumbnailSidebar" />
                 </li>
                 <!-- Search -->
                 <Search :pages="pages" :disabled="textActionsDisabled" :scrollToPage="scrollToPage" />
+
+                <!-- Form Fill -->
+                <li class="nav-item">
+                    <ToolItem class="nav-link" label="Fill Form" label-class="d-lg-none" shortcut="F" icon="ui-checks" :active="isFormFillMode" :disabled="!hasFormFields" :action="toggleFormFillMode" />
+                </li>
+
+                <!-- Reset Form -->
+                <li class="nav-item" v-if="isFormFillMode">
+                    <ToolItem v-if="isFormFillMode" class="nav-link" label-class="d-lg-none" label="Reset Form" shortcut="R" icon="arrow-counterclockwise" :action="resetForm" />
+                </li>
             </ul>
             <!-- Toolbar -->
             <ul ref="toolbar" class="navbar-nav mx-auto gap-1">
@@ -798,6 +821,124 @@ defineExpose({
                         <div class="canvas-container" :class="{ 'canvas-loading': !page.rendered }">
                             <canvas class="pdf-canvas" :ref="el => page.canvas = el"></canvas>
                             <div class="text-layer" :class="{ 'text-selectable': isTextSelectionMode }" :ref="el => page.textLayer = el"></div>
+                            <!-- Interactive form field overlay -->
+                            <div
+                                v-if="isFormFillMode && (pageAnnotations.get(page.index) || []).length > 0"
+                                class="form-layer"
+                            >
+                                <template v-for="field in (pageAnnotations.get(page.index) || [])" :key="field.id">
+                                    <!-- Text / password input -->
+                                    <input
+                                        v-if="field.inputType === 'text'"
+                                        :type="field.password ? 'password' : 'text'"
+                                        class="form-field form-field-text"
+                                        :style="field.posStyle"
+                                        :maxlength="field.maxLength || undefined"
+                                        :readonly="field.readOnly"
+                                        :required="field.required"
+                                        :value="formValues[field.fieldName] ?? ''"
+                                        @input="formValues[field.fieldName] = $event.target.value"
+                                        @click.stop
+                                        @pointerdown.stop
+                                    />
+                                    <!-- Multiline textarea -->
+                                    <textarea
+                                        v-else-if="field.inputType === 'textarea'"
+                                        class="form-field form-field-textarea"
+                                        :style="field.posStyle"
+                                        :maxlength="field.maxLength || undefined"
+                                        :readonly="field.readOnly"
+                                        :required="field.required"
+                                        :value="formValues[field.fieldName] ?? ''"
+                                        @input="formValues[field.fieldName] = $event.target.value"
+                                        @click.stop
+                                        @pointerdown.stop
+                                    ></textarea>
+                                    <!-- Checkbox -->
+                                    <span
+                                        v-else-if="field.inputType === 'checkbox'"
+                                        class="form-field form-field-checkbox-wrap"
+                                        :style="field.posStyle"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            class="form-field-checkbox"
+                                            :disabled="field.readOnly"
+                                            :checked="!!formValues[field.fieldName]"
+                                            @change="formValues[field.fieldName] = $event.target.checked"
+                                            @click.stop
+                                            @pointerdown.stop
+                                        />
+                                    </span>
+                                    <!-- Radio button -->
+                                    <span
+                                        v-else-if="field.inputType === 'radio'"
+                                        class="form-field form-field-radio-wrap"
+                                        :style="field.posStyle"
+                                    >
+                                        <input
+                                            type="radio"
+                                            class="form-field-radio"
+                                            :name="'pdf-radio-' + field.groupName"
+                                            :value="field.exportValue"
+                                            :disabled="field.readOnly"
+                                            :checked="formValues[field.groupName] === field.exportValue"
+                                            @change="formValues[field.groupName] = field.exportValue"
+                                            @click.stop
+                                            @pointerdown.stop
+                                        />
+                                    </span>
+                                    <!-- Single-select dropdown -->
+                                    <select
+                                        v-else-if="field.inputType === 'select'"
+                                        class="form-field form-field-select"
+                                        :style="field.posStyle"
+                                        :disabled="field.readOnly"
+                                        :required="field.required"
+                                        :value="formValues[field.fieldName] ?? ''"
+                                        @change="formValues[field.fieldName] = $event.target.value"
+                                        @click.stop
+                                        @pointerdown.stop
+                                    >
+                                        <option value="">—</option>
+                                        <option
+                                            v-for="opt in field.options"
+                                            :key="opt.value"
+                                            :value="opt.value"
+                                        >{{ opt.label }}</option>
+                                    </select>
+                                    <!-- Multi-select listbox -->
+                                    <select
+                                        v-else-if="field.inputType === 'multiselect'"
+                                        class="form-field form-field-select"
+                                        :style="field.posStyle"
+                                        multiple
+                                        :disabled="field.readOnly"
+                                        :required="field.required"
+                                        @change="formValues[field.fieldName] = Array.from($event.target.selectedOptions).map(o => o.value)"
+                                        @click.stop
+                                        @pointerdown.stop
+                                    >
+                                        <option
+                                            v-for="opt in field.options"
+                                            :key="opt.value"
+                                            :value="opt.value"
+                                            :selected="(formValues[field.fieldName] || []).includes(opt.value)"
+                                        >{{ opt.label }}</option>
+                                    </select>
+                                    <!-- Push button -->
+                                    <button
+                                        v-else-if="field.inputType === 'button'"
+                                        type="button"
+                                        class="form-field form-field-button"
+                                        :style="field.posStyle"
+                                        :disabled="field.readOnly"
+                                        @click.stop="resetForm"
+                                        @pointerdown.stop
+                                    >{{ field.label }}</button>
+                                </template>
+                            </div>
+                            <!-- /form field overlay -->
                             <canvas 
                                 :ref="el => page.drawingCanvas = el"
                                 class="drawing-canvas"
@@ -808,10 +949,10 @@ defineExpose({
                                 @pointercancel="stopDrawing"
                                 @click="handleStrokeMenu"
                                 :style="{
-                                    cursor: cursorStyle,
-                                    pointerEvents: 'auto',
+                                    cursor: isFormFillMode ? 'default' : cursorStyle,
+                                    pointerEvents: isFormFillMode ? 'none' : 'auto',
                                     touchAction: touchAction,
-                                    zIndex: isTextSelectionMode ? 1 : 3
+                                    zIndex: isFormFillMode ? -1 : (isTextSelectionMode ? 1 : 3)
                                 }"
                                 :data-color="drawColor"
                             ></canvas>
@@ -929,6 +1070,7 @@ defineExpose({
                 <li><hr class="dropdown-divider"></li>
                 <ToolItem class="dropdown-item" label="Rotate Clockwise" icon="arrow-clockwise" :action="rotatePage" value="clockwise" />
                 <ToolItem class="dropdown-item" label="Rotate Counterclockwise" icon="arrow-counterclockwise" :action="rotatePage" value="counterclockwise" />
+                <ToolItem class="dropdown-item" label="Insert Blank Page" icon="file-earmark-plus" :action="insertBlankPage" />
                 <li><hr class="dropdown-divider"></li>
                 <ToolItem class="dropdown-item" label="Print" shortcut="Ctrl+P" icon="printer" :action="printPage" />
                 <ToolItem class="dropdown-item" label="Properties" shortcut="Ctrl+I" icon="info-circle" :action="showDocumentProperties" />

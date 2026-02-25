@@ -1,0 +1,110 @@
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Interactive PDF Form Fields
+// ──────────────────────────────────────────────────────────────────────────────
+
+.form-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: auto;
+    z-index: 10;
+    overflow: visible;
+    // Size container so child fields can use cqh/cqw font-size units
+    container-type: size;
+}
+
+.form-field {
+    position: absolute;
+    pointer-events: auto;
+    box-sizing: border-box;
+    font-family: inherit;
+    line-height: 1.2;
+    padding: 1px 3px;
+    outline: none;
+    border-radius: 2px;
+    transition: box-shadow 0.15s ease;
+
+    &:focus {
+        box-shadow: 0 0 0 2px rgba($primary, 0.65);
+        z-index: 1;
+    }
+}
+
+// Text & textarea
+.form-field-text,
+.form-field-textarea {
+    background: $primary-bg-subtle;
+    border: 1px solid rgba(0, 0, 0, 0.35);
+    color: #000;
+    resize: none;
+    overflow: hidden;
+    line-height: 1.1;
+
+    &[readonly] {
+        background: $secondary-bg-subtle;
+        cursor: default;
+    }
+}
+
+.form-field-textarea {
+    overflow: auto;
+}
+
+// Checkbox / Radio wrappers – centres the native input inside the PDF rect
+.form-field-checkbox-wrap,
+.form-field-radio-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    padding: 0;
+}
+
+.form-field-checkbox,
+.form-field-radio {
+    width: 60%;
+    height: 60%;
+    cursor: pointer;
+    accent-color: $primary;
+}
+
+// Dropdown / listbox
+.form-field-select {
+    background: $primary-bg-subtle;
+    border: 1px solid rgba(0, 0, 0, 0.35);
+    color: #000;
+    cursor: pointer;
+    -webkit-appearance: auto;
+    appearance: auto;
+    padding: 0 2px;
+    line-height: 1.1;
+
+    &[disabled] {
+        background: $secondary-bg-subtle;
+        cursor: default;
+    }
+}
+
+// Push button
+.form-field-button {
+    background: $primary;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    padding: 2px 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.1;
+
+    &:hover { filter: brightness(1.15); }
+    &:active { filter: brightness(0.9); }
+    &[disabled] {
+        background: $secondary-bg-subtle;
+        cursor: default;
+    }
+}

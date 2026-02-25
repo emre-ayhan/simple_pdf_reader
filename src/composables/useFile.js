@@ -10,7 +10,7 @@ import { fileDataCache, openNewTab, setCurrentTab } from "./useTabs";
 GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.449/build/pdf.worker.min.mjs';
 const { set: storeSet, get: storeGet } = useStore();
 
-export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallback, fileSavedCallback) {
+export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallback, fileSavedCallback, formAnnotationsCallback, formFlattenCallback) {
     const fileId = uuid();
 
     var pdfDoc = null;
@@ -39,6 +39,9 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             const unscaledViewport = pdfPage.getViewport({ scale: 1 });
             const scale = Math.max((desiredDisplayWidth * pixelRatio) / unscaledViewport.width, 3);
             const viewport = pdfPage.getViewport({ scale });
+
+            // Store viewport on page for form-field overlay positioning
+            page.viewport = viewport;
 
             const canvas = page?.canvas;
             const drawCanvas = page?.drawingCanvas;
@@ -147,6 +150,16 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
 
             page.rendered = true;
             lazyLoadCallback(page.index);
+
+            // Re-extract annotations with the high-res viewport so positions are pixel-accurate
+            if (typeof formAnnotationsCallback === 'function') {
+                try {
+                    const annotations = await pdfPage.getAnnotations();
+                    formAnnotationsCallback(page.index, annotations, viewport);
+                } catch (e) {
+                    console.warn('Form annotation re-extraction failed for page', page.index, e);
+                }
+            }
         })();
 
         pageRenderPromises.set(page.index, promise);
@@ -225,7 +238,10 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             textLayer: null,
             drawingCanvas: null,
             drawingContext: null,
+            viewport: null,
             strokes: [],
+            annotations: new Set(),
+            form: {},
             deleted: false
         }));
     }
@@ -389,6 +405,23 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         });
     };
 
+    const extractAllFormAnnotations = async () => {
+        if (!pdfDoc || typeof formAnnotationsCallback !== 'function') return;
+        const numPages = pdfDoc.numPages;
+        for (let i = 1; i <= numPages; i++) {
+            try {
+                const pdfPage = await pdfDoc.getPage(i);
+                const annotations = await pdfPage.getAnnotations();
+                const viewport = pdfPage.getViewport({ scale: 1 });
+                console.log('[FormFill] page', i, 'annotations:', annotations.length,
+                    annotations.map(a => ({ subtype: a.subtype, fieldType: a.fieldType, annotationType: a.annotationType, fieldName: a.fieldName })));
+                formAnnotationsCallback(i - 1, annotations, viewport);
+            } catch (e) {
+                console.warn('Form annotation extraction failed for page', i, e);
+            }
+        }
+    };
+
     const extractAllText = async () => {
         if (!pdfDoc) return;
         
@@ -428,6 +461,9 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
 
         // Start extracting text for search capability (non-blocking)
         extractAllText();
+
+        // Extract form annotations upfront so the Fill Form button appears immediately (non-blocking)
+        extractAllFormAnnotations();
 
         // Don't render any pages here - let lazy loading handle it
     };
@@ -751,6 +787,16 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
 
             // Remove any pages that were deleted by the user before saving
             const deletedPages = new Set(pages.value.map((p, i) => p.deleted ? i + 1 : null).filter(p => p));
+
+            // Flatten interactive form fields into the PDF if the callback is provided
+            if (typeof formFlattenCallback === 'function') {
+                try {
+                    const pdfForm = pdfLibDoc.getForm();
+                    formFlattenCallback(pdfForm);
+                } catch (e) {
+                    console.warn('Form flatten failed:', e);
+                }
+            }
             if (deletedPages.size > 0) {
                 try {
                     // Convert deleted page numbers to zero-based indexes and sort descending
@@ -1004,9 +1050,6 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
     const insertBlankPage = async () => {
         if (!pdfDoc) return;
         
-        // Increment page count
-        setPages(pageCount.value + 1);
-
         // Load the original PDF and add a blank page
         let arrayBuffer;
         if (originalPdfData.value) {
@@ -1023,7 +1066,8 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         }
         
         const pdfLibDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
-        
+        const currentPageNum = pageNum.value || 1;
+
         // Get dimensions from current page or use default
         const currentPage = pdfLibDoc.getPage(currentPageNum - 1);
         const { width, height } = currentPage.getSize();
@@ -1056,7 +1100,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             
             // Scroll to the newly inserted page
             await nextTick();
-            scrollToPage(pageIndex.value);
+            scrollToPage(pageIndex.value + 1);
             
             if (typeof callback === 'function') {
                 callback({ type: 'insert-blank-page', pageNumber: pageNum.value });
