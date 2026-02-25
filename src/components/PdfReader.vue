@@ -312,11 +312,6 @@ const selectStrokeMode = () => {
     isSelectModeActive.value = true;
 };
 
-const handleInsertBlankPage = () => {
-    if (!isFileLoaded.value) return;
-    insertBlankPage(addToHistory);
-};
-
 const captureSelection = () => {
     if (!isFileLoaded.value) return;
     const wasActive = isSelectionMode.value;
@@ -349,7 +344,7 @@ const toggleZoomMode = (mode) => {
     if (!isFileLoaded.value) return;
     
     if (mode === 'fit-height') {
-        const pageContainer = document.querySelector(`.page-container[data-page="${pageIndex.value}"]`);        
+        const pageContainer = document.querySelector(`.page-container[data-page="${activePage.value.id}"]`);        
         const percentage = pdfReader.value.clientHeight * zoomPercentage.value / pageContainer.clientHeight;
         zoomPercentage.value = Math.ceil(percentage);
     } else {
@@ -809,8 +804,8 @@ defineExpose({
                 :renderPageThumbnail="renderPageThumbnail"
             />
             <div class="pages-container flex-grow-1" ref="pagesContainer" :style="{ width: `${zoomPercentage}%` }">
-                <template v-for="page in pages" :key="`page-${page.index}`">
-                    <div class="page-container" :data-page="page.index" v-show="!page.deleted">
+                <template v-for="page in pages" :key="page.id">
+                    <div class="page-container" :data-page="page.id" v-show="!page.deleted">
                         <div class="canvas-container" :class="{ 'canvas-loading': !page.rendered }">
                             <canvas class="pdf-canvas" :ref="el => page.canvas = el"></canvas>
                             <div class="text-layer" :class="{ 'text-selectable': isTextSelectionMode }" :ref="el => page.textLayer = el"></div>
@@ -947,7 +942,8 @@ defineExpose({
                 <li><hr class="dropdown-divider"></li>
                 <ToolItem class="dropdown-item" show-label label="Rotate Clockwise" icon="arrow-clockwise" :action="rotatePage" value="clockwise" />
                 <ToolItem class="dropdown-item" show-label label="Rotate Counterclockwise" icon="arrow-counterclockwise" :action="rotatePage" value="counterclockwise" />
-                <ToolItem class="dropdown-item" show-label label="Insert Blank Page" icon="file-earmark-plus" :action="handleInsertBlankPage" />
+                <ToolItem class="dropdown-item" show-label label="Insert Blank Page Before" icon="file-earmark-plus" :action="insertBlankPage" value="before" />
+                <ToolItem class="dropdown-item" show-label label="Insert Blank Page After" icon="file-earmark-plus" :action="insertBlankPage" value="after" />
                 <li><hr class="dropdown-divider"></li>
                 <ToolItem class="dropdown-item" show-label label="Print" shortcut="Ctrl+P" icon="printer" :action="printPage" />
                 <ToolItem class="dropdown-item" show-label label="Properties" shortcut="Ctrl+I" icon="info-circle" :action="showDocumentProperties" />

@@ -1,4 +1,4 @@
-import { ref, nextTick, computed, watch } from "vue";
+import { ref, nextTick, computed, watch, toRaw } from "vue";
 import { PDFDocument, rgb, degrees as pdfDegrees } from "pdf-lib";
 import { Electron } from "./useElectron";
 import { useStore } from "./useStore";
@@ -19,11 +19,11 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
     // Prevent concurrent render() calls per page/canvas
     const pageRenderPromises = new Map();
 
-    const renderPdfPage = async (index) => {
+    const renderPdfPage = async (pageId) => {
         if (!pdfDoc) return;
         if (imagePage.value) return;
 
-        const page = pages.value[index];
+        const page = pages.value.find(p => p.id === pageId);
         if (page?.rendered || page.index < 0) return;
 
         if (pageRenderPromises.has(page.index)) {
@@ -232,9 +232,9 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         flattenToPdfLib
     } = useFormFill(activePage);
 
-    const setPages = (length) => {
-        pageCount.value = length;
-        pages.value = Array.from({ length }, (_, index) => ({
+    const getPages = (length) => {
+        return Array.from({ length }, (_, index) => ({
+            id: uuid(),
             index,
             rendered: false,
             canvas: null,
@@ -248,6 +248,29 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             },
             deleted: false
         }));
+    }
+
+    const setPages = (length) => {
+        pageCount.value = length;
+        pages.value = getPages(length);
+    }
+
+    const insertPage = (index) => {
+        const oldPages = toRaw(pages.value);
+        if (index < 0 || index >= oldPages.length) return;
+
+        const newPage = getPages(1)[0];
+        newPage.index = index;
+        newPage.rendered = true;
+        oldPages.splice(index, 0, newPage);
+
+        // Update indexes of subsequent pages
+        for (let i = index; i < oldPages.length; i++) {
+            oldPages[i].index = i;
+        }
+
+        pageCount.value = oldPages.length;
+        pages.value = [...oldPages];
     }
 
     watch(pageIndex, (newIndex) => {
@@ -297,9 +320,9 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         lazyLoadObserver.value = new IntersectionObserver((entries) => {
             entries.forEach(async entry => {
                 if (entry.isIntersecting) {
-                    const index = parseInt(entry.target.getAttribute('data-page'));
+                    const pageId = entry.target.getAttribute('data-page');
                     if (!pdfDoc) return;
-                    await renderPdfPage(index);
+                    await renderPdfPage(pageId);
                 }
             });
         }, options);
@@ -338,13 +361,13 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             });
             
             if (mostVisiblePage) {
-                const visiblePageIndex = parseInt(mostVisiblePage.getAttribute('data-page'));
-                if (Number.isNaN(visiblePageIndex)) return;
+                const visiblePageId = mostVisiblePage.getAttribute('data-page');
+                if (!visiblePageId) return;
 
-                const page = pages.value[visiblePageIndex];
+                const page = pages.value.find(p => p.id === visiblePageId);
 
                 if (page && !page.deleted) {
-                    const activeIndex = activePages.value.findIndex(p => p.index === visiblePageIndex);
+                    const activeIndex = activePages.value.findIndex(p => p.id === visiblePageId);
                     if (activeIndex !== -1 && activeIndex !== pageIndex.value) {
                         pageIndex.value = activeIndex;
                         storePageIndex();
@@ -409,20 +432,6 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         });
     };
 
-    const extractAllFormAnnotations = async () => {
-        const numPages = pdfDoc.numPages;
-        for (let i = 1; i <= numPages; i++) {
-            try {
-                const pdfPage = await pdfDoc.getPage(i);
-                const annotations = await pdfPage.getAnnotations();
-                const viewport = pdfPage.getViewport({ scale: 1 });
-                setPageAnnotations(annotations, viewport);
-            } catch (e) {
-                console.warn('Form annotation extraction failed for page', i, e);
-            }
-        }
-    };
-
     const extractAllText = async () => {
         if (!pdfDoc) return;
         
@@ -450,23 +459,28 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
     const renderAllPages = async () => {
         if (imagePage.value) {
             setPages(1);
+            await nextTick();
             await renderImageFileCallback(imagePage.value);
             pageIndex.value = 0;
             return;
         }
         
         if (!pdfDoc) return;
-        
+
         const numPages = pdfDoc.numPages;
         setPages(numPages);
+
+        // Wait for Vue to render new page elements (keys changed due to new UUIDs)
+        await nextTick();
 
         // Start extracting text for search capability (non-blocking)
         extractAllText();
 
-        // Extract form annotations upfront so the Fill Form button appears immediately (non-blocking)
-        extractAllFormAnnotations();
-
         // Don't render any pages here - let lazy loading handle it
+        // Setup observers after pages structure is ready
+        if (imagePage.value) return;
+        setupIntersectionObserver();
+        setupLazyLoadObserver();
     };
 
     const loadImageFile = (file) => {
@@ -475,37 +489,23 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         filename.value = file.name || 'image';
         filepath.value = file.path || null;
         const reader = new FileReader();
-        reader.onload = () => {
+        reader.onload = async () => {
             loadFileCallback();
             imagePage.value = reader.result;
             
             handleFileLoadEvent('image');
 
-            nextTick(() => {
-                renderAllPages();
-            });
+            await renderAllPages();
         };
         reader.readAsDataURL(file);
     };
 
-    const renderAllPagesAndSetupObservers = () => {
-        // Wait for next tick to ensure refs are populated
-        nextTick(() => {
-            renderAllPages().then(() => {
-                // Setup observers after pages structure is ready
-                if (imagePage.value) return;
-                setupIntersectionObserver();
-                setupLazyLoadObserver();
-            });
-        });
-    };
-
-    const getDocumentCallback = (pdfDoc_) => {
+    const getDocumentCallback = async (pdfDoc_) => {
         loadFileCallback();
         pdfDoc = pdfDoc_;
         imagePage.value = null;
         handleFileLoadEvent('pdf', pdfDoc.numPages);
-        renderAllPagesAndSetupObservers();
+        await renderAllPages();
     }
 
     const loadPdfFile = (file) => {
@@ -574,9 +574,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             imagePage.value = dataUrl;
             handleFileLoadEvent('image');
 
-            nextTick(() => {
-                renderAllPages();
-            });
+            await renderAllPages();
         }
         else {
             await showModal('Unsupported file type. Please select a PDF or image.');
@@ -963,10 +961,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             imagePage.value = null;
             handleFileLoadEvent('pdf', pdfDoc.numPages);
             
-            await nextTick();
             await renderAllPages();
-            setupIntersectionObserver();
-            setupLazyLoadObserver();
             
             // Wait for the page to be rendered by lazy load observer
             await nextTick();
@@ -1010,13 +1005,13 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             }
 
             const pdfLibDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
-            const page = pdfLibDoc.getPage(pageIdx);
+            const pdfPage = pdfLibDoc.getPage(pageIdx);
             
-            const currentRotation = page.getRotation().angle;
+            const currentRotation = pdfPage.getRotation().angle;
             const newRotation = (currentRotation + rotationChange) % 360;
             const normalizedRotation = newRotation < 0 ? newRotation + 360 : newRotation;
 
-            page.setRotation(pdfDegrees(normalizedRotation));
+            pdfPage.setRotation(pdfDegrees(normalizedRotation));
 
             // Save modified PDF
             const pdfBytes = await pdfLibDoc.save();
@@ -1026,29 +1021,24 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             const pdfDoc_ = await getDocument({ data: pdfBytes }).promise;
             
             // Re-initialize viewer state
-             pages.value = [{ canvas: null, drawingCanvas: null, textLayer: null, drawingContext: null }]; // Reset pages structure for single page
-             pdfDoc = pdfDoc_;
-             
-             // Strokes might need adjustment if logic was relative to unrotated coordinates
-             // For now, let's keep them as is (user might need to manually adjust if they drew something)
-             // Ideally we should rotate strokes too, but that's complex math for now.
+            pdfDoc = pdfDoc_;
+            
+            // Strokes might need adjustment if logic was relative to unrotated coordinates
+            // For now, let's keep them as is (user might need to manually adjust if they drew something)
+            // Ideally we should rotate strokes too, but that's complex math for now.
 
-             await nextTick();
-             await renderAllPages();
-             setupIntersectionObserver();
-             setupLazyLoadObserver();
-             
-             // Restore position
-             await nextTick();
-             scrollToPage(pageIdx);
-             
+            await renderAllPages();
+            
+            // Restore position
+            await nextTick();
+            scrollToPage(pageIdx);
         } catch (error) {
             console.error('Error rotating page:', error);
             await showModal('Falied to rotate page: ' + error.message);
         }
     };
 
-    const insertBlankPage = async () => {
+    const insertBlankPage = async (location) => {
         if (!pdfDoc) return;
         
         // Load the original PDF and add a blank page
@@ -1067,14 +1057,16 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         }
         
         const pdfLibDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
-        const currentPageNum = pageNum.value || 1;
+        const currentPageIndex = activePage.value.index;
 
         // Get dimensions from current page or use default
-        const currentPage = pdfLibDoc.getPage(currentPageNum - 1);
+        const currentPage = pdfLibDoc.getPage(currentPageIndex);
         const { width, height } = currentPage.getSize();
+
+        const insertIndex = location === 'after' ? currentPageIndex + 1 : currentPageIndex;
         
         // Create a blank page with same dimensions
-        const blankPage = pdfLibDoc.insertPage(currentPageNum, [width, height]);
+        const blankPage = pdfLibDoc.insertPage(insertIndex, [width, height]);
         
         // Draw a white background
         blankPage.drawRectangle({
@@ -1092,16 +1084,16 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         // Reload the PDF
         getDocument({ data: pdfBytes }).promise.then(async (pdfDoc_) => {
             pdfDoc = pdfDoc_;
-            pages.value = [{ canvas: null, drawingCanvas: null, textLayer: null, drawingContext: null, annotations: [] }]; // Reset pages structure for single page
+
+            insertPage(insertIndex);
             
             await nextTick();
-            await renderAllPages();
             setupIntersectionObserver();
             setupLazyLoadObserver();
-            
-            // Scroll to the newly inserted page
+
             await nextTick();
-            scrollToPage(pageIndex.value + 1);
+            // Scroll to the newly inserted page
+            scrollToPage(insertIndex);
             
             if (typeof callback === 'function') {
                 callback({ type: 'insert-blank-page', pageNumber: pageNum.value });
@@ -1124,7 +1116,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             if (!canvas) return;
             
             // Calculate visible viewport position on the canvas
-            const pageContainer = pagesContainer.value?.querySelector(`.page-container[data-page="${pageIndex.value + 1}"]`);
+            const pageContainer = pagesContainer.value?.querySelector(`.page-container[data-page="${page.id}"]`);
             const pdfReaderEl = pdfReader.value;
             
             let viewportCenterX = canvas.width / 2;
@@ -1323,12 +1315,9 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         zoomPercentage,
         fileRecentlySaved,
         handlePageNumberInput,
-        renderAllPages,
         loadImageFile,
         loadPdfFile,
         loadFile,
-        renderAllPagesAndSetupObservers,
-        getDocumentCallback,
         processFileOpenResult,
         handleFileOpen,
         handleSaveFile,
@@ -1350,7 +1339,6 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         insertBlankPage,
         createImageImportHandler,
         createImage,
-        extractAllText,
         showDocumentProperties,
         openPreferences,
         rotatePage,
