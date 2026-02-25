@@ -145,45 +145,64 @@ const processAnnotation = (annotation, viewport) => {
  * annotations.  All values are reactive; call `flattenToPdfLib(form)` to
  * write them back into a pdf-lib PDFForm before serialising.
  */
-export function useFormFill(page) {
+export function useFormFill() {
     const isFormFillMode = ref(false);
+
+    /**
+     * Map<pageIndex, ProcessedFieldDescriptor[]>
+     * Vue 3 reactive(Map) is used so .set()/.get()/.clear() are all tracked.
+     */
+    const pageAnnotations = reactive(new Map());
+
+    /**
+     * Flat reactive store: fieldName → current value.
+     * For checkboxes: boolean.  For radios: export-value string of the
+     * selected option (keyed by field/group name).
+     * For multi-selects: string[].  Otherwise: string.
+     */
+    const formValues = reactive({});
+
+    /**
+     * Snapshot of values at extraction time – used by resetForm().
+     */
+    const originalValues = {};
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     const _initValue = (field) => {
         const key = field.fieldName;
-        if (key in page.value.form) return; // already tracked (multi-annotation group)
+        if (key in formValues) return; // already tracked (multi-annotation group)
 
         let init;
         if (field.inputType === 'checkbox') {
             init = field.checked;
         } else if (field.inputType === 'radio') {
             // Use the field value that PDF reports as selected (may be '' if none)
-            init = field.checked ? field.exportValue : (page.value.form[key] ?? '');
+            init = field.checked ? field.exportValue : (formValues[key] ?? '');
         } else if (field.inputType === 'multiselect') {
             init = Array.isArray(field.value) ? [...field.value] : [];
         } else {
             init = field.value ?? '';
         }
 
-        page.value.form[key] = init;
-        page.value.form.original[key] = Array.isArray(init) ? [...init] : init;
+        formValues[key] = init;
+        originalValues[key] = Array.isArray(init) ? [...init] : init;
     };
 
     // ── Public API ────────────────────────────────────────────────────────────
 
     /**
      * Called by useFile.js after rendering each page.
+     * @param {number}   pageIndex
      * @param {object[]} rawAnnotations   – from pdfPage.getAnnotations()
      * @param {object}   viewport         – PDF.js viewport
      */
-    const setPageAnnotations = (rawAnnotations, viewport) => {
+    const setPageAnnotations = (pageIndex, rawAnnotations, viewport) => {
         const fields = rawAnnotations
             .map(a => processAnnotation(a, viewport))
             .filter(Boolean);
 
-        // pageAnnotations.set(pageIndex, fields);
-        page.value.annotations = fields;
+        pageAnnotations.set(pageIndex, fields);
 
         // Seed formValues (radio groups need special handling)
         const radioGroupSet = new Set();
@@ -196,9 +215,9 @@ export function useFormFill(page) {
                         f => f.inputType === 'radio' && f.groupName === field.groupName && f.checked
                     );
                     const val = selected ? selected.exportValue : '';
-                    if (!(field.groupName in page.value.form)) {
-                        page.value.form[field.groupName] = val;
-                        page.value.form.original[field.groupName] = val;
+                    if (!(field.groupName in formValues)) {
+                        formValues[field.groupName] = val;
+                        originalValues[field.groupName] = val;
                     }
                 }
             } else {
@@ -211,10 +230,24 @@ export function useFormFill(page) {
      * Reset all form fields to their original (document-loaded) values.
      */
     const resetForm = () => {
-        Object.keys(page.value.form.original).forEach(key => {
-            const orig = page.value.form.original[key];
-            page.value.form[key] = Array.isArray(orig) ? [...orig] : orig;
+        Object.keys(originalValues).forEach(key => {
+            const orig = originalValues[key];
+            formValues[key] = Array.isArray(orig) ? [...orig] : orig;
         });
+    };
+
+    /**
+     * Returns true if any page has at least one interactive form field.
+     */
+    const hasFormFields = computed(() => {
+        for (const fields of pageAnnotations.values()) {
+            if (fields.length > 0) return true;
+        }
+        return false;
+    });
+
+    const toggleFormFillMode = () => {
+        isFormFillMode.value = !isFormFillMode.value;
     };
 
     /**
@@ -235,11 +268,16 @@ export function useFormFill(page) {
             }
         };
 
+        const allFields = [];
+        for (const fields of pageAnnotations.values()) {
+            allFields.push(...fields);
+        }
+
         const handledGroups = new Set();
 
-        page.value.annotations.forEach(field => {
+        allFields.forEach(field => {
             const key = field.fieldName;
-            const val = page.value.form[key];
+            const val = formValues[key];
 
             if (field.inputType === 'text' || field.inputType === 'textarea') {
                 tryField(pdfForm.getTextField, key, (f) => {
@@ -274,8 +312,12 @@ export function useFormFill(page) {
 
     return {
         isFormFillMode,
-        resetForm,
+        formValues,
+        pageAnnotations,
+        hasFormFields,
         setPageAnnotations,
+        resetForm,
+        toggleFormFillMode,
         flattenToPdfLib,
     };
 }

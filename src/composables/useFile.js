@@ -6,11 +6,12 @@ import { GlobalWorkerOptions, getDocument } from "pdfjs-dist";
 import { uuid } from "./useUuid";
 import { showModal } from "./useModal";
 import { fileDataCache, openNewTab, setCurrentTab } from "./useTabs";
+import { useFormFill } from "./useFormFill";
 
 GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.449/build/pdf.worker.min.mjs';
 const { set: storeSet, get: storeGet } = useStore();
 
-export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallback, fileSavedCallback, formAnnotationsCallback, formFlattenCallback) {
+export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallback, fileSavedCallback) {
     const fileId = uuid();
 
     var pdfDoc = null;
@@ -39,9 +40,6 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             const unscaledViewport = pdfPage.getViewport({ scale: 1 });
             const scale = Math.max((desiredDisplayWidth * pixelRatio) / unscaledViewport.width, 3);
             const viewport = pdfPage.getViewport({ scale });
-
-            // Store viewport on page for form-field overlay positioning
-            page.viewport = viewport;
 
             const canvas = page?.canvas;
             const drawCanvas = page?.drawingCanvas;
@@ -152,13 +150,11 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             lazyLoadCallback(page.index);
 
             // Re-extract annotations with the high-res viewport so positions are pixel-accurate
-            if (typeof formAnnotationsCallback === 'function') {
-                try {
-                    const annotations = await pdfPage.getAnnotations();
-                    formAnnotationsCallback(page.index, annotations, viewport);
-                } catch (e) {
-                    console.warn('Form annotation re-extraction failed for page', page.index, e);
-                }
+            try {
+                const rawAnnotations = await pdfPage.getAnnotations();
+                setPageAnnotations(rawAnnotations, viewport);
+            } catch (e) {
+                console.warn('Form annotation re-extraction failed for page', page.index, e);
             }
         })();
 
@@ -229,6 +225,13 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         return activePages.value[pageIndex.value] || {};
     });
 
+    const {
+        isFormFillMode,
+        resetForm,
+        setPageAnnotations,
+        flattenToPdfLib
+    } = useFormFill(activePage);
+
     const setPages = (length) => {
         pageCount.value = length;
         pages.value = Array.from({ length }, (_, index) => ({
@@ -238,10 +241,11 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             textLayer: null,
             drawingCanvas: null,
             drawingContext: null,
-            viewport: null,
             strokes: [],
-            annotations: new Set(),
-            form: {},
+            annotations: [],
+            form: {
+                original: {}, // fieldName → original value at extraction time
+            },
             deleted: false
         }));
     }
@@ -406,16 +410,13 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
     };
 
     const extractAllFormAnnotations = async () => {
-        if (!pdfDoc || typeof formAnnotationsCallback !== 'function') return;
         const numPages = pdfDoc.numPages;
         for (let i = 1; i <= numPages; i++) {
             try {
                 const pdfPage = await pdfDoc.getPage(i);
                 const annotations = await pdfPage.getAnnotations();
                 const viewport = pdfPage.getViewport({ scale: 1 });
-                console.log('[FormFill] page', i, 'annotations:', annotations.length,
-                    annotations.map(a => ({ subtype: a.subtype, fieldType: a.fieldType, annotationType: a.annotationType, fieldName: a.fieldName })));
-                formAnnotationsCallback(i - 1, annotations, viewport);
+                setPageAnnotations(annotations, viewport);
             } catch (e) {
                 console.warn('Form annotation extraction failed for page', i, e);
             }
@@ -789,10 +790,10 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             const deletedPages = new Set(pages.value.map((p, i) => p.deleted ? i + 1 : null).filter(p => p));
 
             // Flatten interactive form fields into the PDF if the callback is provided
-            if (typeof formFlattenCallback === 'function') {
+            if (typeof flattenToPdfLib === 'function') {
                 try {
                     const pdfForm = pdfLibDoc.getForm();
-                    formFlattenCallback(pdfForm);
+                    flattenToPdfLib(pdfForm);
                 } catch (e) {
                     console.warn('Form flatten failed:', e);
                 }
@@ -1091,7 +1092,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         // Reload the PDF
         getDocument({ data: pdfBytes }).promise.then(async (pdfDoc_) => {
             pdfDoc = pdfDoc_;
-            pages.value = [{ canvas: null, drawingCanvas: null, textLayer: null, drawingContext: null }]; // Reset pages structure for single page
+            pages.value = [{ canvas: null, drawingCanvas: null, textLayer: null, drawingContext: null, annotations: [] }]; // Reset pages structure for single page
             
             await nextTick();
             await renderAllPages();
@@ -1352,6 +1353,8 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         extractAllText,
         showDocumentProperties,
         openPreferences,
-        rotatePage
+        rotatePage,
+        isFormFillMode,
+        resetForm,
     }
 }

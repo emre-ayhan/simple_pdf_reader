@@ -3,10 +3,7 @@ const props = defineProps({
     icon: String,
     iconActive: Boolean,
     label: String,
-    labelClass: {
-        type: String,
-        default: '',
-    },
+    showLabel: Boolean,
     shortcut: String,
     action: Function,
     value: [String, Number, Boolean],
@@ -23,7 +20,7 @@ const onClick = () => {
 <a href="#" :class="{ disabled, active }" @click.prevent="onClick" :title="$t(label) + (shortcut ? ` (${shortcut})` : '')">
     <div class="d-flex align-items-center">
         <i v-if="icon" :class="`bi bi-${icon}${iconActive && active ? '-fill' : ''}`"></i>
-        <div :class="`d-flex align-items-start flex-fill ms-2 gap-2 ${labelClass}`" v-if="label">
+        <div class="d-flex align-items-start flex-fill ms-2 gap-2" v-if="label && showLabel">
             {{ $t(label) }}
             <small class="text-secondary ms-auto" v-if="shortcut">{{ shortcut }}</small>
         </div>

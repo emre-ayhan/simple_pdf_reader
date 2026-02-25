@@ -90,7 +90,7 @@ onBeforeUnmount(() => {
             <div class="tab-pane" :class="{ 'active show': index === activeTabIndex }" tabindex="0" v-if="!tab.closed">
                 <empty-state v-if="tab.emptyState">
                     <template v-for="item in fileActions">
-                        <div class="mb-2"><ToolItem class="text-decoration-none" v-bind="item" /></div>
+                        <div class="mb-2"><ToolItem class="text-decoration-none" show-label v-bind="item" /></div>
                     </template>
                 </empty-state>
                 <slot></slot>

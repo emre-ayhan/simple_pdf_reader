@@ -10,10 +10,29 @@
     width: 100%;
     height: 100%;
     pointer-events: auto;
-    z-index: 10;
+    // z-index: 10;
     overflow: visible;
     // Size container so child fields can use cqh/cqw font-size units
     container-type: size;
+
+    .form-field {
+        &:not(.form-field-button, .form-field-checkbox-wrap, .form-field-radio-wrap) {
+            background-color: $primary-bg-subtle;
+        }
+    }
+
+    &.disabled {
+        .form-field {
+            &:not(.form-field-checkbox-wrap, .form-field-radio-wrap) {
+                background-color: $secondary-bg-subtle;
+            }
+
+            .form-field-checkbox,
+            .form-field-radio {
+                accent-color: $secondary;
+            }
+        }
+    }
 }
 
 .form-field {
@@ -36,7 +55,6 @@
 // Text & textarea
 .form-field-text,
 .form-field-textarea {
-    background: $primary-bg-subtle;
     border: 1px solid rgba(0, 0, 0, 0.35);
     color: #000;
     resize: none;
@@ -66,15 +84,14 @@
 
 .form-field-checkbox,
 .form-field-radio {
-    width: 60%;
-    height: 60%;
+    width: 100%;
+    height: 100%;
     cursor: pointer;
     accent-color: $primary;
 }
 
 // Dropdown / listbox
 .form-field-select {
-    background: $primary-bg-subtle;
     border: 1px solid rgba(0, 0, 0, 0.35);
     color: #000;
     cursor: pointer;

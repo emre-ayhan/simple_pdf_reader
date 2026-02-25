@@ -2,7 +2,6 @@
 import { ref, computed, nextTick, onMounted, onUnmounted, onBeforeUnmount } from "vue";
 import { Electron } from "../composables/useElectron";
 import { useFile } from "../composables/useFile";
-import { useFormFill } from "../composables/useFormFill";
 import { useDraw } from "../composables/useDraw";
 import { useHistory } from "../composables/useHistory";
 import { fileDataCache } from "../composables/useTabs";
@@ -14,6 +13,7 @@ import ThumbnailSidebar from "./ThumbnailSidebar.vue";
 import PageNumber from "./PageNumber.vue";
 import ContextMenu from "./ContextMenu.vue";
 import ToolItem from "./ToolItem.vue";
+import PdfForm from "./PdfForm.vue";
 
 // Cursor Style
 const cursorStyle = computed(() => {
@@ -33,23 +33,9 @@ const cursorStyle = computed(() => {
     return 'default';
 });
 
-// Form Fill
-const {
-    isFormFillMode,
-    formValues,
-    pageAnnotations,
-    hasFormFields,
-    setPageAnnotations,
-    resetForm,
-    toggleFormFillMode,
-    flattenToPdfLib,
-} = useFormFill();
-
 // File Management
 const loadFileCallback = () => {
     resetHistory();
-    // Clear form annotations when a new file is loaded
-    pageAnnotations.clear();
 }
 
 const renderImageFileCallback = (image) => {
@@ -103,7 +89,9 @@ const {
     showDocumentProperties,
     rotatePage,
     openPreferences,
-} = useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallback, fileSavedCallback, setPageAnnotations, flattenToPdfLib);
+    isFormFillMode,
+    resetForm,
+} = useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallback, fileSavedCallback);
 
 // Drawing Management
 const strokeChangeCallback = (action) => {
@@ -199,6 +187,11 @@ const touchAction = computed(() => {
 
 const isViewLocked = ref(false);
 const isThumbnailSidebarVisible = ref(false);
+
+const toggleFormFillMode = () => {
+    isFormFillMode.value = !isFormFillMode.value;
+    selectStrokeMode();
+};
 
 const toggleThumbnailSidebar = () => {
     isThumbnailSidebarVisible.value = !isThumbnailSidebarVisible.value;
@@ -672,19 +665,19 @@ defineExpose({
             <ul class="navbar-nav">
                 <!-- Thumbnail Sidebar -->
                 <li class="nav-item">
-                    <ToolItem class="nav-link" label="Thumbnail Sidebar" label-class="d-lg-none" icon="layout-sidebar-inset" :active="isThumbnailSidebarVisible" :action="toggleThumbnailSidebar" />
+                    <ToolItem class="nav-link" label="Thumbnail Sidebar" icon="layout-sidebar-inset" :active="isThumbnailSidebarVisible" :action="toggleThumbnailSidebar" />
                 </li>
                 <!-- Search -->
                 <Search :pages="pages" :disabled="textActionsDisabled" :scrollToPage="scrollToPage" />
 
                 <!-- Form Fill -->
                 <li class="nav-item">
-                    <ToolItem class="nav-link" label="Fill Form" label-class="d-lg-none" shortcut="F" icon="ui-checks" :active="isFormFillMode" :disabled="!hasFormFields" :action="toggleFormFillMode" />
+                    <ToolItem class="nav-link" label="Fill Form" shortcut="F" icon="ui-checks" :active="isFormFillMode" :disabled="!activePage.annotations.length" :action="toggleFormFillMode" />
                 </li>
 
                 <!-- Reset Form -->
                 <li class="nav-item" v-if="isFormFillMode">
-                    <ToolItem v-if="isFormFillMode" class="nav-link" label-class="d-lg-none" label="Reset Form" shortcut="R" icon="arrow-counterclockwise" :action="resetForm" />
+                    <ToolItem class="nav-link" label="Reset Form" shortcut="R" icon="arrow-counterclockwise" :action="resetForm" />
                 </li>
             </ul>
             <!-- Toolbar -->
@@ -734,24 +727,24 @@ defineExpose({
                     <li class="nav-item vr"></li>
                 </template>
                 <li class="nav-item" v-if="isDrawing || isEraser">
-                    <ToolItem class="nav-link" label="Eraser" label-class="d-lg-none" shortcut="E" icon="eraser-fill" :active="isEraser" :disabled="drawMode !== 'pen'" :action="selectEraser" />
+                    <ToolItem class="nav-link" label="Eraser" shortcut="E" icon="eraser-fill" :active="isEraser" :disabled="drawMode !== 'pen'" :action="selectEraser" />
                 </li>
                 <template v-for="tool in dravingTools">
                     <li class="nav-item" v-if="isDrawing || isEraser || tool.value === 'pen'">
-                        <ToolItem class="nav-link" v-bind="tool" :action="selectDrawingTool" :active="drawMode === tool.value && isDrawing" label-class="d-lg-none" />
+                        <ToolItem class="nav-link" v-bind="tool" :action="selectDrawingTool" :active="drawMode === tool.value && isDrawing" />
                     </li>
                 </template>
                 <li class="nav-item">
-                    <ToolItem class="nav-link" label="Highlight Text" label-class="d-lg-none" shortcut="H" icon="highlighter" :active="isTextHighlightMode" :disabled="textActionsDisabled" :action="toggleTextHighlightMode" />
+                    <ToolItem class="nav-link" label="Highlight Text" shortcut="H" icon="highlighter" :active="isTextHighlightMode" :disabled="textActionsDisabled" :action="toggleTextHighlightMode" />
                 </li>
                 <li class="nav-item">
-                    <ToolItem class="nav-link" label="Add Text" label-class="d-lg-none" shortcut="T" icon="textarea-t" :active="isTextInputMode" :action="selectText" />
+                    <ToolItem class="nav-link" label="Add Text" shortcut="T" icon="textarea-t" :active="isTextInputMode" :action="selectText" />
                 </li>
                 <li class="nav-item">
-                    <ToolItem class="nav-link" label="Import Image" label-class="d-lg-none" shortcut="I" icon="image" :action="importImage" />
+                    <ToolItem class="nav-link" label="Import Image" shortcut="I" icon="image" :action="importImage" />
                 </li>
                 <li class="nav-item">
-                    <ToolItem class="nav-link" label="Capture Selection" label-class="d-lg-none" icon="scissors" :active="isSelectionMode" :action="captureSelection" />
+                    <ToolItem class="nav-link" label="Capture Selection" icon="scissors" :active="isSelectionMode" :action="captureSelection" />
                 </li>
 
                 <!-- Pagination -->
@@ -763,28 +756,28 @@ defineExpose({
                     </div>
                 </li>
                 <li class="nav-item">
-                    <ToolItem class="nav-link" label="Previous Page" label-class="d-lg-none" shortcut="ArrowLeft" icon="chevron-up" :action="scrollToPage" :value="pageIndex - 1" :disabled="isFirstPage" />
+                    <ToolItem class="nav-link" label="Previous Page" shortcut="ArrowLeft" icon="chevron-up" :action="scrollToPage" :value="pageIndex - 1" :disabled="isFirstPage" />
                 </li>
                 <li class="nav-item">
-                    <ToolItem class="nav-link" label="Next Page" label-class="d-lg-none" shortcut="ArrowRight" icon="chevron-down" :action="scrollToPage" :value="pageIndex + 1" :disabled="isLastPage" />
+                    <ToolItem class="nav-link" label="Next Page" shortcut="ArrowRight" icon="chevron-down" :action="scrollToPage" :value="pageIndex + 1" :disabled="isLastPage" />
                 </li>
 
                 <!-- History -->
                 <li class="nav-item vr"></li>
                 <li class="nav-item">
-                    <ToolItem class="nav-link" label="Undo" label-class="d-lg-none" shortcut="Ctrl+Z" icon="arrow-counterclockwise" :action="undo" :disabled="!canUndo" />
+                    <ToolItem class="nav-link" label="Undo" shortcut="Ctrl+Z" icon="arrow-counterclockwise" :action="undo" :disabled="!canUndo" />
                 </li>
                 <li class="nav-item">
-                    <ToolItem class="nav-link" label="Redo" label-class="d-lg-none" shortcut="Ctrl+Y" icon="arrow-clockwise" :action="redo" :disabled="!canRedo" />
+                    <ToolItem class="nav-link" label="Redo" shortcut="Ctrl+Y" icon="arrow-clockwise" :action="redo" :disabled="!canRedo" />
                 </li>
 
                 <!-- Zoom -->
                 <li class="nav-item vr"></li>
                 <li class="nav-item">
-                    <ToolItem class="nav-link" label="Zoom In" label-class="d-lg-none" icon="zoom-in" :disabled="zoomPercentage === maxZoom || isViewLocked" :action="zoom" :value="1" />
+                    <ToolItem class="nav-link" label="Zoom In" icon="zoom-in" :disabled="zoomPercentage === maxZoom || isViewLocked" :action="zoom" :value="1" />
                 </li>
                 <li class="nav-item">
-                    <ToolItem class="nav-link" label="Zoom Out" label-class="d-lg-none" icon="zoom-out" :disabled="zoomPercentage === minZoom || isViewLocked" :action="zoom" :value="-1" />
+                    <ToolItem class="nav-link" label="Zoom Out" icon="zoom-out" :disabled="zoomPercentage === minZoom || isViewLocked" :action="zoom" :value="-1" />
                 </li>
                 <li class="nav-item">
                     <select id="zoom-level" class="form-control-plaintext" @change="onZoomLevelChange" :disabled="isViewLocked">
@@ -794,15 +787,15 @@ defineExpose({
                     </select>
                 </li>
                 <li class="nav-item">
-                    <ToolItem class="nav-link" label="Lock View" label-class="d-lg-none" icon="lock" icon-active :active="isViewLocked" :action="lockView" />
+                    <ToolItem class="nav-link" label="Lock View" icon="lock" icon-active :active="isViewLocked" :action="lockView" />
                 </li>
             </ul>
             <ul class="navbar-nav">
                 <li class="nav-item">
-                    <ToolItem class="nav-link" label="Save File" label-class="d-lg-none" icon="floppy-fill" :action="handleSaveFile" :disabled="historyStep === savedHistoryStep" />
+                    <ToolItem class="nav-link" label="Save File" icon="floppy-fill" :action="handleSaveFile" :disabled="historyStep === savedHistoryStep" />
                 </li>
                 <li class="nav-item">
-                    <ToolItem class="nav-link" label="Preferences" label-class="d-lg-none" icon="gear-fill" :action="openPreferences" />
+                    <ToolItem class="nav-link" label="Preferences" icon="gear-fill" :action="openPreferences" />
                 </li>
             </ul>
         </nav>
@@ -822,123 +815,7 @@ defineExpose({
                             <canvas class="pdf-canvas" :ref="el => page.canvas = el"></canvas>
                             <div class="text-layer" :class="{ 'text-selectable': isTextSelectionMode }" :ref="el => page.textLayer = el"></div>
                             <!-- Interactive form field overlay -->
-                            <div
-                                v-if="isFormFillMode && (pageAnnotations.get(page.index) || []).length > 0"
-                                class="form-layer"
-                            >
-                                <template v-for="field in (pageAnnotations.get(page.index) || [])" :key="field.id">
-                                    <!-- Text / password input -->
-                                    <input
-                                        v-if="field.inputType === 'text'"
-                                        :type="field.password ? 'password' : 'text'"
-                                        class="form-field form-field-text"
-                                        :style="field.posStyle"
-                                        :maxlength="field.maxLength || undefined"
-                                        :readonly="field.readOnly"
-                                        :required="field.required"
-                                        :value="formValues[field.fieldName] ?? ''"
-                                        @input="formValues[field.fieldName] = $event.target.value"
-                                        @click.stop
-                                        @pointerdown.stop
-                                    />
-                                    <!-- Multiline textarea -->
-                                    <textarea
-                                        v-else-if="field.inputType === 'textarea'"
-                                        class="form-field form-field-textarea"
-                                        :style="field.posStyle"
-                                        :maxlength="field.maxLength || undefined"
-                                        :readonly="field.readOnly"
-                                        :required="field.required"
-                                        :value="formValues[field.fieldName] ?? ''"
-                                        @input="formValues[field.fieldName] = $event.target.value"
-                                        @click.stop
-                                        @pointerdown.stop
-                                    ></textarea>
-                                    <!-- Checkbox -->
-                                    <span
-                                        v-else-if="field.inputType === 'checkbox'"
-                                        class="form-field form-field-checkbox-wrap"
-                                        :style="field.posStyle"
-                                    >
-                                        <input
-                                            type="checkbox"
-                                            class="form-field-checkbox"
-                                            :disabled="field.readOnly"
-                                            :checked="!!formValues[field.fieldName]"
-                                            @change="formValues[field.fieldName] = $event.target.checked"
-                                            @click.stop
-                                            @pointerdown.stop
-                                        />
-                                    </span>
-                                    <!-- Radio button -->
-                                    <span
-                                        v-else-if="field.inputType === 'radio'"
-                                        class="form-field form-field-radio-wrap"
-                                        :style="field.posStyle"
-                                    >
-                                        <input
-                                            type="radio"
-                                            class="form-field-radio"
-                                            :name="'pdf-radio-' + field.groupName"
-                                            :value="field.exportValue"
-                                            :disabled="field.readOnly"
-                                            :checked="formValues[field.groupName] === field.exportValue"
-                                            @change="formValues[field.groupName] = field.exportValue"
-                                            @click.stop
-                                            @pointerdown.stop
-                                        />
-                                    </span>
-                                    <!-- Single-select dropdown -->
-                                    <select
-                                        v-else-if="field.inputType === 'select'"
-                                        class="form-field form-field-select"
-                                        :style="field.posStyle"
-                                        :disabled="field.readOnly"
-                                        :required="field.required"
-                                        :value="formValues[field.fieldName] ?? ''"
-                                        @change="formValues[field.fieldName] = $event.target.value"
-                                        @click.stop
-                                        @pointerdown.stop
-                                    >
-                                        <option value="">—</option>
-                                        <option
-                                            v-for="opt in field.options"
-                                            :key="opt.value"
-                                            :value="opt.value"
-                                        >{{ opt.label }}</option>
-                                    </select>
-                                    <!-- Multi-select listbox -->
-                                    <select
-                                        v-else-if="field.inputType === 'multiselect'"
-                                        class="form-field form-field-select"
-                                        :style="field.posStyle"
-                                        multiple
-                                        :disabled="field.readOnly"
-                                        :required="field.required"
-                                        @change="formValues[field.fieldName] = Array.from($event.target.selectedOptions).map(o => o.value)"
-                                        @click.stop
-                                        @pointerdown.stop
-                                    >
-                                        <option
-                                            v-for="opt in field.options"
-                                            :key="opt.value"
-                                            :value="opt.value"
-                                            :selected="(formValues[field.fieldName] || []).includes(opt.value)"
-                                        >{{ opt.label }}</option>
-                                    </select>
-                                    <!-- Push button -->
-                                    <button
-                                        v-else-if="field.inputType === 'button'"
-                                        type="button"
-                                        class="form-field form-field-button"
-                                        :style="field.posStyle"
-                                        :disabled="field.readOnly"
-                                        @click.stop="resetForm"
-                                        @pointerdown.stop
-                                    >{{ field.label }}</button>
-                                </template>
-                            </div>
-                            <!-- /form field overlay -->
+                            <PdfForm :page="page" :disabled="!isFormFillMode" />
                             <canvas 
                                 :ref="el => page.drawingCanvas = el"
                                 class="drawing-canvas"
@@ -1057,23 +934,23 @@ defineExpose({
             <PageNumber :page-num="pageNum" :total="activePages.length"/>
             
             <context-menu parent="#pdf-reader" @show="getFromClipboard">
-                <ToolItem class="dropdown-item" label="Stroke Selection" shortcut="P" icon="cursor-fill" :active="isSelectModeActive" :action="selectStrokeMode" />
-                <ToolItem class="dropdown-item" label="Text Selection" shortcut="S" icon="cursor-text" :active="isTextSelectionMode && !isTextHighlightMode" :disabled="textActionsDisabled" :action="toggleTextSelection" />
-                <ToolItem class="dropdown-item" label="Hand Tool" icon="hand-index-thumb-fill" :active="handToolActive" :action="toggleHandTool" />
+                <ToolItem class="dropdown-item" show-label label="Stroke Selection" shortcut="P" icon="cursor-fill" :active="isSelectModeActive" :action="selectStrokeMode" />
+                <ToolItem class="dropdown-item" show-label label="Text Selection" shortcut="S" icon="cursor-text" :active="isTextSelectionMode && !isTextHighlightMode" :disabled="textActionsDisabled" :action="toggleTextSelection" />
+                <ToolItem class="dropdown-item" show-label label="Hand Tool" icon="hand-index-thumb-fill" :active="handToolActive" :action="toggleHandTool" />
                 <li><hr class="dropdown-divider"></li>
-                <ToolItem class="dropdown-item" label="Capture Selection" shortcut="Ctrl+X" icon="scissors" :action="captureSelection" />
-                <ToolItem class="dropdown-item" label="Copy" shortcut="Ctrl+C" icon="copy" :action="copySelection" />
-                <ToolItem class="dropdown-item" label="Paste" shortcut="Ctrl+V" icon="clipboard" :action="insertCopiedStroke" />
+                <ToolItem class="dropdown-item" show-label label="Capture Selection" shortcut="Ctrl+X" icon="scissors" :action="captureSelection" />
+                <ToolItem class="dropdown-item" show-label label="Copy" shortcut="Ctrl+C" icon="copy" :action="copySelection" />
+                <ToolItem class="dropdown-item" show-label label="Paste" shortcut="Ctrl+V" icon="clipboard" :action="insertCopiedStroke" />
                 <li><hr class="dropdown-divider"></li>
-                <ToolItem class="dropdown-item" label="First Page" :disabled="isFirstPage" shortcut="Home" icon="chevron-double-up" :action="scrollToFirstPage" />
-                <ToolItem class="dropdown-item" label="Last Page" :disabled="isLastPage" shortcut="End" icon="chevron-double-down" :action="scrollToLastPage" />
+                <ToolItem class="dropdown-item" show-label label="First Page" :disabled="isFirstPage" shortcut="Home" icon="chevron-double-up" :action="scrollToFirstPage" />
+                <ToolItem class="dropdown-item" show-label label="Last Page" :disabled="isLastPage" shortcut="End" icon="chevron-double-down" :action="scrollToLastPage" />
                 <li><hr class="dropdown-divider"></li>
-                <ToolItem class="dropdown-item" label="Rotate Clockwise" icon="arrow-clockwise" :action="rotatePage" value="clockwise" />
-                <ToolItem class="dropdown-item" label="Rotate Counterclockwise" icon="arrow-counterclockwise" :action="rotatePage" value="counterclockwise" />
-                <ToolItem class="dropdown-item" label="Insert Blank Page" icon="file-earmark-plus" :action="insertBlankPage" />
+                <ToolItem class="dropdown-item" show-label label="Rotate Clockwise" icon="arrow-clockwise" :action="rotatePage" value="clockwise" />
+                <ToolItem class="dropdown-item" show-label label="Rotate Counterclockwise" icon="arrow-counterclockwise" :action="rotatePage" value="counterclockwise" />
+                <ToolItem class="dropdown-item" show-label label="Insert Blank Page" icon="file-earmark-plus" :action="handleInsertBlankPage" />
                 <li><hr class="dropdown-divider"></li>
-                <ToolItem class="dropdown-item" label="Print" shortcut="Ctrl+P" icon="printer" :action="printPage" />
-                <ToolItem class="dropdown-item" label="Properties" shortcut="Ctrl+I" icon="info-circle" :action="showDocumentProperties" />
+                <ToolItem class="dropdown-item" show-label label="Print" shortcut="Ctrl+P" icon="printer" :action="printPage" />
+                <ToolItem class="dropdown-item" show-label label="Properties" shortcut="Ctrl+I" icon="info-circle" :action="showDocumentProperties" />
             </context-menu>
         </div>
 
