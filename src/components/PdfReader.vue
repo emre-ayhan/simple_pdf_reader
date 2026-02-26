@@ -300,7 +300,7 @@ const selectText = () => {
     isTextInputMode.value = !wasActive;
 };
 
-const selectStrokeMode = () => {
+const toggleStrokeSelectionMode = () => {
     if (!isFileLoaded.value) return;
     resetAllTools();
     isSelectModeActive.value = true;
@@ -731,6 +731,15 @@ defineExpose({
                     <ToolItem class="nav-link" label="Capture Selection" icon="scissors" :active="isSelectionMode" :action="captureSelection" />
                 </li>
 
+                <!-- Selection -->
+                <li class="nav-item vr"></li>
+                <li class="nav-item">
+                    <ToolItem class="nav-link" label="Drawing Selection" shortcut="P" icon="cursor-fill" :active="isSelectModeActive" :action="toggleStrokeSelectionMode" />
+                </li>
+                <li class="nav-item">
+                    <ToolItem class="nav-link" label="Text Selection" shortcut="S" icon="cursor-text" :active="isTextSelectionMode" :action="toggleTextSelection" />
+                </li>
+
                 <!-- Pagination -->
                 <li class="nav-item vr"></li>
                 <li class="nav-item">
@@ -918,7 +927,7 @@ defineExpose({
             <PageNumber :page-num="pageNum" :total="activePages.length"/>
             
             <context-menu parent="#pdf-reader" @show="getFromClipboard">
-                <ToolItem class="dropdown-item" show-label label="Stroke Selection" shortcut="P" icon="cursor-fill" :active="isSelectModeActive" :action="selectStrokeMode" />
+                <ToolItem class="dropdown-item" show-label label="Stroke Selection" shortcut="P" icon="cursor-fill" :active="isSelectModeActive" :action="toggleStrokeSelectionMode" />
                 <ToolItem class="dropdown-item" show-label label="Text Selection" shortcut="S" icon="cursor-text" :active="isTextSelectionMode && !isTextHighlightMode" :disabled="textActionsDisabled" :action="toggleTextSelection" />
                 <ToolItem class="dropdown-item" show-label label="Hand Tool" icon="hand-index-thumb-fill" :active="handToolActive" :action="toggleHandTool" />
                 <li><hr class="dropdown-divider"></li>
