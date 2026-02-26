@@ -89,7 +89,6 @@ const {
     showDocumentProperties,
     rotatePage,
     openPreferences,
-    isFormFillMode,
     resetForm,
 } = useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallback, fileSavedCallback);
 
@@ -188,11 +187,6 @@ const touchAction = computed(() => {
 const isViewLocked = ref(false);
 const isThumbnailSidebarVisible = ref(false);
 
-const toggleFormFillMode = () => {
-    isFormFillMode.value = !isFormFillMode.value;
-    selectStrokeMode();
-};
-
 const toggleThumbnailSidebar = () => {
     isThumbnailSidebarVisible.value = !isThumbnailSidebarVisible.value;
 };
@@ -284,7 +278,7 @@ const selectDrawingTool = (mode) => {
     resetAllTools();
     
     if (wasActive) {
-        isSelectModeActive.value = true;
+        isTextSelectionMode.value = true;
         return;
     }
 
@@ -585,7 +579,7 @@ useWindowEvents(fileId, {
             action: (event) => {
                 if (!hasActiveTool.value) return;
                 event.preventDefault();
-                selectStrokeMode();
+                toggleTextSelection();
             }
         },
         ArrowLeft: {
@@ -665,13 +659,8 @@ defineExpose({
                 <!-- Search -->
                 <Search :pages="pages" :disabled="textActionsDisabled" :scrollToPage="scrollToPage" />
 
-                <!-- Form Fill -->
-                <li class="nav-item">
-                    <ToolItem class="nav-link" label="Fill Form" shortcut="F" icon="ui-checks" :active="isFormFillMode" :disabled="!activePage.annotations.length" :action="toggleFormFillMode" />
-                </li>
-
                 <!-- Reset Form -->
-                <li class="nav-item" v-if="isFormFillMode">
+                <li class="nav-item" v-if="isTextSelectionMode && activePage.annotations.length">
                     <ToolItem class="nav-link" label="Reset Form" shortcut="R" icon="arrow-counterclockwise" :action="resetForm" />
                 </li>
             </ul>
@@ -810,7 +799,7 @@ defineExpose({
                             <canvas class="pdf-canvas" :ref="el => page.canvas = el"></canvas>
                             <div class="text-layer" :class="{ 'text-selectable': isTextSelectionMode }" :ref="el => page.textLayer = el"></div>
                             <!-- Interactive form field overlay -->
-                            <PdfForm :page="page" :disabled="!isFormFillMode" />
+                            <PdfForm :page="page" :disabled="!isTextSelectionMode" />
                             <canvas 
                                 :ref="el => page.drawingCanvas = el"
                                 class="drawing-canvas"
@@ -821,10 +810,10 @@ defineExpose({
                                 @pointercancel="stopDrawing"
                                 @click="handleStrokeMenu"
                                 :style="{
-                                    cursor: isFormFillMode ? 'default' : cursorStyle,
-                                    pointerEvents: isFormFillMode ? 'none' : 'auto',
+                                    cursor: cursorStyle,
+                                    pointerEvents: isTextSelectionMode ? 'none' : 'auto',
                                     touchAction: touchAction,
-                                    zIndex: isFormFillMode ? -1 : (isTextSelectionMode ? 1 : 3)
+                                    zIndex: isTextSelectionMode ? 1 : 3
                                 }"
                                 :data-color="drawColor"
                             ></canvas>

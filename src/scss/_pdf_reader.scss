@@ -416,3 +416,24 @@ select.form-control-plaintext {
 input[type="search"] {
     padding-left: 32px !important;
 }
+
+.annotation-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    transform-origin: 0 0;
+    z-index: 4;
+    pointer-events: none;
+
+    section {
+        position: absolute;
+        box-sizing: border-box;
+        transform-origin: 0 0;
+    }
+
+    :is(input, textarea, select, button) {
+        pointer-events: auto;
+    }
+}

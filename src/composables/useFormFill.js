@@ -146,8 +146,6 @@ const processAnnotation = (annotation, viewport) => {
  * write them back into a pdf-lib PDFForm before serialising.
  */
 export function useFormFill(page) {
-    const isFormFillMode = ref(false);
-
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     const _initValue = (field) => {
@@ -273,7 +271,6 @@ export function useFormFill(page) {
     };
 
     return {
-        isFormFillMode,
         resetForm,
         setPageAnnotations,
         flattenToPdfLib,

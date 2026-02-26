@@ -1,14 +1,18 @@
 import { ref, nextTick, computed, watch, toRaw } from "vue";
+import { GlobalWorkerOptions, getDocument } from "pdfjs-dist";
 import { PDFDocument, rgb, degrees as pdfDegrees } from "pdf-lib";
 import { Electron } from "./useElectron";
 import { useStore } from "./useStore";
-import { GlobalWorkerOptions, getDocument } from "pdfjs-dist";
 import { uuid } from "./useUuid";
 import { showModal } from "./useModal";
 import { fileDataCache, openNewTab, setCurrentTab } from "./useTabs";
 import { useFormFill } from "./useFormFill";
 
-GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.449/build/pdf.worker.min.mjs';
+GlobalWorkerOptions.workerSrc = new URL(
+    "pdfjs-dist/build/pdf.worker.min.mjs",
+    import.meta.url
+).toString();
+
 const { set: storeSet, get: storeGet } = useStore();
 
 export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallback, fileSavedCallback) {
@@ -227,7 +231,6 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
     });
 
     const {
-        isFormFillMode,
         resetForm,
         setPageAnnotations,
         flattenToPdfLib
@@ -1360,7 +1363,6 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         showDocumentProperties,
         rotatePage,
         openPreferences,
-        isFormFillMode,
         resetForm,
     }
 }

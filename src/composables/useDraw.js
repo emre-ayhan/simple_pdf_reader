@@ -13,8 +13,8 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
     const imageCache = new Map();
     
     // Drawing variables
-    const isSelectModeActive = ref(true);
-    const isTextSelectionMode = ref(false);
+    const isSelectModeActive = ref(false);
+    const isTextSelectionMode = ref(true);
     const isTextHighlightMode = ref(false);
     const isDrawing = ref(false);
     const isEraser = ref(false);
