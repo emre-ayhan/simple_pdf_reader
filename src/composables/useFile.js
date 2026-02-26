@@ -24,10 +24,11 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         if (imagePage.value) return;
 
         const page = pages.value.find(p => p.id === pageId);
-        if (page?.rendered || page.index < 0) return;
 
-        if (pageRenderPromises.has(page.index)) {
-            return pageRenderPromises.get(page.index);
+        if (page?.rendered || page?.deleted || page.index < 0) return;
+
+        if (pageRenderPromises.has(pageId)) {
+            return pageRenderPromises.get(pageId);
         }
 
         const promise = (async () => {
@@ -147,23 +148,23 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             }
 
             page.rendered = true;
-            lazyLoadCallback(page.index);
+            lazyLoadCallback(page);
 
             // Re-extract annotations with the high-res viewport so positions are pixel-accurate
             try {
                 const rawAnnotations = await pdfPage.getAnnotations();
                 setPageAnnotations(rawAnnotations, viewport);
             } catch (e) {
-                console.warn('Form annotation re-extraction failed for page', page.index, e);
+                console.warn('Form annotation re-extraction failed for page', pageId, e);
             }
         })();
 
-        pageRenderPromises.set(page.index, promise);
+        pageRenderPromises.set(pageId, promise);
 
         try {
             await promise;
         } finally {
-            pageRenderPromises.delete(page.index);
+            pageRenderPromises.delete(pageId);
         }
     };
 
