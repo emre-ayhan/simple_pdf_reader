@@ -256,6 +256,17 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         pages.value = getPages(length);
     }
 
+    const reloadPage = (pageId) => {
+        const oldPages = toRaw(pages.value);
+
+        const page = oldPages.find(p => p.id === pageId);
+        if (!page) return;
+
+        page.id = uuid();
+        page.rendered = false;
+        pages.value = [...oldPages];
+    }
+
     const insertPage = (index) => {
         const oldPages = toRaw(pages.value);
         if (index < 0 || index > oldPages.length) return;
@@ -984,59 +995,57 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         if (!pdfDoc) return;
 
         const rotationChange = direction === 'clockwise' ? 90 : -90;
-        const pageIdx = activePage.value?.index || 0;
+        const page = activePage.value;
 
         // We can't easily rotate the page in the viewer client-side without re-rendering everything
         // So we'll rotate it in the PDF document model (pdf-lib) and reload the document.
         // This is a heavy operation but ensures consistency.
 
-        try {
-            // Get current PDF data
-            let arrayBuffer;
-            if (originalPdfData.value) {
-                arrayBuffer = originalPdfData.value.buffer.slice(
-                    originalPdfData.value.byteOffset, 
-                    originalPdfData.value.byteOffset + originalPdfData.value.byteLength
-                );
-            } else if (fileInput.value?.files[0]) {
-                 const file = fileInput.value.files[0];
-                 arrayBuffer = await file.arrayBuffer();
-            } else {
-                return;
-            }
+        // Get current PDF data
+        let arrayBuffer;
+        if (originalPdfData.value) {
+            arrayBuffer = originalPdfData.value.buffer.slice(
+                originalPdfData.value.byteOffset, 
+                originalPdfData.value.byteOffset + originalPdfData.value.byteLength
+            );
+        } else if (fileInput.value?.files[0]) {
+             const file = fileInput.value.files[0];
+             arrayBuffer = await file.arrayBuffer();
+        } else {
+            return;
+        }
 
-            const pdfLibDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
-            const pdfPage = pdfLibDoc.getPage(pageIdx);
-            
-            const currentRotation = pdfPage.getRotation().angle;
-            const newRotation = (currentRotation + rotationChange) % 360;
-            const normalizedRotation = newRotation < 0 ? newRotation + 360 : newRotation;
+        const pdfLibDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
+        const pdfPage = pdfLibDoc.getPage(page.index);
+        
+        const currentRotation = pdfPage.getRotation().angle;
+        const newRotation = (currentRotation + rotationChange) % 360;
+        const normalizedRotation = newRotation < 0 ? newRotation + 360 : newRotation;
 
-            pdfPage.setRotation(pdfDegrees(normalizedRotation));
+        pdfPage.setRotation(pdfDegrees(normalizedRotation));
 
-            // Save modified PDF
-            const pdfBytes = await pdfLibDoc.save();
-            originalPdfData.value = new Uint8Array(pdfBytes);
+        // Save modified PDF
+        const pdfBytes = await pdfLibDoc.save();
+        originalPdfData.value = new Uint8Array(pdfBytes);
 
-            // Reload PDF
-            const pdfDoc_ = await getDocument({ data: pdfBytes }).promise;
-            
+        // Reload PDF
+        await getDocument({ data: pdfBytes }).promise.then(async (pdfDoc_) => {
             // Re-initialize viewer state
             pdfDoc = pdfDoc_;
-            
-            // Strokes might need adjustment if logic was relative to unrotated coordinates
-            // For now, let's keep them as is (user might need to manually adjust if they drew something)
-            // Ideally we should rotate strokes too, but that's complex math for now.
 
-            await renderAllPages();
+            reloadPage(page.id);
+
+            await nextTick();
+            setupIntersectionObserver();
+            setupLazyLoadObserver();
             
             // Restore position
             await nextTick();
-            scrollToPage(pageIdx);
-        } catch (error) {
+            scrollToPage(page.index);
+        }).catch(async (error) => {
             console.error('Error rotating page:', error);
             await showModal('Falied to rotate page: ' + error.message);
-        }
+        })
     };
 
     const insertBlankPage = async (location) => {
@@ -1319,51 +1328,38 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
     return {
         fileId,
         pages,
-        pagesContainer,
-        pdfReader,
         isFileLoaded,
-        originalPdfData,
+        pdfReader,
+        pagesContainer,
         fileInput,
-        filename,
-        filepath,
-        imagePage,
         pageCount,
-        activePages,
-        activePage,
-        pageNum,
         pageIndex,
+        pageNum,
         isFirstPage,
         isLastPage,
         zoomPercentage,
-        fileRecentlySaved,
-        handlePageNumberInput,
-        loadImageFile,
-        loadPdfFile,
         loadFile,
         processFileOpenResult,
         handleFileOpen,
         handleSaveFile,
         intersectionObserver,
         lazyLoadObserver,
-        setupIntersectionObserver,
-        setupLazyLoadObserver,
-        renderPdfPage,
-        renderPageThumbnail,
-        resyncRenderedTextLayers,
         scrollToPage,
         scrollToFirstPage,
         scrollToLastPage,
-        storePageIndex,
-        getStoredPageIndex,
+        activePage,
+        activePages,
         deletePage,
-        createBlankPage,
-        openNewBlankPage,
         insertBlankPage,
+        openNewBlankPage,
         createImageImportHandler,
-        createImage,
+        handlePageNumberInput,
+        renderPdfPage,
+        renderPageThumbnail,
+        resyncRenderedTextLayers,
         showDocumentProperties,
-        openPreferences,
         rotatePage,
+        openPreferences,
         isFormFillMode,
         resetForm,
     }
