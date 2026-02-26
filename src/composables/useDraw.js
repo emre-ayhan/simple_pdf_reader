@@ -149,8 +149,9 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         selectionEnd.value = { x, y };
         
         // Draw selection rectangle
-        const canvas = activePage.value.drawingCanvas;
-        const ctx = activePage.value.drawingContext;
+        const page = activePage.value;
+        const canvas = page.drawingCanvas;
+        const ctx = page.drawingContext;
         if (canvas && ctx) {
             // Scale coordinates to canvas size
             const scaleX = canvas.width / rect.width;
@@ -412,9 +413,9 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
                 translateStroke(newStroke, baseDX, baseDY);
 
-                activePage.value.strokes.push(newStroke);
-                strokeChangeCallback({ id: newId, type: 'add', page: activePage.value, stroke: newStroke });
-                const strokeIndex = activePage.value.strokes.length - 1;
+                page.strokes.push(newStroke);
+                strokeChangeCallback({ id: newId, type: 'add', page: page, stroke: newStroke });
+                const strokeIndex = page.strokes.length - 1;
                 newSelections.push({ pageIndex: page.index, pageId: page.id, strokeIndex, stroke: newStroke });
             });
 
@@ -451,15 +452,15 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
             translateStroke(newStroke, offset, offset);
         }
 
-        activePage.value.strokes.push(newStroke);
+        page.strokes.push(newStroke);
         strokeChangeCallback({
             id: newId,
             type: 'add',
-            page: activePage.value,
+            page,
             stroke: newStroke
         });
 
-        const strokeIndex = activePage.value.strokes.length - 1;
+        const strokeIndex = page.strokes.length - 1;
 
         selectedStroke.value = {
             pageId: page.id,
@@ -1234,7 +1235,6 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
             }
 
             const canvasIndex = getCanvasIndexFromEvent(e);
-
             if (canvasIndex === -1) return;
             
             const canvas = activePage.value.drawingCanvas || null;
@@ -1300,7 +1300,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         startY = lastY;
 
         if (shouldErase) {
-            eraseAtPoint(lastX, lastY, currentCanvasIndex);
+            eraseAtPoint(lastX, lastY);
         } else if (drawMode.value === 'pen') {
             currentStroke.value = [{
                 id: currentStrokeId.value,
@@ -1685,7 +1685,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         const currentY = pt.y;
         
         if (shouldErase) {
-            eraseAtPoint(currentX, currentY, currentCanvasIndex);
+            eraseAtPoint(currentX, currentY);
         } else if (drawMode.value === 'pen') {
             currentStroke.value.push({
                 id: currentStrokeId.value,
@@ -2590,7 +2590,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         }, 150);
     };
 
-    const eraseAtPoint = (x, y, canvasIndex) => {
+    const eraseAtPoint = (x, y) => {
         const eraserRadius = 10;
         const strokes = activePage.value.strokes || [];
         

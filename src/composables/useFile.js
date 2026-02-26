@@ -258,11 +258,11 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
 
     const insertPage = (index) => {
         const oldPages = toRaw(pages.value);
-        if (index < 0 || index >= oldPages.length) return;
+        if (index < 0 || index > oldPages.length) return;
 
         const newPage = getPages(1)[0];
         newPage.index = index;
-        newPage.rendered = true;
+        newPage.rendered = false;
         oldPages.splice(index, 0, newPage);
 
         // Update indexes of subsequent pages
@@ -1060,9 +1060,30 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         const pdfLibDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
         const currentPageIndex = activePage.value.index;
 
-        // Get dimensions from current page or use default
-        const currentPage = pdfLibDoc.getPage(currentPageIndex);
-        const { width, height } = currentPage.getSize();
+        // Match the rendered page size (rotation/crop aware) when possible
+        let width;
+        let height;
+
+        try {
+            const currentPdfJsPage = await pdfDoc.getPage(currentPageIndex + 1);
+            const viewport = currentPdfJsPage.getViewport({ scale: 1 });
+            width = viewport.width;
+            height = viewport.height;
+        } catch (e) {
+            console.warn('Could not read viewport size from pdf.js page, falling back to pdf-lib size:', e);
+        }
+
+        if (!width || !height) {
+            const currentPage = pdfLibDoc.getPage(currentPageIndex);
+            const size = currentPage.getSize();
+            width = size.width;
+            height = size.height;
+
+            const rotation = ((currentPage.getRotation()?.angle || 0) % 360 + 360) % 360;
+            if (rotation === 90 || rotation === 270) {
+                [width, height] = [height, width];
+            }
+        }
 
         const insertIndex = location === 'after' ? currentPageIndex + 1 : currentPageIndex;
         
