@@ -245,9 +245,9 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         if (!selectedStroke.value) return;
         const isMulti = Array.isArray(selectedStrokes.value) && selectedStrokes.value.length > 1;
         if (isMulti) {
-            const pageIndex = selectedStroke.value.pageIndex;
+            const pageId = selectedStroke.value.pageId;
             const group = selectedStrokes.value
-                .filter(sel => sel.pageIndex === pageIndex)
+                .filter(sel => sel.pageId === pageId)
                 .map(sel => JSON.parse(JSON.stringify(sel.stroke)));
             copyAsStroke({
                 strokes: group,
@@ -1093,7 +1093,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 
                 // Check if clicking on a resize handle of already selected stroke
                 // Disable resizing when multiple selection is active
-                if (selectedStrokes.value.length <= 1 && selectedStroke.value && selectedStroke.value.pageIndex === canvasIndex) {
+                if (selectedStrokes.value.length <= 1 && selectedStroke.value && selectedStroke.value.pageId === page.id) {
                         const handlePadding = 5;
                             const bounds = getStrokeBounds(selectedStroke.value.stroke, SELECTION_PADDING);
                             let handle = getResizeHandle(x, y, bounds, selectedStroke.value.stroke);
@@ -1946,7 +1946,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                         newStrokeHovering = isAnyStrokeAtPoint(x, y, canvasIndex);
     
                         // 2. Check bounding box & resize handle hover (only if selected stroke is on this page)
-                        if (selectedStroke.value && selectedStroke.value.pageIndex === canvasIndex) {
+                        if (selectedStroke.value && selectedStroke.value.pageId === activePage.value.id) {
                             const bounds = getStrokeBounds(selectedStroke.value.stroke, 5);
                             if (bounds) {
                                 newResizeHandle = getResizeHandle(x, y, bounds, selectedStroke.value.stroke);
@@ -2080,14 +2080,14 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
     const changeStrokeColor = (newColor) => {
         if (!selectedStroke.value) return;
-        const pageIndex = selectedStroke.value.pageIndex;
+        const pageId = selectedStroke.value.pageId;
         const strokes = activePage.value.strokes || [];
 
         const isMulti = Array.isArray(selectedStrokes.value) && selectedStrokes.value.length > 1;
         if (isMulti) {
             // Apply color to all selected strokes on the same page
             selectedStrokes.value.forEach(sel => {
-                if (sel.pageIndex !== pageIndex) return;
+                if (sel.pageId !== pageId) return;
                 const s = strokes[sel.strokeIndex];
                 if (!s) return;
                 const originalStroke = JSON.parse(JSON.stringify(s));
@@ -2128,14 +2128,14 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
     const changeStrokeThickness = (newThickness) => {
         if (!selectedStroke.value) return;
-        const pageIndex = selectedStroke.value.pageIndex;
+        const pageId = selectedStroke.value.pageId;
         const strokes = activePage.value.strokes || [];
         const thicknessVal = parseInt(newThickness, 10);
 
         const isMulti = Array.isArray(selectedStrokes.value) && selectedStrokes.value.length > 1;
         if (isMulti) {
             selectedStrokes.value.forEach(sel => {
-                if (sel.pageIndex !== pageIndex) return;
+                if (sel.pageId !== pageId) return;
                 const s = strokes[sel.strokeIndex];
                 if (!s) return;
                 const originalStroke = JSON.parse(JSON.stringify(s));
@@ -2175,13 +2175,13 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
     const changeStrokeText = (newText) => {
         if (!selectedStroke.value) return;
-        const pageIndex = selectedStroke.value.pageIndex;
+        const pageId = selectedStroke.value.pageId;
         const strokes = activePage.value.strokes || [];
 
         const isMulti = Array.isArray(selectedStrokes.value) && selectedStrokes.value.length > 1;
         if (isMulti) {
             selectedStrokes.value.forEach(sel => {
-                if (sel.pageIndex !== pageIndex) return;
+                if (sel.pageId !== pageId) return;
                 const s = strokes[sel.strokeIndex];
                 if (!s || s[0].type !== 'text') return;
                 const originalStroke = JSON.parse(JSON.stringify(s));
@@ -2669,7 +2669,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         
         // Wait for any new images to load, then render
         Promise.all(imagePromises).then(() => {
-            const selectedIndex = (selectedStroke.value && selectedStroke.value.pageIndex === page.index)
+            const selectedIndex = (selectedStroke.value && selectedStroke.value.pageId === page.id)
                 ? selectedStroke.value.strokeIndex
                 : -1;
 
