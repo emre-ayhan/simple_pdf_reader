@@ -157,7 +157,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             // Re-extract annotations with the high-res viewport so positions are pixel-accurate
             try {
                 const rawAnnotations = await pdfPage.getAnnotations();
-                setPageAnnotations(rawAnnotations, viewport);
+                setPageAnnotations(page, rawAnnotations, viewport);
             } catch (e) {
                 console.warn('Form annotation re-extraction failed for page', pageId, e);
             }

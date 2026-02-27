@@ -470,41 +470,25 @@ export function useFormFill(page) {
         }
     };
 
-    const _initValue = (field) => {
-        const key = field.fieldName;
-        if (key in page.value.form) return; // already tracked (multi-annotation group)
-
-        let init;
-        if (field.inputType === 'checkbox') {
-            init = field.checked;
-        } else if (field.inputType === 'radio') {
-            // Use the field value that PDF reports as selected (may be '' if none)
-            init = field.checked ? field.exportValue : (page.value.form[key] ?? '');
-        } else if (field.inputType === 'multiselect') {
-            init = Array.isArray(field.value) ? [...field.value] : [];
-        } else {
-            init = field.value ?? '';
-        }
-
-        page.value.form[key] = init;
-        page.value.form.original[key] = Array.isArray(init) ? [...init] : init;
-    };
-
     // ── Public API ────────────────────────────────────────────────────────────
 
     /**
      * Called by useFile.js after rendering each page.
-     * @param {object[]} rawAnnotations   – from pdfPage.getAnnotations()
-     * @param {object}   viewport         – PDF.js viewport
+    * @param {object}   targetPage       – page state object to update
+    * @param {object[]} rawAnnotations   – from pdfPage.getAnnotations()
+    * @param {object}   viewport         – PDF.js viewport
      */
-    const setPageAnnotations = (rawAnnotations, viewport) => {
+    const setPageAnnotations = (targetPage, rawAnnotations, viewport) => {
+        const pageState = targetPage || page.value;
+        if (!pageState) return;
+
         const fields = rawAnnotations
             .map(a => processAnnotation(a, viewport))
             .filter(Boolean);
 
         // pageAnnotations.set(pageIndex, fields);
-        page.value.annotations = fields;
-        page.value.calculationRules = extractCalculationRules(rawAnnotations);
+        pageState.annotations = fields;
+        pageState.calculationRules = extractCalculationRules(rawAnnotations);
 
         // Seed formValues (radio groups need special handling)
         const radioGroupSet = new Set();
@@ -517,17 +501,34 @@ export function useFormFill(page) {
                         f => f.inputType === 'radio' && f.groupName === field.groupName && f.checked
                     );
                     const val = selected ? selected.exportValue : '';
-                    if (!(field.groupName in page.value.form)) {
-                        page.value.form[field.groupName] = val;
-                        page.value.form.original[field.groupName] = val;
+                    if (!(field.groupName in pageState.form)) {
+                        pageState.form[field.groupName] = val;
+                        pageState.form.original[field.groupName] = val;
                     }
                 }
             } else {
-                _initValue(field);
+                const key = field.fieldName;
+                if (key in pageState.form) return;
+
+                let init;
+                if (field.inputType === 'checkbox') {
+                    init = field.checked;
+                } else if (field.inputType === 'radio') {
+                    init = field.checked ? field.exportValue : (pageState.form[key] ?? '');
+                } else if (field.inputType === 'multiselect') {
+                    init = Array.isArray(field.value) ? [...field.value] : [];
+                } else {
+                    init = field.value ?? '';
+                }
+
+                pageState.form[key] = init;
+                pageState.form.original[key] = Array.isArray(init) ? [...init] : init;
             }
         });
 
-        applyCalculationRules();
+        if (pageState === page.value) {
+            applyCalculationRules();
+        }
     };
 
     /**
