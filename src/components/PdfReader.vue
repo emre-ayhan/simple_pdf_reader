@@ -667,7 +667,7 @@ defineExpose({
                 <Search :pages="pages" :disabled="textActionsDisabled" :scrollToPage="scrollToPage" />
 
                 <!-- Reset Form -->
-                <li class="nav-item" v-if="isTextSelectionMode && activePage.annotations.length">
+                <li class="nav-item" v-if="isTextSelectionMode && activePage.annotations?.length">
                     <ToolItem class="nav-link" label="Reset Form" shortcut="R" icon="arrow-counterclockwise" :action="resetForm" />
                 </li>
             </ul>
