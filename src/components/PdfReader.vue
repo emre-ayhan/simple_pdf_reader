@@ -141,6 +141,7 @@ const {
     activeStrokeStyle,
     setInitialStrokeColor,
     setInitialStrokeThickness,
+    showStrokeStyleMenu,
     handleStrokeStyleButtonClick,
     clampStrokeMenuPosition,
     highlightTextSelection,
@@ -668,14 +669,9 @@ defineExpose({
             <ul ref="toolbar" class="navbar-nav mx-auto gap-1">
                 <!-- Drawing -->
                 <template v-if="isDrawing || isTextInputMode || isTextHighlightMode">
-                    <li class="nav-item" v-for="({ color }, index) in initialStrokeStyles">
+                    <li class="nav-item btn-group" v-for="({ color }, index) in initialStrokeStyles">
                         <ToolItem class="nav-link" icon="circle-fill" :action="handleStrokeStyleButtonClick" :value="index" :active="color === drawColor" :style="`color: ${color} !important`" />
-                    </li>
-                    <li class="nav-item btn-group">
-                        <a href="#" role="button" class="nav-link" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
-                            <i class="bi bi-palette-fill"></i>
-                        </a>
-                        <div class="dropdown-menu dropdown-menu-dark rounded-3 mt-2 p-3">
+                        <div class="dropdown-menu dropdown-menu-dark show rounded-3 mt-5 p-3" v-if="showStrokeStyleMenu && !index">
                             <div class="mb-3">
                                 <div class="form-label">{{ $t('Color') }}</div>
                                 <div class="row row-cols-5">

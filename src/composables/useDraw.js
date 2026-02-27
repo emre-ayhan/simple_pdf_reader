@@ -56,17 +56,19 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
     const initialStrokeIndex = ref(0);
 
+    const showStrokeStyleMenu = ref(false);
+
     const initialStrokeStyles = ref([{
-        color: 'blue',
+        color: '#0066ff',
         thickness: 2
     }, {
-        color: 'red',
+        color: '#ff0000',
         thickness: 2
     }, {
-        color: 'green',
+        color: '#00cc00',
         thickness: 2
     }, {
-        color: 'orange',
+        color: '#ff9900',
         thickness: 2
     }]);
 
@@ -110,6 +112,12 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
     const handleStrokeStyleButtonClick = (index) => {
         if (index < 0 || index >= initialStrokeStyles.value.length) return;
         const style = initialStrokeStyles.value[index];
+
+        if (style.color === drawColor.value) {
+            showStrokeStyleMenu.value = !showStrokeStyleMenu.value;
+            return;
+        }
+
         drawColor.value = style.color;
         drawThickness.value = style.thickness;
         initialStrokeIndex.value = index;
@@ -1043,6 +1051,8 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
     };
 
     const startDrawing = (e) => {
+        showStrokeStyleMenu.value = false;
+
         if (handToolActive.value) {
             const scrollEl = getScrollContainer();
             if (!scrollEl) return;
@@ -2076,6 +2086,8 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         showStrokeMenu.value = false;
         isSelectModeActive.value = false;
         handToolActive.value = false;
+        showStrokeMenu.value = false;
+        showStrokeStyleMenu.value = false;
     };
 
     const changeStrokeColor = (newColor) => {
@@ -3121,5 +3133,6 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         getFromClipboard,
         isSelectedStrokeType,
         selectStrokes,
+        showStrokeStyleMenu
     };
 }
