@@ -16,7 +16,7 @@
     container-type: size;
 
     .form-field {
-        &:not(.form-field-button, .form-field-checkbox-wrap, .form-field-radio-wrap) {
+        &:not(:focus):not(.form-field-button, .form-field-checkbox-wrap, .form-field-radio-wrap) {
             background-color: $primary-bg-subtle;
         }
     }
@@ -46,7 +46,7 @@
     border-radius: 2px;
     transition: box-shadow 0.15s ease;
 
-    &:focus {
+    &:focus:not(button) {
         box-shadow: 0 0 0 2px rgba($primary, 0.65);
         z-index: 1;
     }
@@ -108,8 +108,8 @@
 
 // Push button
 .form-field-button {
-    background: $primary;
-    color: #fff;
+    background: transparent;
+    // color: #fff;
     border: none;
     cursor: pointer;
     padding: 2px 6px;
@@ -118,8 +118,13 @@
     text-overflow: ellipsis;
     line-height: 1.1;
 
-    &:hover { filter: brightness(1.15); }
-    &:active { filter: brightness(0.9); }
+    &:hover { 
+        background-color: rgba($dark, 0.1); 
+    }
+    &:active { 
+        background-color: rgba($dark, 0.15);
+    }
+
     &[disabled] {
         background: $secondary-bg-subtle;
         cursor: default;

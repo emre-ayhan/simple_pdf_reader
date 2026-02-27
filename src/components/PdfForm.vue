@@ -115,7 +115,7 @@ defineProps({
             :disabled="field.readOnly"
             @click.stop="resetForm"
             @pointerdown.stop
-        >{{ field.label }}</button>
+        ></button>
     </template>
 </div>
 </template>
