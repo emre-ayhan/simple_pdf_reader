@@ -1,8 +1,14 @@
 <script setup>
+const emit = defineEmits(['button-action']);
+
 defineProps({
     page: Object,
     disabled: Boolean,
 });
+
+const handleButtonClick = (field) => {
+    emit('button-action', field);
+};
 </script>
 <template>
 <div v-if="page.annotations.length > 0" class="form-layer" :class="{ disabled }">
@@ -132,7 +138,7 @@ defineProps({
             class="form-field form-field-button"
             :style="field.posStyle"
             :disabled="field.readOnly"
-            @click.stop="resetForm"
+            @click.stop="handleButtonClick(field)"
             @pointerdown.stop
         ></button>
     </template>

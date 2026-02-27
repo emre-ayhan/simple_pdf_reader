@@ -233,7 +233,10 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
     const {
         resetForm,
         setPageAnnotations,
-        flattenToPdfLib
+        flattenToPdfLib,
+        handlePdfButtonAction,
+        submitPdfForm,
+        collectPdfFormValues,
     } = useFormFill(activePage);
 
     const getPages = (length) => {
@@ -247,6 +250,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             drawingContext: null,
             strokes: [],
             annotations: [],
+            calculationRules: [],
             form: {
                 original: {}, // fieldName → original value at extraction time
             },
@@ -1364,5 +1368,8 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         rotatePage,
         openPreferences,
         resetForm,
+        handlePdfButtonAction,
+        submitPdfForm,
+        collectPdfFormValues,
     }
 }

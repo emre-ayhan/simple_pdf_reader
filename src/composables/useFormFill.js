@@ -1,4 +1,4 @@
-import { ref, reactive, computed } from 'vue';
+import { ref, reactive, computed, watch } from 'vue';
 
 // PDF.js button field flag bitmasks
 const BTN_FLAG_RADIO        = 1 << 15; // 32768
@@ -11,6 +11,8 @@ const CH_FLAG_MULTISELECT   = 1 << 21; // 2097152
 // Text field flag bitmask
 const TX_FLAG_MULTILINE     = 1 << 12; // 4096
 const TX_FLAG_READONLY      = 1;
+
+const CALC_OPS = new Set(['SUM', 'PRD', 'AVG', 'MIN', 'MAX']);
 
 /**
  * Converts a PDF.js annotation rect (in viewport/canvas pixel space) into
@@ -53,6 +55,256 @@ const fontSizeFromRect = (rect, variant = 'singleline') => {
 
     const sizePx = Math.max(minSize, Math.min(sizeFromHeight, sizeFromWidth, dynamicMax));
     return `${sizePx.toFixed(2)}px`;
+};
+
+const parseNumberOrZero = (value) => {
+    if (typeof value === 'number') {
+        return Number.isFinite(value) ? value : 0;
+    }
+    if (typeof value !== 'string') {
+        return 0;
+    }
+    const normalized = value.trim().replace(/,/g, '');
+    if (!normalized) return 0;
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const hasUserValue = (value) => {
+    if (value === null || value === undefined) return false;
+    if (Array.isArray(value)) return value.length > 0;
+    if (typeof value === 'string') return value.trim() !== '';
+    return true;
+};
+
+const formatCalculatedValue = (value) => {
+    if (!Number.isFinite(value)) return '';
+    if (Number.isInteger(value)) return String(value);
+    return String(Number(value.toFixed(6)));
+};
+
+const getCalcScriptsFromAnnotation = (annotation) => {
+    const scripts = [];
+    const visited = new Set();
+
+    const maybePush = (value) => {
+        if (typeof value !== 'string') return;
+        if (/AFSimple_Calculate\s*\(/i.test(value)) {
+            scripts.push(value);
+        }
+    };
+
+    const walk = (node, depth = 0) => {
+        if (!node || depth > 8) return;
+
+        const nodeType = typeof node;
+        if (nodeType === 'string') {
+            maybePush(node);
+            return;
+        }
+
+        if (nodeType !== 'object') return;
+        if (visited.has(node)) return;
+        visited.add(node);
+
+        if (Array.isArray(node)) {
+            node.forEach(item => walk(item, depth + 1));
+            return;
+        }
+
+        const keys = Object.keys(node);
+        keys.forEach(key => {
+            const value = node[key];
+            const keyLower = String(key).toLowerCase();
+
+            if (typeof value === 'string') {
+                if (keyLower === 'js' || keyLower === 'javascript' || keyLower === 'c' || keyLower === 'calculate') {
+                    maybePush(value);
+                } else {
+                    maybePush(value);
+                }
+                return;
+            }
+
+            walk(value, depth + 1);
+        });
+    };
+
+    walk(annotation);
+
+    return scripts;
+};
+
+const parseSimpleCalcRule = (script, targetField) => {
+    if (!script || !targetField) return null;
+
+    const compactScript = String(script).replace(/\s+/g, ' ');
+    const match = compactScript.match(/AFSimple_Calculate\(\s*['\"](SUM|PRD|AVG|MIN|MAX)['\"]\s*,\s*(?:new\s+Array\s*)?\(([^)]*)\)\s*\)/i);
+    if (!match) return null;
+
+    const op = String(match[1] || '').toUpperCase();
+    if (!CALC_OPS.has(op)) return null;
+
+    const args = match[2] || '';
+    const fieldNames = [];
+    const quoteRegex = /['\"]([^'\"]+)['\"]/g;
+    let token;
+    while ((token = quoteRegex.exec(args)) !== null) {
+        if (token[1]) fieldNames.push(token[1]);
+    }
+
+    if (fieldNames.length === 0) return null;
+
+    return {
+        targetField,
+        op,
+        sourceFields: fieldNames,
+    };
+};
+
+const parseEventSumRule = (script, targetField) => {
+    if (!script || !targetField) return null;
+
+    const compactScript = String(script).replace(/\s+/g, ' ');
+    if (!/event\.value\s*=/.test(compactScript)) return null;
+    if (!/\+/.test(compactScript)) return null;
+
+    const fieldNames = [];
+    const fieldRegex = /getField\(\s*['\"]([^'\"]+)['\"]\s*\)\.value/gi;
+    let token;
+    while ((token = fieldRegex.exec(compactScript)) !== null) {
+        if (token[1]) fieldNames.push(token[1]);
+    }
+
+    if (fieldNames.length < 2) return null;
+
+    return {
+        targetField,
+        op: 'SUM',
+        sourceFields: fieldNames,
+    };
+};
+
+const extractCalculationRules = (rawAnnotations) => {
+    const rules = [];
+    const targetSeen = new Set();
+
+    rawAnnotations.forEach(annotation => {
+        const targetField = annotation?.fieldName || annotation?.id;
+        if (!targetField || targetSeen.has(targetField)) return;
+
+        const scripts = getCalcScriptsFromAnnotation(annotation);
+        for (const script of scripts) {
+            const rule = parseSimpleCalcRule(script, targetField) || parseEventSumRule(script, targetField);
+            if (!rule) continue;
+            rules.push(rule);
+            targetSeen.add(targetField);
+            break;
+        }
+    });
+
+    return rules;
+};
+
+const extractPageIndexFromDest = (dest) => {
+    if (Array.isArray(dest) && dest.length > 0) {
+        const first = Number(dest[0]);
+        if (Number.isInteger(first) && first >= 0) return first;
+    }
+    if (typeof dest === 'number' && Number.isInteger(dest) && dest >= 0) return dest;
+    return null;
+};
+
+const parseButtonAction = (annotation) => {
+    const visited = new Set();
+    let found = null;
+
+    const setFound = (action) => {
+        if (!found && action) found = action;
+    };
+
+    const normalizeString = (value) => String(value || '').trim();
+
+    const inspectObject = (obj) => {
+        if (!obj || typeof obj !== 'object') return;
+
+        const keys = Object.keys(obj);
+        const lowerMap = keys.reduce((acc, key) => {
+            acc[key.toLowerCase()] = obj[key];
+            return acc;
+        }, {});
+
+        const submitRaw = lowerMap.submitform ?? lowerMap.submit ?? lowerMap.submiturl;
+        if (submitRaw && !found) {
+            const url = typeof submitRaw === 'string'
+                ? submitRaw
+                : (submitRaw.url || submitRaw.uri || submitRaw.unsafeurl || submitRaw.f || '');
+            if (url) {
+                const method = normalizeString(submitRaw.method || lowerMap.method || 'POST').toUpperCase();
+                setFound({ type: 'submit', url, method: method === 'GET' ? 'GET' : 'POST' });
+                return;
+            }
+        }
+
+        if ((lowerMap.resetform || lowerMap.reset) && !found) {
+            setFound({ type: 'reset' });
+            return;
+        }
+
+        const uri = lowerMap.uri || lowerMap.url || lowerMap.unsafeurl;
+        if (typeof uri === 'string' && normalizeString(uri) && !found) {
+            setFound({ type: 'link', url: normalizeString(uri) });
+            return;
+        }
+
+        const namedAction = normalizeString(lowerMap.namedaction || lowerMap.named || lowerMap.action || lowerMap.n || '');
+        if (namedAction && !found) {
+            const named = namedAction.toLowerCase();
+            if (named === 'firstpage') setFound({ type: 'navigate', target: 'first' });
+            else if (named === 'lastpage') setFound({ type: 'navigate', target: 'last' });
+            else if (named === 'nextpage') setFound({ type: 'navigate', target: 'next' });
+            else if (named === 'prevpage' || named === 'previouspage') setFound({ type: 'navigate', target: 'prev' });
+            if (found) return;
+        }
+
+        const pageIndex = extractPageIndexFromDest(lowerMap.dest ?? lowerMap.d ?? lowerMap.page ?? lowerMap.pagenumber);
+        if (pageIndex !== null && !found) {
+            setFound({ type: 'goto', pageIndex });
+            return;
+        }
+    };
+
+    const walk = (node, depth = 0) => {
+        if (!node || found || depth > 8) return;
+        if (typeof node !== 'object') return;
+        if (visited.has(node)) return;
+        visited.add(node);
+
+        if (Array.isArray(node)) {
+            node.forEach(item => walk(item, depth + 1));
+            return;
+        }
+
+        inspectObject(node);
+        if (found) return;
+
+        Object.values(node).forEach(value => {
+            walk(value, depth + 1);
+        });
+    };
+
+    walk(annotation);
+
+    if (!found && annotation?.buttonValue) {
+        const label = normalizeString(annotation.buttonValue).toLowerCase();
+        if (label.includes('reset')) return { type: 'reset' };
+        if (label.includes('first')) return { type: 'navigate', target: 'first' };
+        if (label.includes('last')) return { type: 'navigate', target: 'last' };
+        if (label.includes('next')) return { type: 'navigate', target: 'next' };
+        if (label.includes('prev') || label.includes('previous')) return { type: 'navigate', target: 'prev' };
+    }
+
+    return found;
 };
 
 /**
@@ -106,11 +358,13 @@ const processAnnotation = (annotation, viewport) => {
         const isRadio = !!(fieldFlags & BTN_FLAG_RADIO);
 
         if (isPush) {
+            const buttonAction = parseButtonAction(annotation);
             return {
                 ...base,
                 posStyle: { ...base.posStyle, fontSize: fontSizeFromRect(viewportRect, 'singleline') },
                 inputType: 'button',
                 label:     annotation.fieldValue || fieldName || 'Button',
+                buttonAction,
             };
         }
 
@@ -173,6 +427,49 @@ const processAnnotation = (annotation, viewport) => {
 export function useFormFill(page) {
     // ── Helpers ──────────────────────────────────────────────────────────────
 
+    const isApplyingCalculations = ref(false);
+
+    const applyCalculationRules = () => {
+        if (!page.value?.form || isApplyingCalculations.value) return;
+
+        const rules = Array.isArray(page.value.calculationRules) ? page.value.calculationRules : [];
+        if (rules.length === 0) return;
+
+        isApplyingCalculations.value = true;
+        try {
+            rules.forEach(rule => {
+                const sourceValues = rule.sourceFields.map(name => page.value.form[name]);
+                const anySourceValue = sourceValues.some(hasUserValue);
+
+                if (!anySourceValue) {
+                    page.value.form[rule.targetField] = '';
+                    return;
+                }
+
+                const numeric = sourceValues.map(parseNumberOrZero);
+                let result = 0;
+
+                if (rule.op === 'SUM') {
+                    result = numeric.reduce((sum, n) => sum + n, 0);
+                } else if (rule.op === 'PRD') {
+                    result = numeric.reduce((prod, n) => prod * n, 1);
+                } else if (rule.op === 'AVG') {
+                    result = numeric.length > 0
+                        ? numeric.reduce((sum, n) => sum + n, 0) / numeric.length
+                        : 0;
+                } else if (rule.op === 'MIN') {
+                    result = numeric.length > 0 ? Math.min(...numeric) : 0;
+                } else if (rule.op === 'MAX') {
+                    result = numeric.length > 0 ? Math.max(...numeric) : 0;
+                }
+
+                page.value.form[rule.targetField] = formatCalculatedValue(result);
+            });
+        } finally {
+            isApplyingCalculations.value = false;
+        }
+    };
+
     const _initValue = (field) => {
         const key = field.fieldName;
         if (key in page.value.form) return; // already tracked (multi-annotation group)
@@ -207,6 +504,7 @@ export function useFormFill(page) {
 
         // pageAnnotations.set(pageIndex, fields);
         page.value.annotations = fields;
+        page.value.calculationRules = extractCalculationRules(rawAnnotations);
 
         // Seed formValues (radio groups need special handling)
         const radioGroupSet = new Set();
@@ -228,6 +526,8 @@ export function useFormFill(page) {
                 _initValue(field);
             }
         });
+
+        applyCalculationRules();
     };
 
     /**
@@ -238,7 +538,28 @@ export function useFormFill(page) {
             const orig = page.value.form.original[key];
             page.value.form[key] = Array.isArray(orig) ? [...orig] : orig;
         });
+
+        applyCalculationRules();
     };
+
+    watch(
+        () => {
+            if (!page.value?.annotations?.length) return [];
+
+            return page.value.annotations.map(field => {
+                if (field.inputType === 'radio') {
+                    return `radio:${field.groupName}:${page.value.form[field.groupName] ?? ''}`;
+                }
+
+                const value = page.value.form[field.fieldName];
+                const normalized = Array.isArray(value) ? value.join('|') : String(value ?? '');
+                return `${field.fieldName}:${normalized}`;
+            });
+        },
+        () => {
+            applyCalculationRules();
+        }
+    );
 
     /**
      * Write the current formValues back into a pdf-lib PDFForm.
@@ -299,9 +620,106 @@ export function useFormFill(page) {
         });
     };
 
+    // Button actions (submit/reset/link) are not handled here since pdf-lib does not support them.
+    
+    const collectPdfFormValues = () => {
+        const values = {};
+
+        if (!page.value || page.value.deleted || !page.value.form) return;
+
+        Object.keys(page.value.form).forEach(key => {
+            if (key === 'original') return;
+            const value = page.value.form[key];
+            values[key] = Array.isArray(value) ? [...value] : value;
+        });
+
+        return values;
+    };
+
+    const openExternalUrl = (url) => {
+        const normalized = String(url || '').trim();
+        if (!normalized) return;
+        window.open(normalized, '_blank', 'noopener,noreferrer');
+    };
+
+    const submitPdfForm = async (action) => {
+        const url = String(action?.url || '').trim();
+        if (!url) return;
+
+        const method = String(action?.method || 'POST').toUpperCase() === 'GET' ? 'GET' : 'POST';
+        const formValues = collectPdfFormValues();
+
+        try {
+            if (method === 'GET') {
+                const query = new URLSearchParams();
+                Object.entries(formValues).forEach(([key, value]) => {
+                    if (Array.isArray(value)) {
+                        value.forEach(item => query.append(key, String(item ?? '')));
+                        return;
+                    }
+                    query.append(key, String(value ?? ''));
+                });
+
+                const hasQuery = url.includes('?');
+                openExternalUrl(`${url}${hasQuery ? '&' : '?'}${query.toString()}`);
+                return;
+            }
+
+            await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(formValues),
+            });
+        } catch (error) {
+            console.warn('[PdfForm] submit action failed', error);
+        }
+    };
+
+    const handlePdfButtonAction = async (field) => {
+        const action = field?.buttonAction;
+        if (!action) return;
+
+        if (action.type === 'reset') {
+            resetForm();
+            return;
+        }
+
+        if (action.type === 'link') {
+            openExternalUrl(action.url);
+            return;
+        }
+
+        if (action.type === 'submit') {
+            await submitPdfForm(action);
+            return;
+        }
+
+        if (action.type === 'goto') {
+            scrollToPage(action.pageIndex || 0);
+            return;
+        }
+
+        if (action.type === 'navigate') {
+            if (action.target === 'first') {
+                scrollToFirstPage();
+            } else if (action.target === 'last') {
+                scrollToLastPage();
+            } else if (action.target === 'next') {
+                scrollToPage(Math.min(activePages.value.length - 1, pageIndex.value + 1));
+            } else if (action.target === 'prev') {
+                scrollToPage(Math.max(0, pageIndex.value - 1));
+            }
+        }
+    };
+
     return {
         resetForm,
         setPageAnnotations,
         flattenToPdfLib,
+        handlePdfButtonAction,
+        submitPdfForm,
+        collectPdfFormValues,
     };
 }

@@ -90,7 +90,12 @@ const {
     showDocumentProperties,
     rotatePage,
     openPreferences,
+
+    // Form Fill
     resetForm,
+    handlePdfButtonAction,
+    submitPdfForm,
+    collectPdfFormValues,
 } = useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallback, fileSavedCallback);
 
 // Drawing Management
@@ -786,7 +791,7 @@ defineExpose({
                             <canvas class="pdf-canvas" :ref="el => page.canvas = el"></canvas>
                             <div class="text-layer" :class="{ 'text-selectable': isTextSelectionMode }" :ref="el => page.textLayer = el"></div>
                             <!-- Interactive form field overlay -->
-                            <PdfForm :page="page" :disabled="!isTextSelectionMode" />
+                            <PdfForm :page="page" :disabled="!isTextSelectionMode" @button-action="handlePdfButtonAction" />
                             <canvas 
                                 :ref="el => page.drawingCanvas = el"
                                 class="drawing-canvas"

@@ -23,13 +23,14 @@
 
     &.disabled {
         .form-field {
-            &:not(.form-field-checkbox-wrap, .form-field-radio-wrap) {
+            &:not(.form-field-button, .form-field-checkbox-wrap, .form-field-radio-wrap) {
                 background-color: $secondary-bg-subtle;
             }
 
             .form-field-checkbox,
             .form-field-radio {
                 accent-color: $secondary;
+                background-color: $secondary-bg-subtle;
             }
         }
     }
