@@ -775,7 +775,7 @@ defineExpose({
                 </li>
             </ul>
         </nav>
-        <div id="pdf-reader" ref="pdfReader" :class="`pdf-reader toolbar-${toolbarPosition} ${isViewLocked ? 'overflow-hidden' : ''}`">
+        <div :id="`pdf-reader-${fileId}`" ref="pdfReader" :class="`pdf-reader toolbar-${toolbarPosition} ${isViewLocked ? 'overflow-hidden' : ''}`">
             <ThumbnailSidebar 
                 v-if="isThumbnailSidebarVisible"
                 :pageCount="pageCount"
@@ -909,7 +909,7 @@ defineExpose({
 
             <PageNumber :page-num="pageNum" :total="activePages.length"/>
             
-            <context-menu parent="#pdf-reader" @show="getFromClipboard">
+            <context-menu :parent="`#pdf-reader-${fileId}`" @show="getFromClipboard">
                 <ToolItem class="dropdown-item" show-label label="Stroke Selection" shortcut="P" icon="cursor-fill" :active="isSelectModeActive" :action="toggleStrokeSelectionMode" />
                 <ToolItem class="dropdown-item" show-label label="Text Selection" shortcut="S" icon="cursor-text" :active="isTextSelectionMode && !isTextHighlightMode" :disabled="textActionsDisabled" :action="toggleTextSelection" />
                 <ToolItem class="dropdown-item" show-label label="Hand Tool" icon="hand-index-thumb-fill" :active="handToolActive" :action="toggleHandTool" />
