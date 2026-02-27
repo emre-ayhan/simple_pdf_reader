@@ -25,17 +25,34 @@ const rectToStyle = (rect, vpWidth, vpHeight) => {
     const top    = (Math.min(y1, y2) / vpHeight) * 100;
     const width  = (Math.abs(x2 - x1) / vpWidth)  * 100;
     const height = (Math.abs(y2 - y1) / vpHeight) * 100;
-    // Font size: take the smaller of a height-driven value (good for single-line fields)
-    // and a width-driven value (caps oversized fonts in tall multi-selects / listboxes).
-    const fh = (height * 0.72).toFixed(3);
-    const fw = (width  * 0.07).toFixed(3);
     return {
         left:     `${left}%`,
         top:      `${top}%`,
         width:    `${width}%`,
         height:   `${height}%`,
-        fontSize: `min(${fh}cqh, ${fw}cqw)`,
     };
+};
+
+/**
+ * Derive a readable font size from field dimensions in viewport pixels.
+ * Uses different tuning for single-line vs multi-line/listbox controls.
+ */
+const fontSizeFromRect = (rect, variant = 'singleline') => {
+    const [x1, y1, x2, y2] = rect;
+    const widthPx = Math.max(1, Math.abs(x2 - x1));
+    const heightPx = Math.max(1, Math.abs(y2 - y1));
+
+    const isMultiLineLike = variant === 'textarea' || variant === 'multiselect' || variant === 'listbox';
+    const heightFactor = isMultiLineLike ? 0.46 : 0.66;
+    const widthFactor = isMultiLineLike ? 0.085 : 0.13;
+
+    const sizeFromHeight = heightPx * heightFactor;
+    const sizeFromWidth = widthPx * widthFactor;
+    const dynamicMax = isMultiLineLike ? 20 : 24;
+    const minSize = heightPx < 15 ? 8 : 10;
+
+    const sizePx = Math.max(minSize, Math.min(sizeFromHeight, sizeFromWidth, dynamicMax));
+    return `${sizePx.toFixed(2)}px`;
 };
 
 /**
@@ -51,8 +68,9 @@ const processAnnotation = (annotation, viewport) => {
     if (!rect || !Array.isArray(rect) || rect.length < 4) return null;
 
     let posStyle;
+    let viewportRect;
     try {
-        const viewportRect = viewport.convertToViewportRectangle(rect);
+        viewportRect = viewport.convertToViewportRectangle(rect);
         posStyle = rectToStyle(viewportRect, viewport.width, viewport.height);
     } catch (e) {
         console.warn('[FormFill] convertToViewportRectangle failed', e);
@@ -71,9 +89,11 @@ const processAnnotation = (annotation, viewport) => {
 
     // ── Text field ───────────────────────────────────────────────────────────
     if (fieldType === 'Tx') {
+        const inputType = (fieldFlags & TX_FLAG_MULTILINE) ? 'textarea' : 'text';
         return {
             ...base,
-            inputType:  (fieldFlags & TX_FLAG_MULTILINE) ? 'textarea' : 'text',
+            posStyle:   { ...base.posStyle, fontSize: fontSizeFromRect(viewportRect, inputType) },
+            inputType,
             maxLength:  annotation.maxLen || 0,
             password:   !!(fieldFlags & (1 << 13)),
             value:      annotation.fieldValue ?? '',
@@ -88,6 +108,7 @@ const processAnnotation = (annotation, viewport) => {
         if (isPush) {
             return {
                 ...base,
+                posStyle: { ...base.posStyle, fontSize: fontSizeFromRect(viewportRect, 'singleline') },
                 inputType: 'button',
                 label:     annotation.fieldValue || fieldName || 'Button',
             };
@@ -133,6 +154,7 @@ const processAnnotation = (annotation, viewport) => {
 
         return {
             ...base,
+            posStyle: { ...base.posStyle, fontSize: fontSizeFromRect(viewportRect, isMulti ? 'multiselect' : (isCombo ? 'singleline' : 'listbox')) },
             inputType: isMulti ? 'multiselect' : (isCombo ? 'select' : 'listbox'),
             size:      annotation.size || Math.max(2, Math.min(options.length || 2, 8)),
             options,
