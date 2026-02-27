@@ -5,6 +5,7 @@ const BTN_FLAG_RADIO        = 1 << 15; // 32768
 const BTN_FLAG_PUSH_BUTTON  = 1 << 16; // 65536
 
 // PDF.js choice field flag bitmask
+const CH_FLAG_COMBO         = 1 << 17; // 131072
 const CH_FLAG_MULTISELECT   = 1 << 21; // 2097152
 
 // Text field flag bitmask
@@ -117,6 +118,7 @@ const processAnnotation = (annotation, viewport) => {
     // ── Choice (dropdown / listbox) ───────────────────────────────────────────
     if (fieldType === 'Ch') {
         const isMulti = !!(fieldFlags & CH_FLAG_MULTISELECT);
+        const isCombo = !!(fieldFlags & CH_FLAG_COMBO) || annotation.combo === true;
         const options = (annotation.options || []).map(opt =>
             typeof opt === 'string'
                 ? { label: opt,                   value: opt }
@@ -131,7 +133,8 @@ const processAnnotation = (annotation, viewport) => {
 
         return {
             ...base,
-            inputType: isMulti ? 'multiselect' : 'select',
+            inputType: isMulti ? 'multiselect' : (isCombo ? 'select' : 'listbox'),
+            size:      annotation.size || Math.max(2, Math.min(options.length || 2, 8)),
             options,
             value:     initialValue,
         };
@@ -256,6 +259,10 @@ export function useFormFill(page) {
                 }
             } else if (field.inputType === 'select') {
                 tryField(pdfForm.getDropdown, key, (f) => {
+                    try { if (val) f.select(String(val)); } catch (_) {}
+                });
+            } else if (field.inputType === 'listbox') {
+                tryField(pdfForm.getOptionList, key, (f) => {
                     try { if (val) f.select(String(val)); } catch (_) {}
                 });
             } else if (field.inputType === 'multiselect') {

@@ -87,6 +87,25 @@ defineProps({
                 :value="opt.value"
             >{{ opt.label }}</option>
         </select>
+        <!-- Single-select listbox -->
+        <select
+            v-else-if="field.inputType === 'listbox'"
+            class="form-field form-field-select"
+            :style="field.posStyle"
+            :size="field.size || 2"
+            :disabled="field.readOnly"
+            :required="field.required"
+            :value="page.form[field.fieldName] ?? ''"
+            @change="page.form[field.fieldName] = $event.target.value"
+            @click.stop
+            @pointerdown.stop
+        >
+            <option
+                v-for="opt in field.options"
+                :key="opt.value"
+                :value="opt.value"
+            >{{ opt.label }}</option>
+        </select>
         <!-- Multi-select listbox -->
         <select
             v-else-if="field.inputType === 'multiselect'"
