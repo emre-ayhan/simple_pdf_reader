@@ -672,32 +672,13 @@ defineExpose({
                     <li class="nav-item btn-group" v-for="({ color }, index) in initialStrokeStyles">
                         <ToolItem class="nav-link" icon="circle-fill" :action="handleStrokeStyleButtonClick" :value="index" :active="color === drawColor" :style="`color: ${color} !important`" />
                         <div class="dropdown-menu dropdown-menu-dark show rounded-3 mt-5 p-3" v-if="showStrokeStyleMenu && !index">
-                            <div class="mb-3">
-                                <div class="form-label">{{ $t('Color') }}</div>
-                                <div class="row row-cols-5">
-                                    <template v-for="color in colors">
-                                        <div class="col" v-if="!initialStrokeStyles.find(el => el.color === color)">
-                                            <div role="button" class="fs-3" :style="{ color }" @click="setInitialStrokeColor(color)" :title="color">
-                                                <i class="bi bi-circle-fill"></i>
-                                            </div>
-                                        </div>
-                                    </template>
+                            <div class="row">
+                                <div class="form-label col-4">{{ $t('Color') }}</div>
+                                <label class="form-label col-8">{{ $t('Thickness') }}</label>
+                                <div class="col-4">
+                                    <input type="color" class="form-control form-control-sm form-control-color rounded-3" id="color-picker" :value="drawColor" title="Select color" @input="setInitialStrokeColor($event.target.value)" />
                                 </div>
-                                <div class="mb-2">
-                                    <svg width="100%" height="40" viewBox="0 0 200 40" preserveAspectRatio="none">
-                                        <path 
-                                            d="M 0,20 Q 25,5 50,20 T 100,20 T 150,20 T 200,20" 
-                                            fill="none" 
-                                            :stroke="activeStrokeStyle?.color" 
-                                            :stroke-width="activeStrokeStyle?.thickness" 
-                                            stroke-linecap="round"
-                                        />
-                                    </svg>
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">{{ $t('Thickness') }}</label>
-                                <div class="d-flex align-items-center">
+                                <div class="col-8 d-flex align-items-center">
                                     <input type="range" class="form-range" min="1" max="10" :value="activeStrokeStyle?.thickness" @input="setInitialStrokeThickness($event.target.value)" />
                                     <input type="text" class="form-control-plaintext" min="1" max="10" :value="activeStrokeStyle?.thickness" readonly />
                                 </div>
