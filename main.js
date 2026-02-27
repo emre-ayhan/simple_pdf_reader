@@ -400,6 +400,54 @@ ipcMain.handle('print:printImages', async (event, payload = {}) => {
     const deviceName = options.deviceName || '';
     const copies = Number.isFinite(options.copies) ? options.copies : parseInt(options.copies || '1', 10);
     const landscape = options.landscape === true;
+    const color = options.color !== false;
+    const duplexMode = typeof options.duplexMode === 'string' ? options.duplexMode : undefined;
+
+    const dpiRaw = options.dpi || {};
+    const dpiHorizontal = Number.isFinite(dpiRaw.horizontal) ? Math.max(72, Math.min(1200, dpiRaw.horizontal)) : undefined;
+    const dpiVertical = Number.isFinite(dpiRaw.vertical) ? Math.max(72, Math.min(1200, dpiRaw.vertical)) : undefined;
+
+    const scalePercentInput = Number.isFinite(options.scalePercent)
+        ? options.scalePercent
+        : parseInt(options.scalePercent || '100', 10);
+    const scalePercent = Number.isFinite(scalePercentInput) ? Math.max(10, Math.min(200, scalePercentInput)) : 100;
+
+    const pageSizeMap = {
+        A4: '210mm 297mm',
+        Letter: '8.5in 11in',
+        Legal: '8.5in 14in',
+    };
+
+    const pageSizeRaw = typeof options.pageSize === 'string' ? options.pageSize : 'auto';
+    const pageSizeKey = pageSizeRaw === 'A4' || pageSizeRaw === 'Letter' || pageSizeRaw === 'Legal' ? pageSizeRaw : 'auto';
+    const pageSizeCss = pageSizeMap[pageSizeKey] || '';
+
+    const toMm = (value, fallback = 10) => {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return fallback;
+        return Math.max(0, Math.min(50, n));
+    };
+
+    const marginPresetRaw = typeof options.marginPreset === 'string' ? options.marginPreset : 'default';
+    const marginPreset = ['default', 'none', 'minimum', 'custom'].includes(marginPresetRaw)
+        ? marginPresetRaw
+        : 'default';
+
+    const customMargins = options.marginsMm || {};
+    const marginByPresetMm = {
+        none: { top: 0, right: 0, bottom: 0, left: 0 },
+        minimum: { top: 6, right: 6, bottom: 6, left: 6 },
+        default: { top: 12, right: 12, bottom: 12, left: 12 },
+    };
+
+    const marginsMm = marginPreset === 'custom'
+        ? {
+            top: toMm(customMargins.top),
+            right: toMm(customMargins.right),
+            bottom: toMm(customMargins.bottom),
+            left: toMm(customMargins.left),
+        }
+        : marginByPresetMm[marginPreset];
 
     if (!images.length) {
         return { success: false, error: 'No pages to print' };
@@ -430,21 +478,25 @@ ipcMain.handle('print:printImages', async (event, payload = {}) => {
             return { success: false, error: 'No valid images to print' };
         }
 
-        const html = `<!doctype html>
+                const pageSizeRule = pageSizeCss ? `size: ${pageSizeCss};` : '';
+                const marginRule = `margin: ${marginsMm.top}mm ${marginsMm.right}mm ${marginsMm.bottom}mm ${marginsMm.left}mm;`;
+
+                const html = `<!doctype html>
 <html>
   <head>
     <meta charset="utf-8" />
     <title>Print</title>
     <style>
-      @page { margin: 0; }
+            @page { ${pageSizeRule} ${marginRule} }
       html, body { margin: 0; padding: 0; background: white; }
       .page { page-break-after: always; break-after: page; }
       .page:last-child { page-break-after: auto; break-after: auto; }
-      img { width: 100%; height: auto; display: block; }
+            .page-content { width: 100%; }
+            img { width: ${scalePercent}%; height: auto; display: block; margin: 0 auto; }
     </style>
   </head>
   <body>
-    ${imageFiles.map((p) => `<div class="page"><img src="file:///${p.replace(/\\/g, '/')}" /></div>`).join('')}
+        ${imageFiles.map((p) => `<div class="page"><div class="page-content"><img src="file:///${p.replace(/\\/g, '/')}" /></div></div>`).join('')}
   </body>
 </html>`;
 
@@ -473,6 +525,11 @@ ipcMain.handle('print:printImages', async (event, payload = {}) => {
                         deviceName: deviceName || undefined,
                         copies: Number.isFinite(copies) && copies > 0 ? copies : 1,
                         landscape,
+                        color,
+                        pageSize: pageSizeKey === 'auto' ? undefined : pageSizeKey,
+                        scaleFactor: scalePercent,
+                        duplexMode,
+                        dpi: (dpiHorizontal && dpiVertical) ? { horizontal: dpiHorizontal, vertical: dpiVertical } : undefined,
                     },
                     (success, failureReason) => resolve({ success, failureReason })
                 );

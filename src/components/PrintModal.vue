@@ -27,7 +27,8 @@ const renderAllPagesForPrint = async () => {
 
     for (const page of props.pages) {
         if (page.deleted) continue;
-        await props.renderPdfPage(page.index);
+
+        await props.renderPdfPage(page.id);
         await nextTick();
     }
 
@@ -46,6 +47,17 @@ const printPrinters = ref([]);
 const printDeviceName = ref('');
 const printIncludeAnnotations = ref(true);
 const printOrientation = ref('portrait'); // 'portrait' | 'landscape'
+const printPageSize = ref('auto'); // 'auto' | 'A4' | 'Letter' | 'Legal'
+const printColorMode = ref('color'); // 'color' | 'monochrome'
+const printMarginPreset = ref('default'); // 'default' | 'none' | 'minimum' | 'custom'
+const printMarginTop = ref(10);
+const printMarginRight = ref(10);
+const printMarginBottom = ref(10);
+const printMarginLeft = ref(10);
+const printQuality = ref('normal'); // 'draft' | 'normal' | 'high'
+const printScaleMode = ref('fit'); // 'fit' | 'shrink' | 'custom'
+const printScalePercent = ref(100);
+const printDuplexMode = ref('simplex'); // 'simplex' | 'shortEdge' | 'longEdge'
 
 const printPreviewPageIndex = ref(0);
 
@@ -56,13 +68,37 @@ let printPreviewTimer = null;
 
 const canSilentPrint = computed(() => !!Electron.value?.printImages);
 
+const normalizedMarginMm = (value, fallback = 10) => {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(0, Math.min(50, n));
+};
+
+const qualityToDpi = (quality) => {
+    if (quality === 'draft') return { horizontal: 150, vertical: 150 };
+    if (quality === 'high') return { horizontal: 600, vertical: 600 };
+    return { horizontal: 300, vertical: 300 };
+};
+
+const resolveScalePercent = () => {
+    if (printScaleMode.value === 'shrink') return 95;
+    if (printScaleMode.value === 'custom') {
+        const custom = Number(printScalePercent.value);
+        return Number.isFinite(custom) ? Math.max(10, Math.min(200, custom)) : 100;
+    }
+    return 100;
+};
+
 const parsePageRange = (rangeText) => {
-    const active = new Set(props.activePages);
     const total = props.pageCount || 0;
+    const activePageNumbers = props.pages
+        .map((page, index) => (!page?.deleted ? index + 1 : null))
+        .filter((n) => Number.isFinite(n));
+    const active = new Set(activePageNumbers);
 
     const raw = (rangeText || '').trim();
     if (!raw || raw.toLowerCase() === 'all') {
-        return Array.from(active);
+        return activePageNumbers;
     }
 
     const out = new Set();
@@ -150,7 +186,12 @@ const updatePrintPreview = async () => {
 
     try {
         const page = props.pages?.[pageNumber - 1];
-        await props.renderPdfPage(page)
+        if (!page?.id) {
+            printPreviewDataUrl.value = '';
+            return;
+        }
+
+        await props.renderPdfPage(page.id);
         await nextTick();
         printPreviewDataUrl.value = compositePageToDataUrl(pageNumber) || '';
     } catch (error) {
@@ -216,7 +257,8 @@ const doSilentPrint = async () => {
         // Ensure all pages to be printed are rendered sequentially
         for (const pageNumber of pages) {
             const page = props.pages?.[pageNumber - 1];
-            await props.renderPdfPage(page)
+            if (!page?.id) continue;
+            await props.renderPdfPage(page.id);
         }
         await nextTick();
 
@@ -228,11 +270,31 @@ const doSilentPrint = async () => {
 
         const copies = Math.max(1, parseInt(String(printCopies.value || 1), 10) || 1);
         const landscape = printOrientation.value === 'landscape';
+        const dpi = qualityToDpi(printQuality.value);
+        const scalePercent = resolveScalePercent();
+
+        const marginsMm = {
+            top: normalizedMarginMm(printMarginTop.value),
+            right: normalizedMarginMm(printMarginRight.value),
+            bottom: normalizedMarginMm(printMarginBottom.value),
+            left: normalizedMarginMm(printMarginLeft.value),
+        };
+
+        const duplexMode = printDuplexMode.value === 'simplex' ? undefined : printDuplexMode.value;
 
         const result = await Electron.value.printImages(images, {
             deviceName: printDeviceName.value || undefined,
             copies,
             landscape,
+            pageSize: printPageSize.value,
+            color: printColorMode.value === 'color',
+            marginPreset: printMarginPreset.value,
+            marginsMm,
+            dpi,
+            quality: printQuality.value,
+            scaleMode: printScaleMode.value,
+            scalePercent,
+            duplexMode,
         });
 
         if (!result?.success) {
@@ -304,7 +366,19 @@ defineExpose({
             <div class="modal-body">
                 <div class="row g-3">
                     <div class="col-12 col-lg-4">
-                        <label class="form-label">{{ $t('Pages') }}</label>
+                        <label class="form-label mt-2">{{ $t('Printer') }}</label>
+                        <select
+                            class="form-select"
+                            v-model="printDeviceName"
+                            :disabled="!printPrinters.length"
+                        >
+                            <option value="">{{ $t('Default printer') }}</option>
+                            <option v-for="p in printPrinters" :key="p.name" :value="p.name">
+                                {{ p.displayName || p.name }}
+                            </option>
+                        </select>
+
+                        <label class="form-label mt-2">{{ $t('Pages') }}</label>
                         <input
                             type="text"
                             class="form-control"
@@ -328,16 +402,78 @@ defineExpose({
                             <option value="landscape">{{ $t('Landscape') }}</option>
                         </select>
 
-                        <label class="form-label mt-2">{{ $t('Printer') }}</label>
-                        <select
-                            class="form-select"
-                            v-model="printDeviceName"
-                            :disabled="!printPrinters.length"
-                        >
-                            <option value="">{{ $t('Default printer') }}</option>
-                            <option v-for="p in printPrinters" :key="p.name" :value="p.name">
-                                {{ p.displayName || p.name }}
-                            </option>
+                        <label class="form-label mt-2">{{ $t('Color') }}</label>
+                        <select class="form-select" v-model="printColorMode">
+                            <option value="color">{{ $t('Color') }}</option>
+                            <option value="monochrome">{{ $t('Black and white') }}</option>
+                        </select>
+
+                        <hr>
+
+                        <label class="form-label mt-2">{{ $t('Page size') }}</label>
+                        <select class="form-select" v-model="printPageSize" @change="schedulePrintPreview">
+                            <option value="auto">{{ $t('Auto') }}</option>
+                            <option value="A4">A4</option>
+                            <option value="Letter">Letter</option>
+                            <option value="Legal">Legal</option>
+                        </select>
+
+                        <label class="form-label mt-2">{{ $t('Margins') }}</label>
+                        <select class="form-select" v-model="printMarginPreset" @change="schedulePrintPreview">
+                            <option value="default">{{ $t('Default') }}</option>
+                            <option value="none">{{ $t('None') }}</option>
+                            <option value="minimum">{{ $t('Minimum') }}</option>
+                            <option value="custom">{{ $t('Custom') }}</option>
+                        </select>
+
+                        <div v-if="printMarginPreset === 'custom'" class="row g-2 mt-1">
+                            <div class="col-6">
+                                <label class="form-label small mb-1">{{ $t('Top (mm)') }}</label>
+                                <input type="number" min="0" max="50" class="form-control form-control-sm" v-model.number="printMarginTop" @input="schedulePrintPreview" />
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small mb-1">{{ $t('Right (mm)') }}</label>
+                                <input type="number" min="0" max="50" class="form-control form-control-sm" v-model.number="printMarginRight" @input="schedulePrintPreview" />
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small mb-1">{{ $t('Bottom (mm)') }}</label>
+                                <input type="number" min="0" max="50" class="form-control form-control-sm" v-model.number="printMarginBottom" @input="schedulePrintPreview" />
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small mb-1">{{ $t('Left (mm)') }}</label>
+                                <input type="number" min="0" max="50" class="form-control form-control-sm" v-model.number="printMarginLeft" @input="schedulePrintPreview" />
+                            </div>
+                        </div>
+
+                        <label class="form-label mt-2">{{ $t('Quality') }}</label>
+                        <select class="form-select" v-model="printQuality">
+                            <option value="draft">{{ $t('Draft') }}</option>
+                            <option value="normal">{{ $t('Normal') }}</option>
+                            <option value="high">{{ $t('High') }}</option>
+                        </select>
+
+                        <label class="form-label mt-2">{{ $t('Scale') }}</label>
+                        <select class="form-select" v-model="printScaleMode" @change="schedulePrintPreview">
+                            <option value="fit">{{ $t('Fit to page') }}</option>
+                            <option value="shrink">{{ $t('Shrink to fit') }}</option>
+                            <option value="custom">{{ $t('Custom') }}</option>
+                        </select>
+                        <input
+                            v-if="printScaleMode === 'custom'"
+                            type="number"
+                            min="10"
+                            max="200"
+                            class="form-control mt-2"
+                            v-model.number="printScalePercent"
+                            @input="schedulePrintPreview"
+                            :placeholder="$t('Scale %')"
+                        />
+
+                        <label class="form-label mt-2">{{ $t('Print on both sides') }}</label>
+                        <select class="form-select" v-model="printDuplexMode">
+                            <option value="simplex">{{ $t('Off') }}</option>
+                            <option value="longEdge">{{ $t('Flip on long edge') }}</option>
+                            <option value="shortEdge">{{ $t('Flip on short edge') }}</option>
                         </select>
 
                         <div class="form-check mt-3">
