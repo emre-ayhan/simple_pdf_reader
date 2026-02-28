@@ -407,13 +407,6 @@ const printPage = () => {
 
 // Page Event Handlers
 useWindowEvents(fileId, {
-    focus: {
-        action() {
-            nextTick(() => {
-                retrieveClipboardData();
-            });
-        }
-    },
     resize: {
         action() {
             if (!isFileLoaded.value) return;
@@ -555,6 +548,12 @@ useWindowEvents(fileId, {
         x: {
             ctrl: true,
             action: () => {
+                if (selectedStroke.value) {
+                    copySelectedStroke();
+                    deleteSelectedStroke();
+                    return;
+                }
+
                 captureSelection();
             }
         },

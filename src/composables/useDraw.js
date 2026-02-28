@@ -6,6 +6,59 @@ import { enableTouchDrawing } from './useAppPreferences.js';
 const copiedStroke = ref(null);
 const copiedStrokes = ref([]); // For multi-selection copy
 
+const copyAsStroke = (stroke) => {
+    if (!stroke) return;
+
+    copiedStroke.value = stroke;
+
+    if (copiedStrokes.value.length > 10) {
+        copiedStrokes.value.shift();
+    }
+
+    copiedStrokes.value.push(copiedStroke.value);
+}
+
+const retrieveClipboardData = async () => {
+    try {
+        const clipboardItems = await navigator.clipboard.read();
+        for (const item of clipboardItems) {
+            const imageType = item.types.find(type => type.startsWith('image/'));
+            if (imageType) {
+                const blob = await item.getType(imageType);
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const dataUrl = e.target.result;
+                    const img = new Image();
+                    img.onload = () => {
+                        const stroke = {
+                            inserted: 0,
+                            stroke: [{
+                                type: 'image',
+                                x: 0,
+                                y: 0,
+                                width: img.width,
+                                height: img.height,
+                                imageData: dataUrl
+                            }]
+                        };
+
+                        const isCoppied = copiedStrokes.value.findIndex(s => s.stroke[0]?.imageData === dataUrl);
+
+                        if (isCoppied !== -1) return;
+
+                        copyAsStroke(stroke);
+                    };
+                    img.src = dataUrl;
+                };
+                reader.readAsDataURL(blob);
+                return;
+            }
+        }
+    } catch (err) {
+        console.error('Failed to get from clipboard:', err);
+    }
+}
+
 export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
     const { get: storeGet, set: storeSet } = useStore();
     
@@ -237,18 +290,6 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         return first.type === type;
     };
 
-    const copyAsStroke = (stroke) => {
-        if (!stroke) return;
-
-        copiedStroke.value = stroke;
-
-        if (copiedStrokes.value.length > 10) {
-            copiedStrokes.value.shift();
-        }
-
-        copiedStrokes.value.push(copiedStroke.value);
-    }
-
     // Copy Selected Stroke
     const copySelectedStroke = () => {
         if (!selectedStroke.value) return;
@@ -269,47 +310,6 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
             });
         }
     };
-
-    const retrieveClipboardData = async () => {
-        try {
-            const clipboardItems = await navigator.clipboard.read();
-            for (const item of clipboardItems) {
-                const imageType = item.types.find(type => type.startsWith('image/'));
-                if (imageType) {
-                    const blob = await item.getType(imageType);
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        const dataUrl = e.target.result;
-                        const img = new Image();
-                        img.onload = () => {
-                            const stroke = {
-                                inserted: 0,
-                                stroke: [{
-                                    type: 'image',
-                                    x: 0,
-                                    y: 0,
-                                    width: img.width,
-                                    height: img.height,
-                                    imageData: dataUrl
-                                }]
-                            };
-
-                            const isCoppied = copiedStrokes.value.findIndex(s => s.stroke[0]?.imageData === dataUrl);
-
-                            if (isCoppied !== -1) return;
-
-                            copyAsStroke(stroke);
-                        };
-                        img.src = dataUrl;
-                    };
-                    reader.readAsDataURL(blob);
-                    return;
-                }
-            }
-        } catch (err) {
-            console.error('Failed to get from clipboard:', err);
-        }
-    }
 
     const selectStrokes = (strokes) => {
         if (!Array.isArray(strokes) || strokes.length === 0) return;

@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue';
+import { onMounted, onUnmounted, ref } from 'vue';
 import NavTabs from './components/NavTabs.vue';
 import PdfReader from './components/PdfReader.vue';
 import PageModal from './components/PageModal.vue';
@@ -7,6 +7,9 @@ import UpdateState from './components/UpdateState.vue';
 import DragOverlay from './components/DragOverlay.vue';
 import { enableTouchDrawing, moveToolbarBottom, availableLocales, currentLocale } from './composables/useAppPreferences';
 import { useDrop } from './composables/useDrop';
+import { useDraw } from './composables/useDraw';
+
+const { retrieveClipboardData } = useDraw();
 
 const reader = ref(null);
 
@@ -41,6 +44,14 @@ const menuItemClickHandler = (action, value, callback) => {
     const handler = reader.value[action];
     if (typeof handler === 'function') handler(value);
 }
+
+onMounted(() => {
+    window.addEventListener('focus', retrieveClipboardData);
+});
+
+onUnmounted(() => {
+    window.removeEventListener('focus', retrieveClipboardData);
+});
 </script>
 <template>
     <div @contextmenu.prevent @dragenter.prevent="onDragEnter" @dragleave.prevent="onDragLeave" @dragover.prevent @drop.prevent="onDrop">
