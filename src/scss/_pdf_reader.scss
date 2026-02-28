@@ -38,11 +38,8 @@
             }
         }
 
-        .form-label {
-            color: $primary;
-        }
     }
-
+    
     .nav-link {
         padding: 4px 12px !important;
         outline: none !important;
@@ -436,4 +433,8 @@ input[type="search"] {
     :is(input, textarea, select, button) {
         pointer-events: auto;
     }
+}
+
+.form-label {
+    color: $primary;
 }

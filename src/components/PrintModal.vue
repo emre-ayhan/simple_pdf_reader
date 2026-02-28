@@ -356,7 +356,7 @@ defineExpose({
 });
 </script>
 <template>
-<div class="modal fade" tabindex="-1" ref="printModalEl" aria-hidden="true">
+<div class="modal print-modal fade" tabindex="-1" ref="printModalEl" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content bg-dark text-white">
             <div class="modal-header">
@@ -366,19 +366,19 @@ defineExpose({
             <div class="modal-body">
                 <div class="row g-3">
                     <div class="col-12 col-lg-4">
-                        <label class="form-label mt-2">{{ $t('Printer') }}</label>
+                        <label class="form-label small mt-2">{{ $t('Printer') }}</label>
                         <select
                             class="form-select"
                             v-model="printDeviceName"
                             :disabled="!printPrinters.length"
                         >
-                            <option value="">{{ $t('Default printer') }}</option>
+                            <option value="">{{ $t('Default') }}</option>
                             <option v-for="p in printPrinters" :key="p.name" :value="p.name">
                                 {{ p.displayName || p.name }}
                             </option>
                         </select>
 
-                        <label class="form-label mt-2">{{ $t('Pages') }}</label>
+                        <label class="form-label small mt-2">{{ $t('Pages') }}</label>
                         <input
                             type="text"
                             class="form-control"
@@ -388,7 +388,7 @@ defineExpose({
                         />
                         <div class="form-text text-secondary">{{ $t('Use: 1-3,5') }}</div>
 
-                        <label class="form-label mt-2">{{ $t('Copies') }}</label>
+                        <label class="form-label small mt-2">{{ $t('Copies') }}</label>
                         <input
                             type="number"
                             min="1"
@@ -396,21 +396,21 @@ defineExpose({
                             v-model.number="printCopies"
                         />
 
-                        <label class="form-label mt-2">{{ $t('Orientation') }}</label>
+                        <label class="form-label small mt-2">{{ $t('Orientation') }}</label>
                         <select class="form-select" v-model="printOrientation" @change="schedulePrintPreview">
                             <option value="portrait">{{ $t('Portrait') }}</option>
                             <option value="landscape">{{ $t('Landscape') }}</option>
                         </select>
 
-                        <label class="form-label mt-2">{{ $t('Color') }}</label>
+                        <label class="form-label small mt-2">{{ $t('Color') }}</label>
                         <select class="form-select" v-model="printColorMode">
                             <option value="color">{{ $t('Color') }}</option>
-                            <option value="monochrome">{{ $t('Black and white') }}</option>
+                            <option value="monochrome">{{ $t('Grayscale') }}</option>
                         </select>
 
                         <hr>
 
-                        <label class="form-label mt-2">{{ $t('Page size') }}</label>
+                        <label class="form-label small mt-2">{{ $t('Page Size') }}</label>
                         <select class="form-select" v-model="printPageSize" @change="schedulePrintPreview">
                             <option value="auto">{{ $t('Auto') }}</option>
                             <option value="A4">A4</option>
@@ -418,7 +418,7 @@ defineExpose({
                             <option value="Legal">Legal</option>
                         </select>
 
-                        <label class="form-label mt-2">{{ $t('Margins') }}</label>
+                        <label class="form-label small mt-2">{{ $t('Margins') }}</label>
                         <select class="form-select" v-model="printMarginPreset" @change="schedulePrintPreview">
                             <option value="default">{{ $t('Default') }}</option>
                             <option value="none">{{ $t('None') }}</option>
@@ -445,14 +445,14 @@ defineExpose({
                             </div>
                         </div>
 
-                        <label class="form-label mt-2">{{ $t('Quality') }}</label>
+                        <label class="form-label small mt-2">{{ $t('Quality') }}</label>
                         <select class="form-select" v-model="printQuality">
                             <option value="draft">{{ $t('Draft') }}</option>
                             <option value="normal">{{ $t('Normal') }}</option>
                             <option value="high">{{ $t('High') }}</option>
                         </select>
 
-                        <label class="form-label mt-2">{{ $t('Scale') }}</label>
+                        <label class="form-label small mt-2">{{ $t('Scale') }}</label>
                         <select class="form-select" v-model="printScaleMode" @change="schedulePrintPreview">
                             <option value="fit">{{ $t('Fit to page') }}</option>
                             <option value="shrink">{{ $t('Shrink to fit') }}</option>
@@ -469,7 +469,7 @@ defineExpose({
                             :placeholder="$t('Scale %')"
                         />
 
-                        <label class="form-label mt-2">{{ $t('Print on both sides') }}</label>
+                        <label class="form-label small mt-2">{{ $t('Print on both sides') }}</label>
                         <select class="form-select" v-model="printDuplexMode">
                             <option value="simplex">{{ $t('Off') }}</option>
                             <option value="longEdge">{{ $t('Flip on long edge') }}</option>
