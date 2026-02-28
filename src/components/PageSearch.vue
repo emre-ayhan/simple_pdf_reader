@@ -310,7 +310,7 @@ defineExpose({
         <i class="bi bi-search"></i>
     </a>
     <div class="toast-container position-fixed start-0 top-0">
-        <div id="search-toolbar" class="toast show" role="alert" aria-live="assertive" aria-atomic="true">
+        <div id="search-toolbar" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
             <div class="toast-body">
                 <div class="d-flex align-items-start gap-2">
                     <div>
