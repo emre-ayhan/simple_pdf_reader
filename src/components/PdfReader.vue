@@ -153,7 +153,7 @@ const {
     highlightTextSelection,
     copySelectedStroke,
     insertCopiedStroke,
-    getFromClipboard,
+    retrieveClipboardData,
     isSelectedStrokeType,
     copiedStrokes,
     selectStrokes,
@@ -407,6 +407,15 @@ const printPage = () => {
 
 // Page Event Handlers
 useWindowEvents(fileId, {
+    focus: {
+        action() {
+            if (!isFileLoaded.value) return;
+            // Resync text layer positions in case they got out of sync while the window was unfocused
+            nextTick(() => {
+                retrieveClipboardData();
+            });
+        }
+    },
     resize: {
         action() {
             if (!isFileLoaded.value) return;
@@ -909,7 +918,7 @@ defineExpose({
 
             <PageNumber :page-num="pageNum" :total="activePages.length"/>
             
-            <context-menu :parent="`#pdf-reader-${fileId}`" @show="getFromClipboard">
+            <context-menu :parent="`#pdf-reader-${fileId}`" @show="retrieveClipboardData">
                 <ToolItem class="dropdown-item" show-label label="Stroke Selection" shortcut="P" icon="cursor-fill" :active="isSelectModeActive" :action="toggleStrokeSelectionMode" />
                 <ToolItem class="dropdown-item" show-label label="Text Selection" shortcut="S" icon="cursor-text" :active="isTextSelectionMode && !isTextHighlightMode" :disabled="textActionsDisabled" :action="toggleTextSelection" />
                 <ToolItem class="dropdown-item" show-label label="Hand Tool" icon="hand-index-thumb-fill" :active="handToolActive" :action="toggleHandTool" />

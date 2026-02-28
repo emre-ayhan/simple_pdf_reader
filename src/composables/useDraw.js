@@ -270,7 +270,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         }
     };
 
-    const getFromClipboard = async () => {
+    const retrieveClipboardData = async () => {
         try {
             const clipboardItems = await navigator.clipboard.read();
             for (const item of clipboardItems) {
@@ -3130,7 +3130,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         copiedStrokes,
         copySelectedStroke,
         insertCopiedStroke,
-        getFromClipboard,
+        retrieveClipboardData,
         isSelectedStrokeType,
         selectStrokes,
         showStrokeStyleMenu
