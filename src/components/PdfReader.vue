@@ -409,8 +409,6 @@ const printPage = () => {
 useWindowEvents(fileId, {
     focus: {
         action() {
-            if (!isFileLoaded.value) return;
-            // Resync text layer positions in case they got out of sync while the window was unfocused
             nextTick(() => {
                 retrieveClipboardData();
             });
@@ -595,6 +593,11 @@ useWindowEvents(fileId, {
             action: (event) => {
                 if (!hasActiveTool.value) return;
                 event.preventDefault();
+                if (isDrawing.value) {
+                    toggleStrokeSelectionMode();
+                    return;
+                }
+
                 toggleTextSelection();
             }
         },
