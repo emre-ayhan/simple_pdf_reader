@@ -217,9 +217,9 @@
     z-index: 2;
     
     mark.search-highlight {
-        background-color: rgb(255, 255, 0);
-        color: #000 !important;
-        padding: 8px 0;
+        background-color: rgba(255, 196, 0, 0.3) !important;
+        color: transparent !important;
+        padding: 8px 0 !important;
     }
 
     &.text-selectable {

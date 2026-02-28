@@ -2278,7 +2278,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         showStrokeMenu.value = false;
     };
 
-    const createHighlightRectangle = (pageIndex, rectsOrX, y, width, height) => {
+    const createHighlightRectangle = (rectsOrX, y, width, height) => {
         const id = uuid();
         
         // Check if we received an array of rects or individual values
@@ -2393,7 +2393,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
             }
             merged.push(current);
             
-            createHighlightRectangle(pageIndex, merged);
+            createHighlightRectangle(merged);
         });
 
         // Clear the text selection

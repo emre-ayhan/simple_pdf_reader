@@ -142,6 +142,16 @@ const escapeHtml = (text) => {
     return div.innerHTML;
 };
 
+const getPageDataAttribute = (match) => {
+    const page = props.pages?.[match.pageIndex];
+    if (page?.id) {
+        return String(page.id);
+    }
+
+    // Fallback for numeric data-page values
+    return String(match.pageIndex + 1);
+};
+
 const applyVisualHighlight = (match, retryCount = 0) => {
     // Stop retrying after 3 seconds (30 * 100ms)
     if (retryCount > 30) return;
@@ -156,7 +166,8 @@ const applyVisualHighlight = (match, retryCount = 0) => {
         }
     });
 
-    const textLayer = document.querySelector(`.page-container[data-page="${match.pageIndex + 1}"] .text-layer`);
+    const pageDataAttr = getPageDataAttribute(match);
+    const textLayer = document.querySelector(`.page-container[data-page="${pageDataAttr}"] .text-layer`);
     
     if (!textLayer) {
         // Should rarely happen as containers are pre-created
