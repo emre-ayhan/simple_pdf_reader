@@ -8,7 +8,7 @@ import { fileDataCache } from "../composables/useTabs";
 import { useWindowEvents } from "../composables/useWindowEvents";
 import { enableTouchDrawing, toolbarPosition } from "../composables/useAppPreferences";
 import PrintModal from "./PrintModal.vue";
-import Search from "./Search.vue";
+import PageSearch from "./PageSearch.vue";
 import ThumbnailSidebar from "./ThumbnailSidebar.vue";
 import PageNumber from "./PageNumber.vue";
 import ContextMenu from "./ContextMenu.vue";
@@ -675,7 +675,7 @@ defineExpose({
                     <ToolItem class="nav-link" label="Thumbnail Sidebar" icon="layout-sidebar-inset" :active="isThumbnailSidebarVisible" :action="toggleThumbnailSidebar" />
                 </li>
                 <!-- Search -->
-                <Search :pages="pages" :disabled="textActionsDisabled" :scrollToPage="scrollToPage" />
+                <PageSearch :pages="pages" :disabled="textActionsDisabled" :scrollToPage="scrollToPage" />
 
                 <!-- Reset Form -->
                 <li class="nav-item" v-if="isTextSelectionMode && activePage.annotations?.length">
