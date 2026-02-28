@@ -667,7 +667,7 @@ defineExpose({
 <template>
     <div class="container-fluid bg-dark-accent" v-if="isFileLoaded">
         <nav :class="`navbar navbar-expand-lg navbar-dark p-1 fixed-${toolbarPosition}`">
-            <ul class="navbar-nav">
+            <ul class="navbar-nav flex-row gap-1">
                 <!-- Thumbnail Sidebar -->
                 <li class="nav-item">
                     <ToolItem class="nav-link" label="Thumbnail Sidebar" icon="layout-sidebar-inset" :active="isThumbnailSidebarVisible" :action="toggleThumbnailSidebar" />
@@ -681,7 +681,7 @@ defineExpose({
                 </li>
             </ul>
             <!-- Toolbar -->
-            <ul ref="toolbar" class="navbar-nav mx-auto gap-1">
+            <ul ref="toolbar" class="navbar-nav mx-auto gap-1 d-none d-lg-flex">
                 <!-- Drawing -->
                 <template v-if="isDrawing || isTextInputMode || isTextHighlightMode">
                     <li class="nav-item btn-group" v-for="({ color }, index) in initialStrokeStyles">
@@ -775,7 +775,7 @@ defineExpose({
                     <ToolItem class="nav-link" label="Lock View" icon="lock" icon-active :active="isViewLocked" :action="lockView" />
                 </li>
             </ul>
-            <ul class="navbar-nav">
+            <ul class="navbar-nav flex-row gap-1">
                 <li class="nav-item">
                     <ToolItem class="nav-link" label="Save File" icon="floppy-fill" :action="handleSaveFile" :disabled="historyStep === savedHistoryStep" />
                 </li>
