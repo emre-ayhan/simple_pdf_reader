@@ -1,22 +1,27 @@
 // Global Resets
+:root {
+    --text-editor-min-width: 380px;
+    --text-editor-min-height: 256px;
+}
+
 * {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
-    Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
-  line-height: 1.6;
-  overflow: hidden; // From NavTabs global style
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+        Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
+    line-height: 1.6;
+    overflow: hidden; // From NavTabs global style
 }
 
 #app {
-  min-height: 100vh;
-  margin: 0; // From NavTabs global style
-  padding: 0; // From NavTabs global style
-  overflow: hidden; // From NavTabs global style
+    min-height: 100vh;
+    margin: 0; // From NavTabs global style
+    padding: 0; // From NavTabs global style
+    overflow: hidden; // From NavTabs global style
 }
 
 .container-fluid {
@@ -28,33 +33,33 @@ body {
 
 // Custom Scrollbar Styles (solid color for compatibility)
 * {
-  scrollbar-width: thin;
-  scrollbar-color: $dark $secondary;
+    scrollbar-width: thin;
+    scrollbar-color: $dark $secondary;
 }
 
 *::-webkit-scrollbar {
-  width: 10px;
-  background: $dark;
+    width: 10px;
+    background: $dark;
 }
 
 *::-webkit-scrollbar-thumb {
-  background: $secondary;
-  border-radius: 8px;
-  border: 2px solid $dark;
+    background: $secondary;
+    border-radius: 8px;
+    border: 2px solid $dark;
 }
 
 *::-webkit-scrollbar-track {
-  background: $dark;
+    background: $dark;
 }
 
 .link-accent {
-  text-decoration: none !important;
-  color: $text-accent !important;
+    text-decoration: none !important;
+    color: $text-accent !important;
 }
 
 
 .offcanvas-fill {
-  width: 100% !important;
+    width: 100% !important;
 }
 
 .modal-content {

@@ -11,11 +11,6 @@
     background-color: rgba(255, 255, 255, 0.1) !important;
 }
 
-:root {
-    --text-editor-min-width: 420px;
-    --text-editor-min-height: 256px;
-}
-
 .navbar {
     background: $dark-bg-accent !important;
 
@@ -302,7 +297,7 @@
             border-top-right-radius: $border-radius-lg;
             background: $dark-bg-subtle;
             overflow: visible;
-            cursor: move;
+            cursor: grab;
             user-select: none;
 
             .ql-picker {
@@ -316,6 +311,10 @@
                 max-height: 220px;
                 overflow-y: auto;
             }
+        }
+
+        .ql-toolbar:active {
+            cursor: grabbing;
         }
 
         .ql-container {
@@ -341,6 +340,14 @@
 
             button {
                 cursor: pointer;
+            }
+        }
+    }
+
+    &.is-dragging {
+        .quil-editor {
+            .ql-toolbar {
+                cursor: grabbing;
             }
         }
     }

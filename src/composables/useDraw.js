@@ -189,6 +189,16 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
     const textEditorBounds = ref(null); // Canvas coordinates
     const textEditorPosition = ref(null)
     const editingTextStroke = ref(null); // { pageId, pageIndex, strokeIndex }
+    const textEditorPreferredSize = ref({ width: 420, height: 256 });
+
+    storeGet('textEditorPreferredSize').then(value => {
+        if (!value || typeof value !== 'object') return;
+        const width = Number(value.width);
+        const height = Number(value.height);
+        if (!Number.isFinite(width) || !Number.isFinite(height)) return;
+        if (width <= 0 || height <= 0) return;
+        textEditorPreferredSize.value = { width, height };
+    });
 
     // Selection & Capture variables
     const isSelectionMode = ref(false);
@@ -1340,6 +1350,27 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         }
     };
 
+    const getPreferredTextEditorSize = () => {
+        const minSize = getTextEditorMinSize();
+        const preferred = textEditorPreferredSize.value || {};
+
+        return {
+            width: Math.max(minSize.width, Number(preferred.width) || minSize.width),
+            height: Math.max(minSize.height, Number(preferred.height) || minSize.height)
+        };
+    };
+
+    const rememberTextEditorSize = (width, height) => {
+        const minSize = getTextEditorMinSize();
+        const resolved = {
+            width: Math.max(minSize.width, Number(width) || minSize.width),
+            height: Math.max(minSize.height, Number(height) || minSize.height)
+        };
+
+        textEditorPreferredSize.value = resolved;
+        storeSet('textEditorPreferredSize', resolved);
+    };
+
     const closeTextEditor = () => {
         textEditorHtml.value = '';
         textEditorBounds.value = null;
@@ -1350,16 +1381,44 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         textboxPosition.value = null;
     };
 
+    const clampEditorViewportRect = ({ left, top, width, height }) => {
+        const viewportWidth = Math.max(0, window.innerWidth || 0);
+        const viewportHeight = Math.max(0, window.innerHeight || 0);
+
+        const safeWidth = Math.max(24, Math.min(Number(width) || 0, viewportWidth || Number(width) || 24));
+        const safeHeight = Math.max(24, Math.min(Number(height) || 0, viewportHeight || Number(height) || 24));
+
+        const maxLeft = Math.max(0, viewportWidth - safeWidth);
+        const maxTop = Math.max(0, viewportHeight - safeHeight);
+
+        const safeLeft = Math.min(Math.max(0, Number(left) || 0), maxLeft);
+        const safeTop = Math.min(Math.max(0, Number(top) || 0), maxTop);
+
+        return {
+            left: safeLeft,
+            top: safeTop,
+            width: safeWidth,
+            height: safeHeight
+        };
+    };
+
     const setTextEditorPosition = (bounds) => {
         const viewport = canvasBoundsToViewport(bounds);
         if (!viewport) return;
         const minSize = getTextEditorMinSize();
 
+        const clampedViewport = clampEditorViewportRect({
+            left: viewport.x || 0,
+            top: viewport.y || 0,
+            width: Math.max(minSize.width, viewport.width || minSize.width),
+            height: Math.max(minSize.height, viewport.height || minSize.height)
+        });
+
         textEditorPosition.value = {
-            left: `${viewport.x || 0}px`,
-            top: `${viewport.y || 0}px`,
-            width: `${viewport.width || minSize.width}px`,
-            height: `${viewport.height || minSize.height}px`
+            left: `${clampedViewport.left}px`,
+            top: `${clampedViewport.top}px`,
+            width: `${clampedViewport.width}px`,
+            height: `${clampedViewport.height}px`
         };
     };
 
@@ -1367,9 +1426,9 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         if (!textEditorPosition.value || !textEditorBounds.value) return;
         const minSize = getTextEditorMinSize();
 
-        const viewportWidth = Math.max(minSize.width, Number(width) || 0);
-        const viewportHeight = Math.max(minSize.height, Number(height) || 0);
-        if (!viewportWidth || !viewportHeight) return;
+        const requestedWidth = Math.max(minSize.width, Number(width) || 0);
+        const requestedHeight = Math.max(minSize.height, Number(height) || 0);
+        if (!requestedWidth || !requestedHeight) return;
 
         const canvas = activePage.value.drawingCanvas || null;
         if (!canvas) return;
@@ -1378,17 +1437,30 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         const scaleX = rect.width > 0 ? canvas.width / rect.width : 1;
         const scaleY = rect.height > 0 ? canvas.height / rect.height : 1;
 
+        const currentLeft = parseFloat(textEditorPosition.value.left) || 0;
+        const currentTop = parseFloat(textEditorPosition.value.top) || 0;
+        const clampedViewport = clampEditorViewportRect({
+            left: currentLeft,
+            top: currentTop,
+            width: requestedWidth,
+            height: requestedHeight
+        });
+
         textEditorPosition.value = {
             ...textEditorPosition.value,
-            width: `${viewportWidth}px`,
-            height: `${viewportHeight}px`
+            left: `${clampedViewport.left}px`,
+            top: `${clampedViewport.top}px`,
+            width: `${clampedViewport.width}px`,
+            height: `${clampedViewport.height}px`
         };
 
         textEditorBounds.value = {
             ...textEditorBounds.value,
-            width: viewportWidth * scaleX,
-            height: viewportHeight * scaleY
+            width: clampedViewport.width * scaleX,
+            height: clampedViewport.height * scaleY
         };
+
+        rememberTextEditorSize(clampedViewport.width, clampedViewport.height);
     };
 
     const updateTextEditorPosition = ({ left, top }) => {
@@ -1396,27 +1468,30 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
         const viewportWidth = parseFloat(textEditorPosition.value.width) || 0;
         const viewportHeight = parseFloat(textEditorPosition.value.height) || 0;
-
-        const clampedLeft = Math.min(
-            Math.max(0, Number(left) || 0),
-            Math.max(0, window.innerWidth - viewportWidth)
-        );
-        const clampedTop = Math.min(
-            Math.max(0, Number(top) || 0),
-            Math.max(0, window.innerHeight - viewportHeight)
-        );
+        const clampedViewport = clampEditorViewportRect({
+            left,
+            top,
+            width: viewportWidth,
+            height: viewportHeight
+        });
 
         textEditorPosition.value = {
             ...textEditorPosition.value,
-            left: `${clampedLeft}px`,
-            top: `${clampedTop}px`
+            left: `${clampedViewport.left}px`,
+            top: `${clampedViewport.top}px`
         };
     };
 
     const openTextEditor = ({ bounds, content = '', strokeRef = null }) => {
         if (!bounds) return;
-        textEditorBounds.value = { ...bounds };
-        setTextEditorPosition(bounds);
+        const preferredSize = getPreferredTextEditorSize();
+        const normalizedBounds = {
+            ...bounds,
+            width: Math.max(24, Number(bounds.width) || preferredSize.width),
+            height: Math.max(24, Number(bounds.height) || preferredSize.height)
+        };
+        textEditorBounds.value = normalizedBounds;
+        setTextEditorPosition(normalizedBounds);
         textEditorHtml.value = content;
         editingTextStroke.value = strokeRef;
     };
@@ -2202,9 +2277,9 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
             if (!canvas) return;
 
-            const minSize = getTextEditorMinSize();
-            const width = Math.min(minSize.width, canvas.width);
-            const height = Math.min(minSize.height, canvas.height);
+            const preferredSize = getPreferredTextEditorSize();
+            const width = Math.min(preferredSize.width, canvas.width);
+            const height = Math.min(preferredSize.height, canvas.height);
             const clampedX = Math.max(0, Math.min(x, Math.max(0, canvas.width - width)));
             const clampedY = Math.max(0, Math.min(y, Math.max(0, canvas.height - height)));
 
@@ -3332,8 +3407,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         if (selectedStroke.value.stroke?.[0]?.type !== 'text') return;
 
         const first = selectedStroke.value.stroke[0];
-        const textBox = getTextBoxSize(selectedStroke.value.stroke);
-        if (!textBox) return;
+        const preferredSize = getPreferredTextEditorSize();
 
         showStrokeMenu.value = false;
 
@@ -3341,8 +3415,8 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
             bounds: {
                 x: first.x,
                 y: first.y,
-                width: first.editorWidth || textBox.width,
-                height: first.editorHeight || textBox.height
+                width: first.editorWidth || preferredSize.width,
+                height: first.editorHeight || preferredSize.height
             },
             content: getTextStrokeContent(first).html,
             strokeRef: {

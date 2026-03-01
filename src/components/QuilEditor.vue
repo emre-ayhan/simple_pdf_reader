@@ -168,7 +168,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <div ref="box" class="text-editor-box" :style="style" @contextmenu.stop.prevent @pointerdown="handleDragStart">
+    <div ref="box" class="text-editor-box" :class="{ 'is-dragging': !!dragState }" :style="style" @contextmenu.stop.prevent @pointerdown="handleDragStart">
         <div class="quil-editor">
             <div ref="editor"></div>
             <div class="quil-editor-actions">
