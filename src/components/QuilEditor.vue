@@ -68,7 +68,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <div class="text-editor-box" :style="style">
+    <div class="text-editor-box" :style="style" @contextmenu.stop.prevent>
         <div class="quil-editor">
             <div ref="editor"></div>
             <div class="quil-editor-actions">

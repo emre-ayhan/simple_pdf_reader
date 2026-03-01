@@ -988,6 +988,131 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         drawWrappedText(ctx, content.text, x, y, width, height, lineHeight);
     };
 
+    const buildPlainTextTokens = (text, style) => {
+        const lines = String(text || '').split('\n');
+        const tokens = [];
+
+        lines.forEach((line, index) => {
+            if (line) {
+                tokens.push({ type: 'text', text: line, style: { ...style } });
+            }
+            if (index < lines.length - 1) {
+                tokens.push({ type: 'newline' });
+            }
+        });
+
+        return tokens;
+    };
+
+    const measureTextTokens = (ctx, tokens, baseStyle, maxWidth = null) => {
+        if (!ctx || !Array.isArray(tokens) || tokens.length === 0) {
+            return {
+                width: 24,
+                height: 24
+            };
+        }
+
+        const minFont = 8;
+        const wrapWidth = Number.isFinite(maxWidth) ? Math.max(24, maxWidth) : null;
+
+        const toFont = (style) => {
+            const fontSize = Math.max(minFont, Number(style.fontSize) || baseStyle.fontSize || 16);
+            const weight = style.bold ? 'bold ' : '';
+            const italic = style.italic ? 'italic ' : '';
+            return {
+                font: `${italic}${weight}${fontSize}px Arial`,
+                fontSize
+            };
+        };
+
+        let cursorX = 0;
+        let totalY = 0;
+        let lineHeight = Math.max(baseStyle.fontSize * 1.35, 12);
+        let maxLineWidth = 0;
+
+        const commitNewLine = () => {
+            maxLineWidth = Math.max(maxLineWidth, cursorX);
+            totalY += lineHeight;
+            cursorX = 0;
+            lineHeight = Math.max(baseStyle.fontSize * 1.35, 12);
+        };
+
+        for (const token of tokens) {
+            if (token.type === 'newline') {
+                commitNewLine();
+                continue;
+            }
+
+            const style = {
+                fontSize: token.style?.fontSize || baseStyle.fontSize,
+                bold: Boolean(token.style?.bold),
+                italic: Boolean(token.style?.italic)
+            };
+
+            const parts = String(token.text || '').split(/(\s+)/);
+            for (const part of parts) {
+                if (part === '') continue;
+                if (/^\s+$/.test(part) && cursorX === 0) continue;
+
+                const { font, fontSize } = toFont(style);
+                ctx.font = font;
+                const chunkWidth = ctx.measureText(part).width;
+
+                if (wrapWidth && cursorX + chunkWidth > wrapWidth && cursorX > 0) {
+                    commitNewLine();
+                }
+
+                lineHeight = Math.max(lineHeight, fontSize * 1.35);
+                cursorX += chunkWidth;
+            }
+        }
+
+        maxLineWidth = Math.max(maxLineWidth, cursorX);
+
+        return {
+            width: Math.max(24, wrapWidth ? Math.min(maxLineWidth, wrapWidth) : maxLineWidth),
+            height: Math.max(24, totalY + lineHeight)
+        };
+    };
+
+    const getFittedTextStrokeBounds = ({ content, color, fontSize, bounds }) => {
+        const safeBounds = bounds || { x: 0, y: 0, width: DEFAULT_TEXTBOX_WIDTH, height: DEFAULT_TEXTBOX_HEIGHT };
+        const ctx = activePage.value.drawingContext;
+
+        if (!ctx) {
+            return {
+                x: safeBounds.x,
+                y: safeBounds.y,
+                width: Math.max(24, safeBounds.width || 24),
+                height: Math.max(24, safeBounds.height || 24)
+            };
+        }
+
+        const baseStyle = {
+            color: color || DEFAULT_TEXT_COLOR,
+            fontSize: Math.max(8, Number(fontSize) || 16),
+            bold: false,
+            italic: false,
+            underline: false,
+            strike: false,
+            backgroundColor: null
+        };
+
+        let tokens = htmlToStyledTokens(content?.html || '', baseStyle);
+        if (!tokens.length) {
+            tokens = buildPlainTextTokens(content?.text || '', baseStyle);
+        }
+
+        const measured = measureTextTokens(ctx, tokens, baseStyle, safeBounds.width);
+
+        return {
+            x: safeBounds.x,
+            y: safeBounds.y,
+            width: measured.width,
+            height: measured.height
+        };
+    };
+
     const convertPlainTextToHtml = (text) => {
         const escaped = (text || '')
             .replaceAll('&', '&amp;')
@@ -1061,7 +1186,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         editingTextStroke.value = strokeRef;
     };
 
-    const syncTextEditorViewport = () => {
+    const syncTextEditorPosition = () => {
         if (!textEditorPosition.value || !textEditorBounds.value) return;
         setTextEditorPosition(textEditorBounds.value);
     };
@@ -1090,13 +1215,30 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
             const stroke = activePage.value.strokes?.[strokeIndex];
             if (stroke?.[0]?.type === 'text') {
                 const originalStroke = JSON.parse(JSON.stringify(stroke));
+                const editorBounds = {
+                    x: bounds.x,
+                    y: bounds.y,
+                    width: bounds.width,
+                    height: bounds.height
+                };
+
                 stroke[0].content = normalizedContent;
                 stroke[0].text = normalizedContent.text;
-                stroke[0].x = bounds.x;
-                stroke[0].y = bounds.y;
-                stroke[0].width = bounds.width;
-                stroke[0].height = bounds.height;
                 stroke[0].fontSize = stroke[0].fontSize || fontSize.value * scale;
+                stroke[0].editorWidth = editorBounds.width;
+                stroke[0].editorHeight = editorBounds.height;
+
+                const fittedBounds = getFittedTextStrokeBounds({
+                    content: normalizedContent,
+                    color: stroke[0].color,
+                    fontSize: stroke[0].fontSize,
+                    bounds: editorBounds
+                });
+
+                stroke[0].x = fittedBounds.x;
+                stroke[0].y = fittedBounds.y;
+                stroke[0].width = fittedBounds.width;
+                stroke[0].height = fittedBounds.height;
 
                 strokeChangeCallback({
                     id: stroke[0].id,
@@ -1109,18 +1251,34 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
             }
         } else {
             const id = uuid();
-            const textStroke = [{
-                id,
+            const editorBounds = {
                 x: bounds.x,
                 y: bounds.y,
                 width: bounds.width,
-                height: bounds.height,
+                height: bounds.height
+            };
+            const initialFontSize = fontSize.value * scale;
+            const fittedBounds = getFittedTextStrokeBounds({
+                content: normalizedContent,
+                color: DEFAULT_TEXT_COLOR,
+                fontSize: initialFontSize,
+                bounds: editorBounds
+            });
+
+            const textStroke = [{
+                id,
+                x: fittedBounds.x,
+                y: fittedBounds.y,
+                width: fittedBounds.width,
+                height: fittedBounds.height,
+                editorWidth: editorBounds.width,
+                editorHeight: editorBounds.height,
                 color: DEFAULT_TEXT_COLOR,
                 thickness: drawThickness.value,
                 type: 'text',
                 content: normalizedContent,
                 text: normalizedContent.text,
-                fontSize: fontSize.value * scale
+                fontSize: initialFontSize
             }];
 
             activePage.value.strokes.push(textStroke);
@@ -1497,6 +1655,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
     const getResizeHandle = (x, y, bounds, stroke) => {
         if (!bounds) return null;
+        if (stroke?.[0]?.type === 'text') return null;
         
         const handleSize = 8;
         const threshold = handleSize;
@@ -1665,11 +1824,11 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                         const handlePadding = 5;
                             const bounds = getStrokeBounds(selectedStroke.value.stroke, SELECTION_PADDING);
                             let handle = getResizeHandle(x, y, bounds, selectedStroke.value.stroke);
-                            // Treat top-right corner as rotation handle for all strokes (single selection), except highlight-rect
+                            // Treat top-right corner as rotation handle for all strokes (single selection), except highlight-rect/text
                             if (handle === 'ne') {
                                 const multiActive = Array.isArray(selectedStrokes.value) && selectedStrokes.value.filter(s => s.pageIndex === canvasIndex).length > 1;
                                 const type = selectedStroke.value.stroke[0]?.type;
-                                if (!multiActive && type !== 'highlight-rect') handle = 'rotate';
+                                if (!multiActive && type !== 'highlight-rect' && type !== 'text') handle = 'rotate';
                             }
                     
                     if (handle) {
@@ -2623,11 +2782,11 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 isBoundingBoxHovering.value = newBBoxHovering;
             }
             if (!isMouseDown.value) {
-                // Map NE to rotate for single-selected strokes (except highlight-rect)
+                // Map NE to rotate for single-selected strokes (except highlight-rect/text)
                 if (newResizeHandle === 'ne' && selectedStroke.value) {
                     const multiActive = Array.isArray(selectedStrokes.value) && selectedStrokes.value.filter(s => s.pageIndex === getCanvasIndexFromEvent(e)).length > 1;
                     const type = selectedStroke.value.stroke[0]?.type;
-                    if (!multiActive && type !== 'highlight-rect') newResizeHandle = 'rotate';
+                    if (!multiActive && type !== 'highlight-rect' && type !== 'text') newResizeHandle = 'rotate';
                 }
                 if (resizeHandle.value !== newResizeHandle) {
                     resizeHandle.value = newResizeHandle;
@@ -3037,8 +3196,8 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
             bounds: {
                 x: first.x,
                 y: first.y,
-                width: textBox.width,
-                height: textBox.height
+                width: first.editorWidth || textBox.width,
+                height: first.editorHeight || textBox.height
             },
             content: getTextStrokeContent(first).html,
             strokeRef: {
@@ -3131,8 +3290,8 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 if (shouldDrawBorder) {
                     ctx.strokeRect(bLocal.minX - cx, bLocal.minY - cy, w, h);
                 }
-                // Single selection: draw rotated handles
-                if (!multi) {
+                // Single selection: draw rotated handles (except text)
+                if (!multi && first.type !== 'text') {
                     ctx.setLineDash([]);
                     const handleSize = 8;
                     const handlesLocal = [
@@ -3174,7 +3333,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                     ctx.strokeRect(minX, minY, maxX - minX, maxY - minY);
                 }
                 
-                if (!multi) {
+                if (!multi && first.type !== 'text') {
                     ctx.setLineDash([]);
                     const handleSize = 8;
                     const handles = [
@@ -3719,7 +3878,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         editSelectedTextStroke,
         commitTextEditor,
         closeTextEditor,
-        syncTextEditorViewport,
+        syncTextEditorPosition,
         resetToolState,
         handleTextboxBlur,
         redrawAllStrokes,

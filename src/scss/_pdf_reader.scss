@@ -277,7 +277,7 @@
         border-radius: $border-radius-lg;
         background-color: rgba(255, 255, 255, 0.95);
         box-shadow: $box-shadow-sm;
-        overflow: hidden;
+        overflow: visible;
         height: 100%;
         display: flex;
         flex-direction: column;
@@ -285,6 +285,17 @@
         .ql-toolbar {
             border: none;
             background: $dark-bg-subtle;
+            overflow: visible;
+
+            .ql-picker {
+                position: relative;
+            }
+
+            .ql-picker-options {
+                z-index: 10001;
+                max-height: 220px;
+                overflow-y: auto;
+            }
         }
 
         .ql-container {
