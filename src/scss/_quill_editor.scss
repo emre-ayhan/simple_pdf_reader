@@ -1,0 +1,96 @@
+:root {
+    --text-editor-min-width: 380px;
+    --text-editor-min-height: 256px;
+}
+
+.text-editor-box {
+    position: fixed;
+    z-index: 9998;
+    pointer-events: all;
+    resize: both;
+    overflow: hidden;
+    min-width: var(--text-editor-min-width);
+    min-height: var(--text-editor-min-height);
+
+    &:has(.ql-picker.ql-expanded) {
+        overflow: visible;
+    }
+
+    &.is-hidden {
+        visibility: hidden;
+        pointer-events: none;
+        opacity: 0;
+    }
+
+    .quil-editor {
+        border: 1px solid $dark-bg-subtle;
+        border-radius: $border-radius-lg;
+        background-color: $white;
+        box-shadow: $box-shadow-sm;
+        overflow: visible;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+
+        .ql-toolbar {
+            border: none;
+            border-top-left-radius: $border-radius-lg;
+            border-top-right-radius: $border-radius-lg;
+            background: $dark-bg-subtle;
+            overflow: visible;
+            cursor: grab;
+            user-select: none;
+
+            .ql-picker {
+                position: relative;
+                cursor: default;
+            }
+
+            .ql-picker-options {
+                position: absolute;
+                z-index: 10001;
+                max-height: 220px;
+                overflow-y: auto;
+            }
+        }
+
+        .ql-toolbar:active {
+            cursor: grabbing;
+        }
+
+        .ql-container {
+            border: none;
+            color: $dark;
+            font-family: Arial, sans-serif;
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: auto;
+        }
+
+
+        .quil-editor-actions {
+            display: flex;
+            justify-content: flex-end;
+            border-bottom-left-radius: $border-radius-lg;
+            border-bottom-right-radius: $border-radius-lg;
+            gap: 8px;
+            padding: 8px;
+            border-top: 1px solid $border-color;
+            background: $dark-bg-subtle;
+            cursor: default;
+
+            button {
+                cursor: pointer;
+            }
+        }
+    }
+
+    &.is-dragging {
+        .quil-editor {
+            .ql-toolbar {
+                cursor: grabbing;
+            }
+        }
+    }
+}
