@@ -271,7 +271,7 @@
     z-index: 9998;
     pointer-events: all;
     resize: both;
-    overflow: auto;
+    overflow: hidden;
     min-width: var(--text-editor-min-width);
     min-height: var(--text-editor-min-height);
 
@@ -288,7 +288,7 @@
     .quil-editor {
         border: 1px solid $dark-bg-subtle;
         border-radius: $border-radius-lg;
-        background-color: rgba(255, 255, 255, 0.9);
+        background-color: $white;
         box-shadow: $box-shadow-sm;
         overflow: visible;
         width: 100%;
@@ -322,17 +322,22 @@
             border: none;
             color: $dark;
             font-family: Arial, sans-serif;
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: auto;
         }
 
 
         .quil-editor-actions {
             display: flex;
             justify-content: flex-end;
+            border-bottom-left-radius: $border-radius-lg;
+            border-bottom-right-radius: $border-radius-lg;
             gap: 8px;
             padding: 8px;
             border-top: 1px solid $border-color;
             background: $dark-bg-subtle;
-            cursor: move;
+            cursor: default;
 
             button {
                 cursor: pointer;

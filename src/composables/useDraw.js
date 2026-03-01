@@ -749,6 +749,24 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                     style.fontSize = parsed;
                 }
             }
+
+            if (key === 'text-align' && value) {
+                style.align = String(value).toLowerCase();
+                return;
+            }
+
+            if (key === 'text-decoration' && value) {
+                const lowered = String(value).toLowerCase();
+                if (lowered.includes('underline')) style.underline = true;
+                if (lowered.includes('line-through')) style.strike = true;
+                return;
+            }
+
+            if (key === 'vertical-align' && value) {
+                const lowered = String(value).toLowerCase();
+                if (lowered.includes('super')) style.script = 'super';
+                if (lowered.includes('sub')) style.script = 'sub';
+            }
         });
 
         return style;
@@ -766,20 +784,68 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         const applyElementStyle = (style, node) => {
             const nextStyle = { ...style };
             const tag = node.tagName;
+            const classList = String(node.getAttribute('class') || '')
+                .split(/\s+/)
+                .filter(Boolean);
 
             if (tag === 'STRONG' || tag === 'B') nextStyle.bold = true;
             if (tag === 'EM' || tag === 'I') nextStyle.italic = true;
             if (tag === 'U') nextStyle.underline = true;
             if (tag === 'S' || tag === 'STRIKE') nextStyle.strike = true;
+            if (tag === 'SUP') nextStyle.script = 'super';
+            if (tag === 'SUB') nextStyle.script = 'sub';
 
-            if (tag === 'H1') nextStyle.fontSize = Math.max(nextStyle.fontSize, Math.round(baseStyle.fontSize * 2));
-            if (tag === 'H2') nextStyle.fontSize = Math.max(nextStyle.fontSize, Math.round(baseStyle.fontSize * 1.5));
-            if (tag === 'H3') nextStyle.fontSize = Math.max(nextStyle.fontSize, Math.round(baseStyle.fontSize * 1.25));
+            if (tag === 'A') {
+                nextStyle.link = true;
+                nextStyle.underline = true;
+                if (!nextStyle.color) {
+                    nextStyle.color = '#1a0dab';
+                }
+            }
+
+            const headingScaleByTag = {
+                H1: 2,
+                H2: 1.5,
+                H3: 1.25,
+                H4: 1.1,
+                H5: 1,
+                H6: 0.9
+            };
+            const headingScale = headingScaleByTag[tag];
+            if (headingScale) {
+                nextStyle.fontSize = Math.max(nextStyle.fontSize, Math.round(baseStyle.fontSize * headingScale));
+            }
+
+            classList.forEach((className) => {
+                const alignMatch = className.match(/^ql-align-(left|center|right|justify)$/);
+                if (alignMatch) {
+                    nextStyle.align = alignMatch[1];
+                }
+
+                const indentMatch = className.match(/^ql-indent-(\d+)$/);
+                if (indentMatch) {
+                    nextStyle.indentLevel = Number(indentMatch[1]) || 0;
+                }
+
+                const sizeMatch = className.match(/^ql-size-(small|large|huge)$/);
+                if (sizeMatch) {
+                    if (sizeMatch[1] === 'small') nextStyle.fontSize = Math.max(8, Math.round(baseStyle.fontSize * 0.8));
+                    if (sizeMatch[1] === 'large') nextStyle.fontSize = Math.max(nextStyle.fontSize, Math.round(baseStyle.fontSize * 1.25));
+                    if (sizeMatch[1] === 'huge') nextStyle.fontSize = Math.max(nextStyle.fontSize, Math.round(baseStyle.fontSize * 1.5));
+                }
+            });
 
             const inlineStyle = parseInlineStyle(node.getAttribute('style') || '');
             if (inlineStyle.color) nextStyle.color = inlineStyle.color;
             if (inlineStyle.backgroundColor) nextStyle.backgroundColor = inlineStyle.backgroundColor;
             if (inlineStyle.fontSize) nextStyle.fontSize = inlineStyle.fontSize;
+            if (inlineStyle.align) nextStyle.align = inlineStyle.align;
+            if (inlineStyle.underline) nextStyle.underline = true;
+            if (inlineStyle.strike) nextStyle.strike = true;
+            if (inlineStyle.script) nextStyle.script = inlineStyle.script;
+
+            if (!nextStyle.align) nextStyle.align = 'left';
+            if (!Number.isFinite(nextStyle.indentLevel)) nextStyle.indentLevel = 0;
 
             return nextStyle;
         };
@@ -813,11 +879,12 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 }
 
                 if (tag === 'UL' || tag === 'OL') {
+                    const listStyle = applyElementStyle(style, node);
                     pushNewline(tokens);
                     let index = 1;
                     Array.from(node.children || []).forEach((child) => {
                         if (child.tagName !== 'LI') return;
-                        walk(child, style, {
+                        walk(child, listStyle, {
                             ordered: tag === 'OL',
                             index
                         });
@@ -863,83 +930,134 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         const safeWidth = Math.max(20, width || 20);
         const safeHeight = Math.max(baseStyle.fontSize * 1.35, height || 20);
         const maxY = y + safeHeight;
-        const endX = x + safeWidth;
         const minFont = 8;
+        const indentStep = 32;
 
-        const toFont = (style) => {
-            const fontSize = Math.max(minFont, Number(style.fontSize) || baseStyle.fontSize || 16);
+        const normalizeAlign = (align) => {
+            const lower = String(align || 'left').toLowerCase();
+            if (lower === 'center' || lower === 'right' || lower === 'justify') return lower;
+            return 'left';
+        };
+
+        const toFontMetrics = (style) => {
+            const baseFontSize = Math.max(minFont, Number(style.fontSize) || baseStyle.fontSize || 16);
+            const isScript = style.script === 'super' || style.script === 'sub';
+            const fontSize = isScript ? Math.max(minFont, Math.round(baseFontSize * 0.75)) : baseFontSize;
             const weight = style.bold ? 'bold ' : '';
             const italic = style.italic ? 'italic ' : '';
+
+            let baselineOffset = 0;
+            if (style.script === 'super') baselineOffset = -fontSize * 0.35;
+            if (style.script === 'sub') baselineOffset = fontSize * 0.2;
+
             return {
                 font: `${italic}${weight}${fontSize}px Arial`,
-                fontSize
+                fontSize,
+                lineHeight: Math.max(fontSize * 1.35, 12),
+                baselineOffset
             };
         };
 
-        let cursorX = x;
         let cursorY = y;
+        let lineWidth = 0;
         let lineHeight = Math.max(baseStyle.fontSize * 1.35, 12);
+        let lineAlign = 'left';
+        let lineIndentLevel = 0;
+        let hasLineStyle = false;
+        let lineChunks = [];
 
-        const commitNewLine = () => {
-            cursorX = x;
-            cursorY += lineHeight;
+        const resetLine = () => {
+            lineWidth = 0;
             lineHeight = Math.max(baseStyle.fontSize * 1.35, 12);
+            lineAlign = 'left';
+            lineIndentLevel = 0;
+            hasLineStyle = false;
+            lineChunks = [];
         };
 
-        const drawChunk = (chunk, style) => {
-            if (!chunk) return true;
+        const applyLineStyle = (style) => {
+            if (hasLineStyle) return;
+            lineAlign = normalizeAlign(style.align || 'left');
+            lineIndentLevel = Math.max(0, Number(style.indentLevel) || 0);
+            hasLineStyle = true;
+        };
 
-            const { font, fontSize } = toFont(style);
-            ctx.font = font;
-            const chunkWidth = ctx.measureText(chunk).width;
+        const getIndentPixels = (level) => level * indentStep;
 
-            if (cursorX + chunkWidth > endX && cursorX > x) {
-                commitNewLine();
+        const flushLine = (forceBlank = false) => {
+            const hasContent = lineChunks.length > 0;
+            if (!hasContent && !forceBlank) {
+                resetLine();
+                return true;
             }
 
             if (cursorY + lineHeight > maxY) return false;
 
-            lineHeight = Math.max(lineHeight, fontSize * 1.35);
+            const indentPixels = getIndentPixels(lineIndentLevel);
+            const availableWidth = Math.max(8, safeWidth - indentPixels);
+            let drawX = x + indentPixels;
+            let justifyGapCount = 0;
+            let justifyExtraPerGap = 0;
 
-            if (style.backgroundColor && chunk.trim()) {
-                ctx.fillStyle = style.backgroundColor;
-                ctx.fillRect(cursorX, cursorY, chunkWidth, lineHeight);
+            if (lineAlign === 'center') {
+                drawX += Math.max(0, (availableWidth - lineWidth) / 2);
+            } else if (lineAlign === 'right') {
+                drawX += Math.max(0, availableWidth - lineWidth);
+            } else if (lineAlign === 'justify') {
+                justifyGapCount = lineChunks.reduce((count, chunk) => count + (/^\s+$/.test(chunk.text) ? 1 : 0), 0);
+                if (justifyGapCount > 0) {
+                    justifyExtraPerGap = Math.max(0, availableWidth - lineWidth) / justifyGapCount;
+                }
             }
 
-            ctx.fillStyle = style.color || baseStyle.color;
-            ctx.textBaseline = 'top';
-            ctx.fillText(chunk, cursorX, cursorY);
+            lineChunks.forEach((chunk) => {
+                const style = chunk.style;
+                const textColor = style.color || baseStyle.color;
 
-            const textColor = style.color || baseStyle.color;
+                if (style.backgroundColor && chunk.text.trim()) {
+                    ctx.fillStyle = style.backgroundColor;
+                    ctx.fillRect(drawX, cursorY, chunk.width, lineHeight);
+                }
 
-            if (style.underline && chunk.trim()) {
-                ctx.beginPath();
-                ctx.strokeStyle = textColor;
-                ctx.lineWidth = Math.max(1, fontSize / 12);
-                const underlineY = cursorY + fontSize * 1.08;
-                ctx.moveTo(cursorX, underlineY);
-                ctx.lineTo(cursorX + chunkWidth, underlineY);
-                ctx.stroke();
-            }
+                ctx.font = chunk.font;
+                ctx.fillStyle = textColor;
+                ctx.textBaseline = 'top';
+                ctx.fillText(chunk.text, drawX, cursorY + chunk.baselineOffset);
 
-            if (style.strike && chunk.trim()) {
-                ctx.beginPath();
-                ctx.strokeStyle = textColor;
-                ctx.lineWidth = Math.max(1, fontSize / 12);
-                const strikeY = cursorY + fontSize * 0.58;
-                ctx.moveTo(cursorX, strikeY);
-                ctx.lineTo(cursorX + chunkWidth, strikeY);
-                ctx.stroke();
-            }
+                if (style.underline && chunk.text.trim()) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = textColor;
+                    ctx.lineWidth = Math.max(1, chunk.fontSize / 12);
+                    const underlineY = cursorY + chunk.baselineOffset + chunk.fontSize * 1.08;
+                    ctx.moveTo(drawX, underlineY);
+                    ctx.lineTo(drawX + chunk.width, underlineY);
+                    ctx.stroke();
+                }
 
-            cursorX += chunkWidth;
+                if (style.strike && chunk.text.trim()) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = textColor;
+                    ctx.lineWidth = Math.max(1, chunk.fontSize / 12);
+                    const strikeY = cursorY + chunk.baselineOffset + chunk.fontSize * 0.58;
+                    ctx.moveTo(drawX, strikeY);
+                    ctx.lineTo(drawX + chunk.width, strikeY);
+                    ctx.stroke();
+                }
+
+                drawX += chunk.width;
+                if (lineAlign === 'justify' && justifyExtraPerGap > 0 && /^\s+$/.test(chunk.text)) {
+                    drawX += justifyExtraPerGap;
+                }
+            });
+
+            cursorY += lineHeight;
+            resetLine();
             return true;
         };
 
         for (const token of tokens) {
             if (token.type === 'newline') {
-                commitNewLine();
-                if (cursorY + lineHeight > maxY) return;
+                if (!flushLine(true)) return;
                 continue;
             }
 
@@ -950,17 +1068,44 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 bold: Boolean(token.style?.bold),
                 italic: Boolean(token.style?.italic),
                 underline: Boolean(token.style?.underline),
-                strike: Boolean(token.style?.strike)
+                strike: Boolean(token.style?.strike),
+                script: token.style?.script || null,
+                align: token.style?.align || 'left',
+                indentLevel: Number(token.style?.indentLevel) || 0
             };
 
             const parts = String(token.text || '').split(/(\s+)/);
             for (const part of parts) {
                 if (part === '') continue;
-                if (/^\s+$/.test(part) && cursorX === x) continue;
-                const shouldContinue = drawChunk(part, style);
-                if (!shouldContinue) return;
+                applyLineStyle(style);
+                if (/^\s+$/.test(part) && lineWidth === 0) continue;
+
+                const metrics = toFontMetrics(style);
+                ctx.font = metrics.font;
+                const chunkWidth = ctx.measureText(part).width;
+
+                const indentPixels = getIndentPixels(lineIndentLevel);
+                const availableWidth = Math.max(8, safeWidth - indentPixels);
+
+                if (lineWidth + chunkWidth > availableWidth && lineWidth > 0) {
+                    if (!flushLine(false)) return;
+                    applyLineStyle(style);
+                }
+
+                lineHeight = Math.max(lineHeight, metrics.lineHeight);
+                lineChunks.push({
+                    text: part,
+                    width: chunkWidth,
+                    style,
+                    font: metrics.font,
+                    fontSize: metrics.fontSize,
+                    baselineOffset: metrics.baselineOffset
+                });
+                lineWidth += chunkWidth;
             }
         }
+
+        flushLine(false);
     };
 
     const drawTextStroke = (ctx, first, x, y, width, height) => {
@@ -1014,15 +1159,19 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         }
 
         const minFont = 8;
+        const indentStep = 32;
         const wrapWidth = Number.isFinite(maxWidth) ? Math.max(24, maxWidth) : null;
 
         const toFont = (style) => {
-            const fontSize = Math.max(minFont, Number(style.fontSize) || baseStyle.fontSize || 16);
+            const baseFontSize = Math.max(minFont, Number(style.fontSize) || baseStyle.fontSize || 16);
+            const isScript = style.script === 'super' || style.script === 'sub';
+            const fontSize = isScript ? Math.max(minFont, Math.round(baseFontSize * 0.75)) : baseFontSize;
             const weight = style.bold ? 'bold ' : '';
             const italic = style.italic ? 'italic ' : '';
             return {
                 font: `${italic}${weight}${fontSize}px Arial`,
-                fontSize
+                fontSize,
+                lineHeight: Math.max(fontSize * 1.35, 12)
             };
         };
 
@@ -1030,12 +1179,18 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         let totalY = 0;
         let lineHeight = Math.max(baseStyle.fontSize * 1.35, 12);
         let maxLineWidth = 0;
+        let lineIndentLevel = 0;
+        let hasLineStyle = false;
+
+        const getIndentPixels = (level) => Math.max(0, Number(level) || 0) * indentStep;
 
         const commitNewLine = () => {
-            maxLineWidth = Math.max(maxLineWidth, cursorX);
+            maxLineWidth = Math.max(maxLineWidth, getIndentPixels(lineIndentLevel) + cursorX);
             totalY += lineHeight;
             cursorX = 0;
             lineHeight = Math.max(baseStyle.fontSize * 1.35, 12);
+            lineIndentLevel = 0;
+            hasLineStyle = false;
         };
 
         for (const token of tokens) {
@@ -1047,7 +1202,9 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
             const style = {
                 fontSize: token.style?.fontSize || baseStyle.fontSize,
                 bold: Boolean(token.style?.bold),
-                italic: Boolean(token.style?.italic)
+                italic: Boolean(token.style?.italic),
+                script: token.style?.script || null,
+                indentLevel: Number(token.style?.indentLevel) || 0
             };
 
             const parts = String(token.text || '').split(/(\s+)/);
@@ -1055,20 +1212,30 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 if (part === '') continue;
                 if (/^\s+$/.test(part) && cursorX === 0) continue;
 
-                const { font, fontSize } = toFont(style);
+                if (!hasLineStyle) {
+                    lineIndentLevel = Math.max(0, style.indentLevel || 0);
+                    hasLineStyle = true;
+                }
+
+                const { font, lineHeight: chunkLineHeight } = toFont(style);
                 ctx.font = font;
                 const chunkWidth = ctx.measureText(part).width;
 
-                if (wrapWidth && cursorX + chunkWidth > wrapWidth && cursorX > 0) {
+                const indentPixels = getIndentPixels(lineIndentLevel);
+                const availableWidth = wrapWidth ? Math.max(8, wrapWidth - indentPixels) : null;
+
+                if (availableWidth && cursorX + chunkWidth > availableWidth && cursorX > 0) {
                     commitNewLine();
+                    lineIndentLevel = Math.max(0, style.indentLevel || 0);
+                    hasLineStyle = true;
                 }
 
-                lineHeight = Math.max(lineHeight, fontSize * 1.35);
+                lineHeight = Math.max(lineHeight, chunkLineHeight);
                 cursorX += chunkWidth;
             }
         }
 
-        maxLineWidth = Math.max(maxLineWidth, cursorX);
+        maxLineWidth = Math.max(maxLineWidth, getIndentPixels(lineIndentLevel) + cursorX);
 
         return {
             width: Math.max(24, wrapWidth ? Math.min(maxLineWidth, wrapWidth) : maxLineWidth),

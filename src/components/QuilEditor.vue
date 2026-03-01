@@ -51,8 +51,13 @@ const handleDragStart = (e) => {
     if (!box.value) return;
 
     const target = e.target;
-    const isDragZone = target?.closest?.('.ql-toolbar, .quil-editor-actions');
-    const isInteractive = target?.closest?.('.ql-picker-options, button, input, textarea, select');
+    const inToolbar = target?.closest?.('.ql-toolbar');
+    const isDragZone = inToolbar;
+
+    // Keep all Quill controls clickable (pickers, buttons, format groups, etc.)
+    const isInteractive = target?.closest?.(
+        '.ql-formats, .ql-picker, .ql-picker-label, .ql-picker-options, .ql-picker-item, button, input, textarea, select, a'
+    );
     if (!isDragZone || isInteractive) return;
 
     dragState.value = {
@@ -94,11 +99,12 @@ onMounted(() => {
         modules: {
             toolbar: [
                 [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
-                // [{ size: ['small', false, 'large', 'huge'] }],
-                ['bold', 'italic', 'underline', 'strike'],
+                ['bold', 'italic', 'underline', 'strike', 'link'],
+                [{ 'script': 'sub' }, { 'script': 'super' }],
+                [{ 'indent': '-1' }, { 'indent': '+1' }],
+                [{ 'align': [] }],
                 [{ list: 'ordered' }, { list: 'bullet' }],
                 [{ color: [] }, { background: [] }],
-                // ['clean']
             ]
         }
     });
