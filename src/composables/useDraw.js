@@ -180,17 +180,11 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
     // Text mode variables
     const DEFAULT_TEXT_COLOR = '#000000';
-    const DEFAULT_TEXTBOX_WIDTH = 420;
-    const DEFAULT_TEXTBOX_HEIGHT = 260;
-    const MIN_TEXTBOX_SELECTION = 8;
     const isTextInputMode = ref(false);
     const textPosition = ref(null);
     const textCanvasIndex = ref(-1);
     const fontSize = ref(16);
     const textboxPosition = ref(null); // Screen position for the textbox
-    const isTextAreaSelecting = ref(false);
-    const textSelectionStart = ref(null);
-    const textSelectionEnd = ref(null);
     const textEditorHtml = ref('');
     const textEditorBounds = ref(null); // Canvas coordinates
     const textEditorPosition = ref(null)
@@ -1083,7 +1077,8 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
     };
 
     const getFittedTextStrokeBounds = ({ content, color, fontSize, bounds }) => {
-        const safeBounds = bounds || { x: 0, y: 0, width: DEFAULT_TEXTBOX_WIDTH, height: DEFAULT_TEXTBOX_HEIGHT };
+        const minSize = getTextEditorMinSize();
+        const safeBounds = bounds || { x: 0, y: 0, width: minSize.width, height: minSize.height };
         const ctx = activePage.value.drawingContext;
 
         if (!ctx) {
@@ -1163,6 +1158,21 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         };
     };
 
+    const getTextEditorMinSize = () => {
+        try {
+            const rootStyles = getComputedStyle(document.documentElement);
+            const minWidth = parseFloat(rootStyles.getPropertyValue('--text-editor-min-width'));
+            const minHeight = parseFloat(rootStyles.getPropertyValue('--text-editor-min-height'));
+
+            return {
+                width: Number.isFinite(minWidth) && minWidth > 0 ? minWidth : 420,
+                height: Number.isFinite(minHeight) && minHeight > 0 ? minHeight : 256
+            };
+        } catch (err) {
+            return { width: 420, height: 256 };
+        }
+    };
+
     const closeTextEditor = () => {
         textEditorHtml.value = '';
         textEditorBounds.value = null;
@@ -1176,12 +1186,63 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
     const setTextEditorPosition = (bounds) => {
         const viewport = canvasBoundsToViewport(bounds);
         if (!viewport) return;
+        const minSize = getTextEditorMinSize();
 
         textEditorPosition.value = {
             left: `${viewport.x || 0}px`,
             top: `${viewport.y || 0}px`,
-            width: `${viewport.width || DEFAULT_TEXTBOX_WIDTH}px`,
-            height: `${viewport.height || DEFAULT_TEXTBOX_HEIGHT}px`
+            width: `${viewport.width || minSize.width}px`,
+            height: `${viewport.height || minSize.height}px`
+        };
+    };
+
+    const updateTextEditorSize = ({ width, height }) => {
+        if (!textEditorPosition.value || !textEditorBounds.value) return;
+        const minSize = getTextEditorMinSize();
+
+        const viewportWidth = Math.max(minSize.width, Number(width) || 0);
+        const viewportHeight = Math.max(minSize.height, Number(height) || 0);
+        if (!viewportWidth || !viewportHeight) return;
+
+        const canvas = activePage.value.drawingCanvas || null;
+        if (!canvas) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = rect.width > 0 ? canvas.width / rect.width : 1;
+        const scaleY = rect.height > 0 ? canvas.height / rect.height : 1;
+
+        textEditorPosition.value = {
+            ...textEditorPosition.value,
+            width: `${viewportWidth}px`,
+            height: `${viewportHeight}px`
+        };
+
+        textEditorBounds.value = {
+            ...textEditorBounds.value,
+            width: viewportWidth * scaleX,
+            height: viewportHeight * scaleY
+        };
+    };
+
+    const updateTextEditorPosition = ({ left, top }) => {
+        if (!textEditorPosition.value || !textEditorBounds.value) return;
+
+        const viewportWidth = parseFloat(textEditorPosition.value.width) || 0;
+        const viewportHeight = parseFloat(textEditorPosition.value.height) || 0;
+
+        const clampedLeft = Math.min(
+            Math.max(0, Number(left) || 0),
+            Math.max(0, window.innerWidth - viewportWidth)
+        );
+        const clampedTop = Math.min(
+            Math.max(0, Number(top) || 0),
+            Math.max(0, window.innerHeight - viewportHeight)
+        );
+
+        textEditorPosition.value = {
+            ...textEditorPosition.value,
+            left: `${clampedLeft}px`,
+            top: `${clampedTop}px`
         };
     };
 
@@ -1972,22 +2033,25 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
             if (!pt) return;
             const { x, y } = pt;
 
+            if (!canvas) return;
+
+            const minSize = getTextEditorMinSize();
+            const width = Math.min(minSize.width, canvas.width);
+            const height = Math.min(minSize.height, canvas.height);
+            const clampedX = Math.max(0, Math.min(x, Math.max(0, canvas.width - width)));
+            const clampedY = Math.max(0, Math.min(y, Math.max(0, canvas.height - height)));
+
             textPosition.value = { x, y };
             textCanvasIndex.value = activePage.value.index;
 
-            isTextAreaSelecting.value = true;
-            textSelectionStart.value = { x, y };
-            textSelectionEnd.value = { x, y };
-
-            currentCanvasIndex = canvasIndex;
-            isMouseDown.value = true;
-            activePointerId.value = e.pointerId;
-
-            if (canvas && e.pointerId !== undefined) {
-                canvas.setPointerCapture(e.pointerId);
-            }
+            openTextEditor({
+                bounds: { x: clampedX, y: clampedY, width, height },
+                content: '<p><br></p>',
+                strokeRef: null
+            });
 
             stopEvent(e);
+            redrawAllStrokes();
 
             return;
         }
@@ -2063,34 +2127,6 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         }
 
         if (textModesActive.value) return;
-
-        if (isTextInputMode.value) {
-            if (!isTextAreaSelecting.value) return;
-            if (e.pointerId !== activePointerId.value) return;
-
-            const canvas = activePage.value.drawingCanvas || null;
-            const drawingContext = activePage.value.drawingContext || null;
-            const pt = getCanvasPointFromEvent(canvas, e);
-            if (!canvas || !drawingContext || !pt || !textSelectionStart.value) return;
-
-            textSelectionEnd.value = { x: pt.x, y: pt.y };
-
-            redrawAllStrokes();
-            drawingContext.save();
-            drawingContext.strokeStyle = boundingBoxColors.rotate;
-            drawingContext.lineWidth = 1;
-            drawingContext.setLineDash([5, 4]);
-
-            const x = Math.min(textSelectionStart.value.x, textSelectionEnd.value.x);
-            const y = Math.min(textSelectionStart.value.y, textSelectionEnd.value.y);
-            const width = Math.abs(textSelectionEnd.value.x - textSelectionStart.value.x);
-            const height = Math.abs(textSelectionEnd.value.y - textSelectionStart.value.y);
-
-            drawingContext.strokeRect(x, y, width, height);
-            drawingContext.restore();
-            stopEvent(e);
-            return;
-        }
 
         if (isSelectModeActive.value && (isStrokeHovering.value || selectedStroke.value)) {
             // Handle rotation
@@ -2497,70 +2533,6 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
         if (textModesActive.value) return;
         
-        if (isTextInputMode.value) {
-            if (!isTextAreaSelecting.value) return;
-            if (e && e.pointerId !== activePointerId.value) return;
-
-            const canvas = activePage.value.drawingCanvas || null;
-            if (!canvas) return;
-
-            if (e && e.pointerId !== undefined) {
-                try {
-                    canvas.releasePointerCapture(e.pointerId);
-                } catch (err) {
-                    // Ignore if capture was already released
-                }
-            }
-
-            const start = textSelectionStart.value;
-            const end = textSelectionEnd.value || start;
-
-            if (start && end && !isSecondaryPointerAction(e)) {
-                const rect = canvas.getBoundingClientRect();
-                const scaleX = rect.width > 0 ? canvas.width / rect.width : 1;
-                const scaleY = rect.height > 0 ? canvas.height / rect.height : 1;
-
-                const selectedWidth = Math.abs(end.x - start.x);
-                const selectedHeight = Math.abs(end.y - start.y);
-
-                let x = Math.min(start.x, end.x);
-                let y = Math.min(start.y, end.y);
-                let width = selectedWidth;
-                let height = selectedHeight;
-
-                if (selectedWidth < MIN_TEXTBOX_SELECTION || selectedHeight < MIN_TEXTBOX_SELECTION) {
-                    width = DEFAULT_TEXTBOX_WIDTH * scaleX;
-                    height = DEFAULT_TEXTBOX_HEIGHT * scaleY;
-                    x = start.x;
-                    y = start.y;
-                }
-
-                width = Math.min(width, canvas.width);
-                height = Math.min(height, canvas.height);
-
-                x = Math.max(0, Math.min(x, Math.max(0, canvas.width - width)));
-                y = Math.max(0, Math.min(y, Math.max(0, canvas.height - height)));
-
-                openTextEditor({
-                    bounds: { x, y, width, height },
-                    content: '<p><br></p>',
-                    strokeRef: null
-                });
-            }
-
-            isTextAreaSelecting.value = false;
-            textSelectionStart.value = null;
-            textSelectionEnd.value = null;
-            isMouseDown.value = false;
-            activePointerId.value = null;
-            activePointerType.value = null;
-            currentCanvasIndex = -1;
-
-            stopEvent(e);
-            redrawAllStrokes();
-            return;
-        }
-
         if (isSelectModeActive.value && (isStrokeHovering.value || isDragging.value || isResizing.value || isRotating.value) && isMouseDown.value && selectedStroke.value) {
             // Only stop if it's the same pointer
             if (e && e.pointerId !== activePointerId.value) return;
@@ -2817,9 +2789,6 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
     };
     
     const resetToolState = () => {
-        isTextAreaSelecting.value = false;
-        textSelectionStart.value = null;
-        textSelectionEnd.value = null;
         closeTextEditor();
         isTextHighlightMode.value = false;
         isTextSelectionMode.value = false;
@@ -3888,6 +3857,8 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         commitTextEditor,
         closeTextEditor,
         syncTextEditorPosition,
+        updateTextEditorSize,
+        updateTextEditorPosition,
         resetToolState,
         handleTextboxBlur,
         redrawAllStrokes,

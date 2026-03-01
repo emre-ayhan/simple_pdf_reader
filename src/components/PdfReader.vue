@@ -134,6 +134,8 @@ const {
     commitTextEditor,
     closeTextEditor,
     syncTextEditorPosition,
+    updateTextEditorSize,
+    updateTextEditorPosition,
     resetToolState,
     redrawAllStrokes,
     drawImageCanvas,
@@ -825,12 +827,14 @@ defineExpose({
             </div>
 
             <QuilEditor
-                v-if="!!textEditorPosition?.width"
+                v-if="!!textEditorPosition"
                 :placeholder="$t('Type text...')"
                 :style="textEditorPosition"
                 v-model="textEditorHtml"
                 @save="commitTextEditor"
                 @cancel="closeTextEditor"
+                @resize="updateTextEditorSize"
+                @drag="updateTextEditorPosition"
             />
 
             <!-- Stroke Menu -->
