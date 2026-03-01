@@ -527,6 +527,13 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         if (typeof e.stopPropagation === 'function') e.stopPropagation();
     };
 
+    const isSecondaryPointerAction = (e) => {
+        if (!e) return false;
+        if (e.button === 2) return true;
+        if (typeof e.buttons === 'number' && (e.buttons & 2) === 2) return true;
+        return false;
+    };
+
     const getEventClientXY = (e) => {
         if (e?.clientX !== undefined && e?.clientY !== undefined) {
             return { clientX: e.clientX, clientY: e.clientY };
@@ -1955,6 +1962,8 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         
         // Handle text mode
         if (isTextInputMode.value) {
+            if (isSecondaryPointerAction(e)) return;
+
             const canvasIndex = getCanvasIndexFromEvent(e);
             if (canvasIndex === -1) return;
             
@@ -2506,7 +2515,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
             const start = textSelectionStart.value;
             const end = textSelectionEnd.value || start;
 
-            if (start && end) {
+            if (start && end && !isSecondaryPointerAction(e)) {
                 const rect = canvas.getBoundingClientRect();
                 const scaleX = rect.width > 0 ? canvas.width / rect.width : 1;
                 const scaleY = rect.height > 0 ? canvas.height / rect.height : 1;
