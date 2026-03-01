@@ -77,7 +77,7 @@
     "Cancel": "İptal",
     "Please Confirm": "Lütfen Onaylayın",
     "Notice": "Bildirim",
-    "Unsupported file type. Please select a PDF or image.": "Desteklenmeyen dosya türü. Lütfen bir PDF veya resim seçin.",
+    "Unsupported file type. Please select a PDF file.": "Desteklenmeyen dosya türü. Lütfen bir PDF dosyası seçin.",
     "Are you sure you want to delete page :attribute?": "Sayfa :attribute silmek istediğinizden emin misiniz?",
     "You have unsaved changes in this tab. Are you sure you want to close it?": "Bu sekmede kaydedilmemiş değişiklikleriniz var. Kapatmak istediğinizden emin misiniz?",
     "You have unsaved changes in one or more tabs. Are you sure you want to close the application?": "Bir veya daha fazla sekmede kaydedilmemiş değişiklikleriniz var. Uygulamayı kapatmak istediğinizden emin misiniz?",

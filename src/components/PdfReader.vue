@@ -945,5 +945,5 @@ defineExpose({
         <input ref="imageInput" type="file" accept="image/*" class="d-none" @change="handleImageImport" />
     </div>
 
-    <input ref="fileInput" type="file"  accept="application/pdf,image/*" class="d-none" @change="loadFile" />
+    <input ref="fileInput" type="file"  accept="application/pdf" class="d-none" @change="loadFile" />
 </template>

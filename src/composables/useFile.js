@@ -25,7 +25,6 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
 
     const renderPdfPage = async (pageId) => {
         if (!pdfDoc) return;
-        if (imagePage.value) return;
 
         const page = pages.value.find(p => p.id === pageId);
 
@@ -209,9 +208,6 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
     const pdfReader = ref(null);
     const isFileLoaded = ref(false);
     const originalPdfData = ref(null);
-    
-    // when opening images as a single page
-    const imagePage = ref(null);
 
     // Zoom State Variables
     const zoomPercentage = ref(100); // 25 to 100
@@ -503,14 +499,6 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
     };
 
     const renderAllPages = async () => {
-        if (imagePage.value) {
-            setPages(1);
-            await nextTick();
-            await renderImageFileCallback(imagePage.value);
-            pageIndex.value = 0;
-            return;
-        }
-        
         if (!pdfDoc) return;
 
         const numPages = pdfDoc.numPages;
@@ -524,32 +512,13 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
 
         // Don't render any pages here - let lazy loading handle it
         // Setup observers after pages structure is ready
-        if (imagePage.value) return;
         setupIntersectionObserver();
         setupLazyLoadObserver();
-    };
-
-    const loadImageFile = (file) => {
-        if (!file) return;
-
-        filename.value = file.name || 'image';
-        filepath.value = file.path || null;
-        const reader = new FileReader();
-        reader.onload = async () => {
-            loadFileCallback();
-            imagePage.value = reader.result;
-            
-            handleFileLoadEvent('image');
-
-            await renderAllPages();
-        };
-        reader.readAsDataURL(file);
     };
 
     const getDocumentCallback = async (pdfDoc_) => {
         loadFileCallback();
         pdfDoc = pdfDoc_;
-        imagePage.value = null;
         handleFileLoadEvent('pdf', pdfDoc.numPages);
         await renderAllPages();
     }
@@ -571,16 +540,14 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         const file = event?.target?.files?.[0] || event;
         
         if (!file) {
-            await showModal('Unsupported file type. Please select a PDF or image.');
+            await showModal('Unsupported file type. Please select a PDF file.');
             return
         };
 
         if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
             loadPdfFile(file);
-        } else if (file.type.startsWith('image/') || file.name.toLowerCase().match(/\.(png|jpe?g|gif|webp|bmp|svg)$/)) {
-            loadImageFile(file);
         } else {
-            await showModal('Unsupported file type. Please select a PDF or image.');
+            await showModal('Unsupported file type. Please select a PDF file.');
         }
     };
 
@@ -608,22 +575,8 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
                 console.error('Error loading PDF:', error);
                 await showModal('Error loading PDF: ' + error.message);
             });
-        }
-        // Handle image files
-        else if (result.type === 'image' && result.encoding === 'base64') {
-            filename.value = result.filename || 'image';
-            const dataUrl = `data:${result.mimeType};base64,${result.content}`;
-
-            loadFileCallback();
-            pages.value = []; // Clear pages structure since we're in image mode
-            
-            imagePage.value = dataUrl;
-            handleFileLoadEvent('image');
-
-            await renderAllPages();
-        }
-        else {
-            await showModal('Unsupported file type. Please select a PDF or image.');
+        } else {
+            await showModal('Unsupported file type. Please select a PDF file.');
         }
     };
 
@@ -1004,7 +957,6 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             filepath.value = null;
             loadFileCallback();
             pdfDoc = pdfDoc_;
-            imagePage.value = null;
             handleFileLoadEvent('pdf', pdfDoc.numPages);
             
             await renderAllPages();
