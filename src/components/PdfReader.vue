@@ -14,6 +14,7 @@ import PageNumber from "./PageNumber.vue";
 import ContextMenu from "./ContextMenu.vue";
 import ToolItem from "./ToolItem.vue";
 import PdfForm from "./PdfForm.vue";
+import QuilEditor from "./QuilEditor.vue";
 
 // Cursor Style
 const cursorStyle = computed(() => {
@@ -111,12 +112,9 @@ const {
     isEraser,
     drawMode,
     drawColor,
-    colors,
     isTextInputMode,
-    textInput,
-    textInputField,
-    fontSize,
-    textboxPosition,
+    textEditorHtml,
+    textEditorPosition,
     isSelectionMode,
     isPenHovering,
     isStrokeHovering,
@@ -132,15 +130,13 @@ const {
     stopDrawing,
     onPointerMove,
     onPointerLeave,
-    confirmText,
-    cancelText,
+    editSelectedTextStroke,
+    commitTextEditor,
+    closeTextEditor,
+    syncTextEditorViewport,
     resetToolState,
-    handleTextboxBlur,
     redrawAllStrokes,
     drawImageCanvas,
-    changeStrokeColor,
-    changeStrokeThickness,
-    changeStrokeText,
     deleteSelectedStroke,
     handleStrokeMenu,
     initialStrokeStyles,
@@ -356,6 +352,7 @@ const toggleZoomMode = (mode) => {
     nextTick(async () => {
         await resyncRenderedTextLayers();
         scrollToPage(pageIndex.value);
+        syncTextEditorViewport();
     });
 };
 
@@ -379,6 +376,7 @@ const handleZoomLevel = (percentage) => {
     nextTick(async () => {
         await resyncRenderedTextLayers();
         scrollToPage(pageIndex.value);
+        syncTextEditorViewport();
     });
 };
 
@@ -420,6 +418,7 @@ useWindowEvents(fileId, {
                 nextTick(async () => {
                     await resyncRenderedTextLayers();
                     scrollToPage(pageIndex.value);
+                    syncTextEditorViewport();
                 })
             });
         }
@@ -825,31 +824,14 @@ defineExpose({
                 </template>
             </div>
 
-            <!-- Text Input Box -->
-            <div v-if="isTextInputMode && textboxPosition" 
-                 class="text-input-box" 
-                 :style="{ 
-                     left: textboxPosition.x + 'px', 
-                     top: textboxPosition.y + 'px'
-                 }">
-                <input 
-                    id="textInputField"
-                    ref="textInputField"
-                    type="text" 
-                    v-model="textInput" 
-                    class="text-input-field" 
-                    :placeholder="$t('Type text...')" 
-                    @keydown.enter="confirmText()"
-                    @keydown.esc="cancelText()"
-                    @blur="handleTextboxBlur()"
-                    :style="{ 
-                        fontSize: fontSize + 'px',
-                        color: drawColor,
-                        minWidth: '150px'
-                    }"
-                    autofocus
-                />
-            </div>
+            <QuilEditor
+                v-if="!!textEditorPosition?.width"
+                :placeholder="$t('Type text...')"
+                :style="textEditorPosition"
+                v-model="textEditorHtml"
+                @save="commitTextEditor"
+                @cancel="closeTextEditor"
+            />
 
             <!-- Stroke Menu -->
             <div v-if="showStrokeMenu && selectedStroke" 
@@ -862,25 +844,16 @@ defineExpose({
                 <div class="stroke-menu-content">
                     <div class="stroke-menu-section">
                         <div class="stroke-menu-colors dropdown-center">
-                            <template v-if="!isSelectedStrokeType('image')">
-                                <button
-                                    type="button"
-                                    class="btn-color"
-                                    data-bs-toggle="dropdown"
-                                    aria-expanded="false"
-                                    :style="{ backgroundColor: selectedStroke?.stroke[0]?.color || 'transparent' }"
-                                ></button>
-                                <div class="dropdown-menu dropdown-menu-dark color-menu px-2 mt-2">
-                                    <button 
-                                        v-for="strokeStyle in initialStrokeStyles"
-                                        class="btn-color dropdown-item mb-1"
-                                        :style="{ backgroundColor: strokeStyle.color }"
-                                        :title="strokeStyle.color"
-                                        @click="changeStrokeColor(strokeStyle.color)"
-                                    ></button>
-                                </div>
-                                <div class="vr bg-primary"></div>
-                            </template>
+                            <button
+                                v-if="isSelectedStrokeType('text')"
+                                type="button"
+                                class="btn btn-link link-secondary btn-stroke-menu border-0 p-0"
+                                :title="$t('Edit')"
+                                @click.stop="editSelectedTextStroke()"
+                            >
+                                <i class="bi bi-pencil-square"></i>
+                            </button>
+                            <div v-if="isSelectedStrokeType('text')" class="vr bg-primary"></div>
                             <button type="button" class="btn btn-link link-secondary btn-stroke-menu border-0 p-0" :title="$t('Copy')" @click.stop="copySelectedStroke()">
                                 <i class="bi bi-copy"></i>
                             </button>
@@ -889,24 +862,6 @@ defineExpose({
                             </button>
                         </div>
                     </div>
-                    <template v-if="!isSelectedStrokeType('image')">
-                        <div v-if="isSelectedStrokeType('text')" class="stroke-menu-section">
-                            <input 
-                                type="text" 
-                                class="form-control form-control-sm" 
-                                :value="selectedStroke?.stroke[0]?.text || ''"
-                                @input="changeStrokeText($event.target.value)"
-                                @click.stop
-                                :placeholder="$t('Enter text')"
-                            />
-                        </div>
-                        <!-- <div class="stroke-menu-section" v-else-if="!isSelectedStrokeType('highlight-rect')">
-                            <div class="d-flex align-items-center gap-1">
-                                <input type="range" class="form-range" min="1" max="10" @input="changeStrokeThickness($event.target.value)" :value="selectedStroke?.stroke[0]?.thickness || 1" />
-                                <input type="text" class="form-control-plaintext" min="1" max="10" :value="selectedStroke?.stroke[0]?.thickness || 1" readonly />
-                            </div>
-                        </div> -->
-                    </template>
                 </div>
             </div>
 

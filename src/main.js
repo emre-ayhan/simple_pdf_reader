@@ -3,6 +3,7 @@ import App from './App.vue'
 import './scss/app.scss'
 import * as bootstrap from 'bootstrap'
 import 'bootstrap-icons/font/bootstrap-icons.css'
+import 'quill/dist/quill.snow.css';
 import i18n from './plugins/i18n.js'
 
 createApp(App)

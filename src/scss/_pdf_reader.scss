@@ -261,25 +261,47 @@
 }
 
 
-.text-input-box {
+.text-editor-box {
     position: fixed;
     z-index: 9998;
     pointer-events: all;
-}
 
-.text-input-field {
-    border: 2px dashed $primary;
-    background-color: rgba(255, 255, 255, 0.9);
-    border-radius: $border-radius-lg !important;
-    padding: 4px 8px;
-    outline: none;
-    font-family: Arial, sans-serif;
-    border-radius: 2px;
-    border-color: $primary;
-    min-width: 128px;
-    
-    &::placeholder {
-        color: $secondary !important;
+    &.is-hidden {
+        visibility: hidden;
+        pointer-events: none;
+        opacity: 0;
+    }
+
+    .quil-editor {
+        border: 1px solid $dark;
+        border-radius: $border-radius-lg;
+        background-color: rgba(255, 255, 255, 0.95);
+        overflow: hidden;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+
+        .ql-toolbar {
+            border: none;
+            border-bottom: 1px solid $border-color;
+            background: $dark-bg-subtle;
+        }
+
+        .ql-container {
+            border: none;
+            color: $dark;
+            font-family: Arial, sans-serif;
+        }
+
+
+        .quil-editor-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            padding: 8px;
+            border-top: 1px solid $border-color;
+            background: $dark-bg-subtle;
+        }
     }
 }
 
@@ -367,7 +389,7 @@ select.form-control-plaintext {
     /* Hide UI chrome inside the reader */
     .navbar,
     .stroke-menu,
-    .text-input-box,
+    .text-editor-box,
     .drag-overlay {
         display: none !important;
     }

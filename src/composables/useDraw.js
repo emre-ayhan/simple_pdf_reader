@@ -179,13 +179,22 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
 
     // Text mode variables
+    const DEFAULT_TEXT_COLOR = '#000000';
+    const DEFAULT_TEXTBOX_WIDTH = 420;
+    const DEFAULT_TEXTBOX_HEIGHT = 260;
+    const MIN_TEXTBOX_SELECTION = 8;
     const isTextInputMode = ref(false);
-    const textInput = ref('');
-    const textInputField = ref(null);
     const textPosition = ref(null);
     const textCanvasIndex = ref(-1);
     const fontSize = ref(16);
     const textboxPosition = ref(null); // Screen position for the textbox
+    const isTextAreaSelecting = ref(false);
+    const textSelectionStart = ref(null);
+    const textSelectionEnd = ref(null);
+    const textEditorHtml = ref('');
+    const textEditorBounds = ref(null); // Canvas coordinates
+    const textEditorPosition = ref(null)
+    const editingTextStroke = ref(null); // { pageId, pageIndex, strokeIndex }
 
     // Selection & Capture variables
     const isSelectionMode = ref(false);
@@ -578,6 +587,555 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         }
     };
 
+    const drawWrappedText = (ctx, text, x, y, width, height, lineHeight) => {
+        if (!text) return;
+
+        const safeWidth = Math.max(20, width || 20);
+        const safeHeight = Math.max(lineHeight, height || lineHeight);
+        const maxY = y + safeHeight;
+        const paragraphs = String(text).split('\n');
+        let cursorY = y;
+
+        for (let p = 0; p < paragraphs.length; p++) {
+            const paragraph = paragraphs[p] || '';
+            const words = paragraph.split(/\s+/).filter(Boolean);
+
+            if (words.length === 0) {
+                if (cursorY + lineHeight > maxY) break;
+                cursorY += lineHeight;
+                continue;
+            }
+
+            let currentLine = '';
+
+            for (let i = 0; i < words.length; i++) {
+                const testLine = currentLine ? `${currentLine} ${words[i]}` : words[i];
+                const testWidth = ctx.measureText(testLine).width;
+
+                if (testWidth > safeWidth && currentLine) {
+                    if (cursorY + lineHeight > maxY) return;
+                    ctx.fillText(currentLine, x, cursorY);
+                    currentLine = words[i];
+                    cursorY += lineHeight;
+                    continue;
+                }
+
+                currentLine = testLine;
+            }
+
+            if (currentLine) {
+                if (cursorY + lineHeight > maxY) return;
+                ctx.fillText(currentLine, x, cursorY);
+                cursorY += lineHeight;
+            }
+        }
+    };
+
+    const extractPlainTextFromHtml = (html) => {
+        const htmlValue = String(html || '');
+        if (!htmlValue.trim()) return '';
+
+        try {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(`<div>${htmlValue}</div>`, 'text/html');
+            const root = doc.body.firstElementChild || doc.body;
+            if (!root) return '';
+
+            const blocks = new Set(['P', 'DIV', 'LI', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6']);
+            let text = '';
+
+            const visit = (node) => {
+                if (!node) return;
+
+                if (node.nodeType === Node.TEXT_NODE) {
+                    text += node.nodeValue || '';
+                    return;
+                }
+
+                if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+                const tag = node.tagName;
+                if (tag === 'BR') {
+                    text += '\n';
+                    return;
+                }
+
+                const children = Array.from(node.childNodes || []);
+                children.forEach(visit);
+
+                if (blocks.has(tag)) {
+                    text += '\n';
+                }
+            };
+
+            Array.from(root.childNodes || []).forEach(visit);
+
+            return text
+                .replace(/\u00A0/g, ' ')
+                .replace(/\r/g, '')
+                .replace(/[ \t]+\n/g, '\n')
+                .replace(/\n[ \t]+/g, '\n')
+                .replace(/\n{3,}/g, '\n\n')
+                .trim();
+        } catch (err) {
+            return htmlValue
+                .replace(/<br\s*\/?>/gi, '\n')
+                .replace(/<[^>]+>/g, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+    };
+
+    const normalizeTextStrokeContent = (content) => {
+        if (!content) {
+            return { text: '', html: '' };
+        }
+
+        if (typeof content === 'string') {
+            const html = content;
+            return {
+                text: extractPlainTextFromHtml(html),
+                html
+            };
+        }
+
+        const html = typeof content.html === 'string' ? content.html : '';
+        const text = typeof content.text === 'string' ? content.text : extractPlainTextFromHtml(html);
+        return { text, html };
+    };
+
+    const getTextStrokeContent = (strokeOrFirst) => {
+        const first = Array.isArray(strokeOrFirst) ? strokeOrFirst[0] : strokeOrFirst;
+        if (!first) return { text: '', html: '' };
+
+        if (first.content !== undefined && first.content !== null) {
+            return normalizeTextStrokeContent(first.content);
+        }
+
+        const fallbackText = typeof first.text === 'string' ? first.text : '';
+        return {
+            text: fallbackText,
+            html: fallbackText ? convertPlainTextToHtml(fallbackText) : ''
+        };
+    };
+
+    const parseInlineStyle = (styleText = '') => {
+        const style = {};
+        const parts = String(styleText)
+            .split(';')
+            .map(part => part.trim())
+            .filter(Boolean);
+
+        parts.forEach(part => {
+            const [rawKey, ...rawValueParts] = part.split(':');
+            if (!rawKey || rawValueParts.length === 0) return;
+            const key = rawKey.trim().toLowerCase();
+            const value = rawValueParts.join(':').trim();
+
+            if (key === 'color' && value) {
+                style.color = value;
+                return;
+            }
+
+            if ((key === 'background' || key === 'background-color') && value && value !== 'transparent') {
+                style.backgroundColor = value;
+                return;
+            }
+
+            if (key === 'font-size') {
+                const parsed = parseFloat(value);
+                if (Number.isFinite(parsed) && parsed > 0) {
+                    style.fontSize = parsed;
+                }
+            }
+        });
+
+        return style;
+    };
+
+    const htmlToStyledTokens = (html, baseStyle) => {
+        const htmlValue = String(html || '').trim();
+        if (!htmlValue) return [];
+
+        const pushNewline = (tokens) => {
+            if (tokens.length === 0 || tokens[tokens.length - 1].type === 'newline') return;
+            tokens.push({ type: 'newline' });
+        };
+
+        const applyElementStyle = (style, node) => {
+            const nextStyle = { ...style };
+            const tag = node.tagName;
+
+            if (tag === 'STRONG' || tag === 'B') nextStyle.bold = true;
+            if (tag === 'EM' || tag === 'I') nextStyle.italic = true;
+            if (tag === 'U') nextStyle.underline = true;
+            if (tag === 'S' || tag === 'STRIKE') nextStyle.strike = true;
+
+            if (tag === 'H1') nextStyle.fontSize = Math.max(nextStyle.fontSize, Math.round(baseStyle.fontSize * 2));
+            if (tag === 'H2') nextStyle.fontSize = Math.max(nextStyle.fontSize, Math.round(baseStyle.fontSize * 1.5));
+            if (tag === 'H3') nextStyle.fontSize = Math.max(nextStyle.fontSize, Math.round(baseStyle.fontSize * 1.25));
+
+            const inlineStyle = parseInlineStyle(node.getAttribute('style') || '');
+            if (inlineStyle.color) nextStyle.color = inlineStyle.color;
+            if (inlineStyle.backgroundColor) nextStyle.backgroundColor = inlineStyle.backgroundColor;
+            if (inlineStyle.fontSize) nextStyle.fontSize = inlineStyle.fontSize;
+
+            return nextStyle;
+        };
+
+        try {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(`<div>${htmlValue}</div>`, 'text/html');
+            const root = doc.body.firstElementChild || doc.body;
+            if (!root) return [];
+
+            const tokens = [];
+            const blockTags = new Set(['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6']);
+
+            const walk = (node, style, listState = null) => {
+                if (!node) return;
+
+                if (node.nodeType === Node.TEXT_NODE) {
+                    const raw = node.nodeValue || '';
+                    const normalized = raw.replace(/\u00A0/g, ' ').replace(/[\t\r\n]+/g, ' ');
+                    if (!normalized) return;
+                    tokens.push({ type: 'text', text: normalized, style: { ...style } });
+                    return;
+                }
+
+                if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+                const tag = node.tagName;
+                if (tag === 'BR') {
+                    pushNewline(tokens);
+                    return;
+                }
+
+                if (tag === 'UL' || tag === 'OL') {
+                    pushNewline(tokens);
+                    let index = 1;
+                    Array.from(node.children || []).forEach((child) => {
+                        if (child.tagName !== 'LI') return;
+                        walk(child, style, {
+                            ordered: tag === 'OL',
+                            index
+                        });
+                        index += 1;
+                    });
+                    pushNewline(tokens);
+                    return;
+                }
+
+                const nextStyle = applyElementStyle(style, node);
+                const isBlock = blockTags.has(tag);
+
+                if (isBlock || tag === 'LI') {
+                    pushNewline(tokens);
+                }
+
+                if (tag === 'LI') {
+                    const marker = listState?.ordered ? `${listState.index}. ` : '• ';
+                    tokens.push({ type: 'text', text: marker, style: { ...nextStyle } });
+                }
+
+                Array.from(node.childNodes || []).forEach((child) => walk(child, nextStyle, listState));
+
+                if (isBlock || tag === 'LI') {
+                    pushNewline(tokens);
+                }
+            };
+
+            Array.from(root.childNodes || []).forEach(node => walk(node, { ...baseStyle }));
+
+            while (tokens.length > 0 && tokens[0].type === 'newline') tokens.shift();
+            while (tokens.length > 0 && tokens[tokens.length - 1].type === 'newline') tokens.pop();
+
+            return tokens;
+        } catch (err) {
+            return [];
+        }
+    };
+
+    const drawStyledText = (ctx, tokens, x, y, width, height, baseStyle) => {
+        if (!Array.isArray(tokens) || tokens.length === 0) return;
+
+        const safeWidth = Math.max(20, width || 20);
+        const safeHeight = Math.max(baseStyle.fontSize * 1.35, height || 20);
+        const maxY = y + safeHeight;
+        const endX = x + safeWidth;
+        const minFont = 8;
+
+        const toFont = (style) => {
+            const fontSize = Math.max(minFont, Number(style.fontSize) || baseStyle.fontSize || 16);
+            const weight = style.bold ? 'bold ' : '';
+            const italic = style.italic ? 'italic ' : '';
+            return {
+                font: `${italic}${weight}${fontSize}px Arial`,
+                fontSize
+            };
+        };
+
+        let cursorX = x;
+        let cursorY = y;
+        let lineHeight = Math.max(baseStyle.fontSize * 1.35, 12);
+
+        const commitNewLine = () => {
+            cursorX = x;
+            cursorY += lineHeight;
+            lineHeight = Math.max(baseStyle.fontSize * 1.35, 12);
+        };
+
+        const drawChunk = (chunk, style) => {
+            if (!chunk) return true;
+
+            const { font, fontSize } = toFont(style);
+            ctx.font = font;
+            const chunkWidth = ctx.measureText(chunk).width;
+
+            if (cursorX + chunkWidth > endX && cursorX > x) {
+                commitNewLine();
+            }
+
+            if (cursorY + lineHeight > maxY) return false;
+
+            lineHeight = Math.max(lineHeight, fontSize * 1.35);
+
+            if (style.backgroundColor && chunk.trim()) {
+                ctx.fillStyle = style.backgroundColor;
+                ctx.fillRect(cursorX, cursorY, chunkWidth, lineHeight);
+            }
+
+            ctx.fillStyle = style.color || baseStyle.color;
+            ctx.textBaseline = 'top';
+            ctx.fillText(chunk, cursorX, cursorY);
+
+            const textColor = style.color || baseStyle.color;
+
+            if (style.underline && chunk.trim()) {
+                ctx.beginPath();
+                ctx.strokeStyle = textColor;
+                ctx.lineWidth = Math.max(1, fontSize / 12);
+                const underlineY = cursorY + fontSize * 1.08;
+                ctx.moveTo(cursorX, underlineY);
+                ctx.lineTo(cursorX + chunkWidth, underlineY);
+                ctx.stroke();
+            }
+
+            if (style.strike && chunk.trim()) {
+                ctx.beginPath();
+                ctx.strokeStyle = textColor;
+                ctx.lineWidth = Math.max(1, fontSize / 12);
+                const strikeY = cursorY + fontSize * 0.58;
+                ctx.moveTo(cursorX, strikeY);
+                ctx.lineTo(cursorX + chunkWidth, strikeY);
+                ctx.stroke();
+            }
+
+            cursorX += chunkWidth;
+            return true;
+        };
+
+        for (const token of tokens) {
+            if (token.type === 'newline') {
+                commitNewLine();
+                if (cursorY + lineHeight > maxY) return;
+                continue;
+            }
+
+            const style = {
+                color: token.style?.color || baseStyle.color,
+                backgroundColor: token.style?.backgroundColor || null,
+                fontSize: token.style?.fontSize || baseStyle.fontSize,
+                bold: Boolean(token.style?.bold),
+                italic: Boolean(token.style?.italic),
+                underline: Boolean(token.style?.underline),
+                strike: Boolean(token.style?.strike)
+            };
+
+            const parts = String(token.text || '').split(/(\s+)/);
+            for (const part of parts) {
+                if (part === '') continue;
+                if (/^\s+$/.test(part) && cursorX === x) continue;
+                const shouldContinue = drawChunk(part, style);
+                if (!shouldContinue) return;
+            }
+        }
+    };
+
+    const drawTextStroke = (ctx, first, x, y, width, height) => {
+        const baseStyle = {
+            color: first.color || DEFAULT_TEXT_COLOR,
+            fontSize: Math.max(8, Number(first.fontSize) || 16),
+            bold: false,
+            italic: false,
+            underline: false,
+            strike: false,
+            backgroundColor: null
+        };
+
+        const content = getTextStrokeContent(first);
+        const tokens = htmlToStyledTokens(content.html, baseStyle);
+
+        if (tokens.length > 0) {
+            drawStyledText(ctx, tokens, x, y, width, height, baseStyle);
+            return;
+        }
+
+        ctx.font = `${baseStyle.fontSize}px Arial`;
+        ctx.fillStyle = baseStyle.color;
+        ctx.textBaseline = 'top';
+        const lineHeight = Math.max(baseStyle.fontSize * 1.25, 12);
+        drawWrappedText(ctx, content.text, x, y, width, height, lineHeight);
+    };
+
+    const convertPlainTextToHtml = (text) => {
+        const escaped = (text || '')
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;');
+        return `<p>${escaped.replaceAll('\n', '</p><p>')}</p>`;
+    };
+
+    const getTextBoxSize = (stroke) => {
+        const first = stroke?.[0];
+        if (!first || first.type !== 'text') return null;
+
+        const ctx = activePage.value.drawingContext;
+        if (!ctx) return null;
+
+        const content = getTextStrokeContent(first);
+        const fontPx = Math.max(8, Number(first.fontSize) || 16);
+        ctx.font = `${fontPx}px Arial`;
+        const fallbackWidth = ctx.measureText(content.text || '').width + 8;
+        const fallbackHeight = Math.max(first.fontSize * 1.5, 28);
+
+        return {
+            width: Math.max(24, first.width || fallbackWidth),
+            height: Math.max(24, first.height || fallbackHeight)
+        };
+    };
+
+    const canvasBoundsToViewport = (bounds) => {
+        const canvas = activePage.value.drawingCanvas || null;
+        if (!canvas || !bounds) return null;
+
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = rect.width > 0 ? canvas.width / rect.width : 1;
+        const scaleY = rect.height > 0 ? canvas.height / rect.height : 1;
+
+        return {
+            x: rect.left + (bounds.x / scaleX),
+            y: rect.top + (bounds.y / scaleY),
+            width: bounds.width / scaleX,
+            height: bounds.height / scaleY
+        };
+    };
+
+    const closeTextEditor = () => {
+        textEditorHtml.value = '';
+        textEditorBounds.value = null;
+        textEditorPosition.value = null;
+        editingTextStroke.value = null;
+        textPosition.value = null;
+        textCanvasIndex.value = -1;
+        textboxPosition.value = null;
+    };
+
+    const setTextEditorPosition = (bounds) => {
+        const viewport = canvasBoundsToViewport(bounds);
+        if (!viewport) return;
+
+        textEditorPosition.value = {
+            left: `${viewport.x || 0}px`,
+            top: `${viewport.y || 0}px`,
+            width: `${viewport.width || DEFAULT_TEXTBOX_WIDTH}px`,
+            height: `${viewport.height || DEFAULT_TEXTBOX_HEIGHT}px`
+        };
+    };
+
+    const openTextEditor = ({ bounds, content = '', strokeRef = null }) => {
+        if (!bounds) return;
+        textEditorBounds.value = { ...bounds };
+        setTextEditorPosition(bounds);
+        textEditorHtml.value = content;
+        editingTextStroke.value = strokeRef;
+    };
+
+    const syncTextEditorViewport = () => {
+        if (!textEditorPosition.value || !textEditorBounds.value) return;
+        setTextEditorPosition(textEditorBounds.value);
+    };
+
+    const commitTextEditor = (content = null) => {
+        const bounds = textEditorBounds.value;
+        const normalizedContent = normalizeTextStrokeContent(content);
+
+        if (!bounds || !normalizedContent.text.trim()) {
+            closeTextEditor();
+            redrawAllStrokes();
+            return;
+        }
+
+        const canvas = activePage.value.drawingCanvas || null;
+        let scale = 1;
+        if (canvas) {
+            const rect = canvas.getBoundingClientRect();
+            if (rect.height > 0) {
+                scale = canvas.height / rect.height;
+            }
+        }
+
+        if (editingTextStroke.value) {
+            const strokeIndex = editingTextStroke.value.strokeIndex;
+            const stroke = activePage.value.strokes?.[strokeIndex];
+            if (stroke?.[0]?.type === 'text') {
+                const originalStroke = JSON.parse(JSON.stringify(stroke));
+                stroke[0].content = normalizedContent;
+                stroke[0].text = normalizedContent.text;
+                stroke[0].x = bounds.x;
+                stroke[0].y = bounds.y;
+                stroke[0].width = bounds.width;
+                stroke[0].height = bounds.height;
+                stroke[0].fontSize = stroke[0].fontSize || fontSize.value * scale;
+
+                strokeChangeCallback({
+                    id: stroke[0].id,
+                    type: 'text-change',
+                    page: activePage.value,
+                    strokeIndex,
+                    stroke: JSON.parse(JSON.stringify(stroke)),
+                    previousStroke: originalStroke
+                });
+            }
+        } else {
+            const id = uuid();
+            const textStroke = [{
+                id,
+                x: bounds.x,
+                y: bounds.y,
+                width: bounds.width,
+                height: bounds.height,
+                color: DEFAULT_TEXT_COLOR,
+                thickness: drawThickness.value,
+                type: 'text',
+                content: normalizedContent,
+                text: normalizedContent.text,
+                fontSize: fontSize.value * scale
+            }];
+
+            activePage.value.strokes.push(textStroke);
+            strokeChangeCallback({
+                id,
+                type: 'add',
+                page: activePage.value,
+                stroke: textStroke
+            });
+        }
+
+        closeTextEditor();
+        redrawAllStrokes();
+    };
+
     const isPointNearStroke = (x, y, stroke, threshold = 10) => {
         if (!stroke || stroke.length === 0) return false;
         
@@ -626,12 +1184,10 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         
         // Check text strokes
         if (first.type === 'text') {
-            const ctx = activePage.value.drawingContext;
-            if (!ctx) return false;
-            ctx.font = `${first.fontSize}px Arial`;
-            const metrics = ctx.measureText(first.text);
-            const textWidth = metrics.width;
-            const textHeight = first.fontSize;
+            const textBox = getTextBoxSize(stroke);
+            if (!textBox) return false;
+            const textWidth = textBox.width;
+            const textHeight = textBox.height;
             
                  return testX >= first.x - threshold && 
                      testX <= first.x + textWidth + threshold && 
@@ -768,18 +1324,16 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
             });
             return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
         } else if (first.type === 'text') {
-            const ctx = activePage.value.drawingContext;
-            if (!ctx) return null;
-            ctx.font = `${first.fontSize}px Arial`;
-            const metrics = ctx.measureText(first.text);
+            const textBox = getTextBoxSize(stroke);
+            if (!textBox) return null;
             const angle = first.rotation || 0;
-            const cx = first.x + metrics.width / 2;
-            const cy = first.y + first.fontSize / 2;
+            const cx = first.x + textBox.width / 2;
+            const cy = first.y + textBox.height / 2;
             const corners = [
                 { x: first.x, y: first.y },
-                { x: first.x + metrics.width, y: first.y },
-                { x: first.x + metrics.width, y: first.y + first.fontSize },
-                { x: first.x, y: first.y + first.fontSize }
+                { x: first.x + textBox.width, y: first.y },
+                { x: first.x + textBox.width, y: first.y + textBox.height },
+                { x: first.x, y: first.y + textBox.height }
             ];
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
             const cosA = Math.cos(angle);
@@ -891,11 +1445,14 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
             });
             return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
         } else if (first.type === 'text') {
-            const ctx = activePage.value.drawingContext;
-            if (!ctx) return null;
-            ctx.font = `${first.fontSize}px Arial`;
-            const metrics = ctx.measureText(first.text);
-            return { minX: first.x - pad, minY: first.y - pad, maxX: first.x + metrics.width + pad, maxY: first.y + first.fontSize + pad };
+            const textBox = getTextBoxSize(stroke);
+            if (!textBox) return null;
+            return {
+                minX: first.x - pad,
+                minY: first.y - pad,
+                maxX: first.x + textBox.width + pad,
+                maxY: first.y + textBox.height + pad
+            };
         } else if (first.type === 'line' || first.type === 'rectangle' || first.type === 'circle') {
             let points = [];
             if (first.type === 'line') {
@@ -1239,39 +1796,30 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         
         // Handle text mode
         if (isTextInputMode.value) {
-            if (textInput.value) {
-                confirmText();
-                return;
-            }
-
             const canvasIndex = getCanvasIndexFromEvent(e);
             if (canvasIndex === -1) return;
             
             const canvas = activePage.value.drawingCanvas || null;
             const pt = getCanvasPointFromEvent(canvas, e);
             if (!pt) return;
-            const { x, y, clientX, clientY } = pt;
-            
+            const { x, y } = pt;
+
             textPosition.value = { x, y };
             textCanvasIndex.value = activePage.value.index;
-            textInput.value = '';
-            
-            // Set textbox position in screen coordinates (relative to viewport)
-            // Offset by half the estimated textbox height to center vertically
-            textboxPosition.value = {
-                x: clientX,
-                y: clientY - (fontSize.value / 2) - 10
-            };
+
+            isTextAreaSelecting.value = true;
+            textSelectionStart.value = { x, y };
+            textSelectionEnd.value = { x, y };
+
+            currentCanvasIndex = canvasIndex;
+            isMouseDown.value = true;
+            activePointerId.value = e.pointerId;
+
+            if (canvas && e.pointerId !== undefined) {
+                canvas.setPointerCapture(e.pointerId);
+            }
 
             stopEvent(e);
-            
-            // Focus will be handled by the template's text input
-            nextTick(() => {
-                if (textInputField.value) {
-                    textInputField.value.focus();
-                    textInputField.value.select();
-                }
-            });
 
             return;
         }
@@ -1348,8 +1896,33 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
         if (textModesActive.value) return;
 
-        // Text mode doesn't need draw event handling
-        if (isTextInputMode.value) return;
+        if (isTextInputMode.value) {
+            if (!isTextAreaSelecting.value) return;
+            if (e.pointerId !== activePointerId.value) return;
+
+            const canvas = activePage.value.drawingCanvas || null;
+            const drawingContext = activePage.value.drawingContext || null;
+            const pt = getCanvasPointFromEvent(canvas, e);
+            if (!canvas || !drawingContext || !pt || !textSelectionStart.value) return;
+
+            textSelectionEnd.value = { x: pt.x, y: pt.y };
+
+            redrawAllStrokes();
+            drawingContext.save();
+            drawingContext.strokeStyle = boundingBoxColors.rotate;
+            drawingContext.lineWidth = 1;
+            drawingContext.setLineDash([5, 4]);
+
+            const x = Math.min(textSelectionStart.value.x, textSelectionEnd.value.x);
+            const y = Math.min(textSelectionStart.value.y, textSelectionEnd.value.y);
+            const width = Math.abs(textSelectionEnd.value.x - textSelectionStart.value.x);
+            const height = Math.abs(textSelectionEnd.value.y - textSelectionStart.value.y);
+
+            drawingContext.strokeRect(x, y, width, height);
+            drawingContext.restore();
+            stopEvent(e);
+            return;
+        }
 
         if (isSelectModeActive.value && (isStrokeHovering.value || selectedStroke.value)) {
             // Handle rotation
@@ -1756,8 +2329,69 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
         if (textModesActive.value) return;
         
-        // Text mode is handled by confirmText function
-        if (isTextInputMode.value) return;
+        if (isTextInputMode.value) {
+            if (!isTextAreaSelecting.value) return;
+            if (e && e.pointerId !== activePointerId.value) return;
+
+            const canvas = activePage.value.drawingCanvas || null;
+            if (!canvas) return;
+
+            if (e && e.pointerId !== undefined) {
+                try {
+                    canvas.releasePointerCapture(e.pointerId);
+                } catch (err) {
+                    // Ignore if capture was already released
+                }
+            }
+
+            const start = textSelectionStart.value;
+            const end = textSelectionEnd.value || start;
+
+            if (start && end) {
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = rect.width > 0 ? canvas.width / rect.width : 1;
+                const scaleY = rect.height > 0 ? canvas.height / rect.height : 1;
+
+                const selectedWidth = Math.abs(end.x - start.x);
+                const selectedHeight = Math.abs(end.y - start.y);
+
+                let x = Math.min(start.x, end.x);
+                let y = Math.min(start.y, end.y);
+                let width = selectedWidth;
+                let height = selectedHeight;
+
+                if (selectedWidth < MIN_TEXTBOX_SELECTION || selectedHeight < MIN_TEXTBOX_SELECTION) {
+                    width = DEFAULT_TEXTBOX_WIDTH * scaleX;
+                    height = DEFAULT_TEXTBOX_HEIGHT * scaleY;
+                    x = start.x;
+                    y = start.y;
+                }
+
+                width = Math.min(width, canvas.width);
+                height = Math.min(height, canvas.height);
+
+                x = Math.max(0, Math.min(x, Math.max(0, canvas.width - width)));
+                y = Math.max(0, Math.min(y, Math.max(0, canvas.height - height)));
+
+                openTextEditor({
+                    bounds: { x, y, width, height },
+                    content: '<p><br></p>',
+                    strokeRef: null
+                });
+            }
+
+            isTextAreaSelecting.value = false;
+            textSelectionStart.value = null;
+            textSelectionEnd.value = null;
+            isMouseDown.value = false;
+            activePointerId.value = null;
+            activePointerType.value = null;
+            currentCanvasIndex = -1;
+
+            stopEvent(e);
+            redrawAllStrokes();
+            return;
+        }
 
         if (isSelectModeActive.value && (isStrokeHovering.value || isDragging.value || isResizing.value || isRotating.value) && isMouseDown.value && selectedStroke.value) {
             // Only stop if it's the same pointer
@@ -2013,64 +2647,12 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         isBoundingBoxHovering.value = false;
         stopDrawing(e);
     };
-
-    const confirmText = () => {
-        if (!textInput.value.trim() || textPosition.value === null || textCanvasIndex.value === -1) {
-            cancelText();
-            return;
-        }
-
-        // Calculate scale factor from canvas to screen to ensure text size matches
-        let scale = 1;
-        const canvas = activePage.value.drawingCanvas || null;
-        if (canvas) {
-            const rect = canvas.getBoundingClientRect();
-            // Use height ratio to determine font scaling
-            if (rect.height > 0) {
-                scale = canvas.height / rect.height;
-            }
-        }
-
-        const id = uuid();
-        
-        const textStroke = [{
-            id,
-            x: textPosition.value.x,
-            y: textPosition.value.y - 4,
-            color: drawColor.value,
-            thickness: drawThickness.value,
-            type: 'text',
-            text: textInput.value,
-            fontSize: fontSize.value * scale
-        }];
-        
-        activePage.value.strokes.push(textStroke);
-        
-        strokeChangeCallback({
-            id,
-            type: 'add',
-            page: activePage.value,
-            stroke: textStroke
-        });
-        
-        redrawAllStrokes();
-        
-        // Reset text mode
-        textInput.value = '';
-        textPosition.value = null;
-        textCanvasIndex.value = -1;
-        textboxPosition.value = null;
-    };
-
-    const cancelText = () => {
-        textInput.value = '';
-        textPosition.value = null;
-        textCanvasIndex.value = -1;
-        textboxPosition.value = null;
-    };
-
+    
     const resetToolState = () => {
-        cancelText();
+        isTextAreaSelecting.value = false;
+        textSelectionStart.value = null;
+        textSelectionEnd.value = null;
+        closeTextEditor();
         isTextHighlightMode.value = false;
         isTextSelectionMode.value = false;
         isTextInputMode.value = false;
@@ -2189,6 +2771,8 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         if (!selectedStroke.value) return;
         const pageId = selectedStroke.value.pageId;
         const strokes = activePage.value.strokes || [];
+        const html = convertPlainTextToHtml(newText || '');
+        const normalized = normalizeTextStrokeContent({ text: newText || '', html });
 
         const isMulti = Array.isArray(selectedStrokes.value) && selectedStrokes.value.length > 1;
         if (isMulti) {
@@ -2198,6 +2782,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 if (!s || s[0].type !== 'text') return;
                 const originalStroke = JSON.parse(JSON.stringify(s));
                 s[0].text = newText;
+                s[0].content = normalized;
                 strokeChangeCallback({
                     id: s[0].id,
                     type: 'text-change',
@@ -2212,6 +2797,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
             if (stroke && stroke[0].type === 'text') {
                 const originalStroke = JSON.parse(JSON.stringify(stroke));
                 stroke[0].text = newText;
+                stroke[0].content = normalized;
                 strokeChangeCallback({
                     id: stroke[0].id,
                     type: 'text-change',
@@ -2437,6 +3023,34 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         stopEvent(e);
     };
 
+    const editSelectedTextStroke = () => {
+        if (!selectedStroke.value) return;
+        if (selectedStroke.value.stroke?.[0]?.type !== 'text') return;
+
+        const first = selectedStroke.value.stroke[0];
+        const textBox = getTextBoxSize(selectedStroke.value.stroke);
+        if (!textBox) return;
+
+        showStrokeMenu.value = false;
+
+        openTextEditor({
+            bounds: {
+                x: first.x,
+                y: first.y,
+                width: textBox.width,
+                height: textBox.height
+            },
+            content: getTextStrokeContent(first).html,
+            strokeRef: {
+                pageId: selectedStroke.value.pageId,
+                pageIndex: selectedStroke.value.pageIndex,
+                strokeIndex: selectedStroke.value.strokeIndex
+            }
+        });
+
+        redrawAllStrokes();
+    };
+
     const boundingBoxColors = {
         default: '#0000ff',
         rotate: '#ff0000'
@@ -2593,14 +3207,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         ctx.restore();
     };
 
-    const handleTextboxBlur = () => {
-        // Small delay to allow clicking Add button if present
-        setTimeout(() => {
-            if (textboxPosition.value !== null) {
-                confirmText();
-            }
-        }, 150);
-    };
+    const handleTextboxBlur = () => {};
 
     const eraseAtPoint = (x, y) => {
         const eraserRadius = 10;
@@ -2773,16 +3380,19 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                     }
                     drawingContext.fill();
                 } else if (first.type === 'text') {
-                    drawingContext.font = `${first.fontSize}px Arial`;
-                    drawingContext.fillStyle = first.color;
-                    drawingContext.textBaseline = 'top';
+                    const textBox = getTextBoxSize(stroke);
+                    if (!textBox) {
+                        drawingContext.restore();
+                        return;
+                    }
+
                     if (angle) {
                         const b = getStrokeBounds(stroke, 0);
                         const cx = (b.minX + b.maxX) / 2;
                         const cy = (b.minY + b.maxY) / 2;
-                        drawingContext.fillText(first.text, first.x - cx, first.y - cy);
+                        drawTextStroke(drawingContext, first, first.x - cx, first.y - cy, textBox.width, textBox.height);
                     } else {
-                        drawingContext.fillText(first.text, first.x, first.y);
+                        drawTextStroke(drawingContext, first, first.x, first.y, textBox.width, textBox.height);
                     }
                 } else {
                     // It's a pen stroke
@@ -2983,12 +3593,12 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                         maxY = Math.max(maxY, rect.y + rect.height);
                     });
                 } else if (first.type === 'text') {
-                    const ctx = activePage.value.drawingContext || null;
-                    if (ctx) {
-                        ctx.font = `${first.fontSize}px Arial`;
-                        const metrics = ctx.measureText(first.text || '');
-                        minX = first.x; minY = first.y;
-                        maxX = first.x + metrics.width; maxY = first.y + first.fontSize;
+                    const textBox = getTextBoxSize(stroke);
+                    if (textBox) {
+                        minX = first.x;
+                        minY = first.y;
+                        maxX = first.x + textBox.width;
+                        maxY = first.y + textBox.height;
                     }
                 } else if (first.type === 'line' || first.type === 'rectangle' || first.type === 'circle') {
                     if (first.type === 'circle') {
@@ -3080,12 +3690,12 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         drawThickness,
         colors,
         isTextInputMode,
-        textInput,
-        textInputField,
         textPosition,
         textCanvasIndex,
         fontSize,
         textboxPosition,
+        textEditorPosition,
+        textEditorHtml,
         isSelectionMode,
         selectionStart,
         selectionEnd,
@@ -3106,8 +3716,10 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         stopDrawing,
         onPointerMove,
         onPointerLeave,
-        confirmText,
-        cancelText,
+        editSelectedTextStroke,
+        commitTextEditor,
+        closeTextEditor,
+        syncTextEditorViewport,
         resetToolState,
         handleTextboxBlur,
         redrawAllStrokes,
