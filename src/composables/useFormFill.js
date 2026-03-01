@@ -260,10 +260,10 @@ const parseButtonAction = (annotation) => {
         const namedAction = normalizeString(lowerMap.namedaction || lowerMap.named || lowerMap.action || lowerMap.n || '');
         if (namedAction && !found) {
             const named = namedAction.toLowerCase();
-            if (named === 'firstpage') setFound({ type: 'navigate', target: 'first' });
-            else if (named === 'lastpage') setFound({ type: 'navigate', target: 'last' });
-            else if (named === 'nextpage') setFound({ type: 'navigate', target: 'next' });
-            else if (named === 'prevpage' || named === 'previouspage') setFound({ type: 'navigate', target: 'prev' });
+            if (named.includes('firstpage')) setFound({ type: 'navigate', target: 'first' });
+            else if (named.includes('lastpage')) setFound({ type: 'navigate', target: 'last' });
+            else if (named.includes('nextpage')) setFound({ type: 'navigate', target: 'next' });
+            else if (named.includes('prevpage') || named.includes('previouspage')) setFound({ type: 'navigate', target: 'prev' });
             if (found) return;
         }
 
@@ -295,13 +295,50 @@ const parseButtonAction = (annotation) => {
 
     walk(annotation);
 
+    const parseNavigationHint = (raw) => {
+        const text = normalizeString(raw).toLowerCase();
+        if (!text) return null;
+
+        if (text.includes('firstpage') || text === 'first' || text.startsWith('first')) {
+            return { type: 'navigate', target: 'first' };
+        }
+        if (text.includes('lastpage') || text === 'last' || text.startsWith('last')) {
+            return { type: 'navigate', target: 'last' };
+        }
+        if (text.includes('nextpage') || text === 'next' || text.startsWith('next')) {
+            return { type: 'navigate', target: 'next' };
+        }
+        if (text.includes('prevpage') || text.includes('previouspage') || text === 'prev' || text === 'previous' || text.startsWith('prev')) {
+            return { type: 'navigate', target: 'prev' };
+        }
+
+        return null;
+    };
+
+    if (!found) {
+        const hints = [
+            annotation?.fieldName,
+            annotation?.buttonValue,
+            annotation?.id,
+            annotation?.alternativeText,
+            annotation?.userName,
+            annotation?.title,
+        ];
+
+        for (const hint of hints) {
+            const navigationAction = parseNavigationHint(hint);
+            if (navigationAction) {
+                return navigationAction;
+            }
+        }
+    }
+
     if (!found && annotation?.buttonValue) {
         const label = normalizeString(annotation.buttonValue).toLowerCase();
         if (label.includes('reset')) return { type: 'reset' };
-        if (label.includes('first')) return { type: 'navigate', target: 'first' };
-        if (label.includes('last')) return { type: 'navigate', target: 'last' };
-        if (label.includes('next')) return { type: 'navigate', target: 'next' };
-        if (label.includes('prev') || label.includes('previous')) return { type: 'navigate', target: 'prev' };
+
+        const navigationAction = parseNavigationHint(label);
+        if (navigationAction) return navigationAction;
     }
 
     return found;
@@ -424,7 +461,7 @@ const processAnnotation = (annotation, viewport) => {
  * annotations.  All values are reactive; call `flattenToPdfLib(form)` to
  * write them back into a pdf-lib PDFForm before serialising.
  */
-export function useFormFill(page) {
+export function useFormFill(page, actionButtonHandler) {
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     const isApplyingCalculations = ref(false);
@@ -697,21 +734,9 @@ export function useFormFill(page) {
             return;
         }
 
-        if (action.type === 'goto') {
-            scrollToPage(action.pageIndex || 0);
+        if (typeof actionButtonHandler === 'function') {
+            actionButtonHandler(action);
             return;
-        }
-
-        if (action.type === 'navigate') {
-            if (action.target === 'first') {
-                scrollToFirstPage();
-            } else if (action.target === 'last') {
-                scrollToLastPage();
-            } else if (action.target === 'next') {
-                scrollToPage(Math.min(activePages.value.length - 1, pageIndex.value + 1));
-            } else if (action.target === 'prev') {
-                scrollToPage(Math.max(0, pageIndex.value - 1));
-            }
         }
     };
 

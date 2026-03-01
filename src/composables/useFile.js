@@ -237,7 +237,34 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         handlePdfButtonAction,
         submitPdfForm,
         collectPdfFormValues,
-    } = useFormFill(activePage);
+    } = useFormFill(activePage, (action) => {
+        if (action.type === 'goto') {
+            scrollToPage(action.pageIndex ?? 0);
+            return;
+        }
+
+        const actionNames = [action.type, action.target];
+
+        if (actionNames.some(el => el.includes('first'))) {
+            scrollToFirstPage();
+            return;
+        }
+
+        if (actionNames.some(el => el.includes('last'))) {
+            scrollToLastPage();
+            return;
+        }
+
+        if (actionNames.some(el => el.includes('next'))) {
+            scrollToPage(pageIndex.value + 1);
+            return;
+        }
+
+        if (actionNames.some(el => el.includes('prev'))) {
+            scrollToPage(pageIndex.value - 1);
+            return;
+        }
+    });
 
     const getPages = (length) => {
         return Array.from({ length }, (_, index) => ({
