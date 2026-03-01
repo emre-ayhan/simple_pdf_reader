@@ -46,6 +46,28 @@ const stopDragging = () => {
     dragState.value = null;
 };
 
+const closeOpenPickers = () => {
+    if (!box.value) return;
+    box.value.querySelectorAll('.ql-toolbar .ql-picker.ql-expanded').forEach((picker) => {
+        picker.classList.remove('ql-expanded');
+    });
+};
+
+const handleGlobalPointerDown = (e) => {
+    if (!box.value) return;
+    const target = e.target;
+    const activePicker = target?.closest?.('.ql-toolbar .ql-picker');
+    if (activePicker) {
+        box.value.querySelectorAll('.ql-toolbar .ql-picker.ql-expanded').forEach((picker) => {
+            if (picker !== activePicker) {
+                picker.classList.remove('ql-expanded');
+            }
+        });
+        return;
+    }
+    closeOpenPickers();
+};
+
 const handleDragStart = (e) => {
     if (e.button !== 0) return;
     if (!box.value) return;
@@ -126,10 +148,13 @@ onMounted(() => {
 
         resizeObserver.observe(box.value);
     });
+
+    window.addEventListener('pointerdown', handleGlobalPointerDown, true);
 });
 
 onBeforeUnmount(() => {
     stopDragging();
+    window.removeEventListener('pointerdown', handleGlobalPointerDown, true);
 
     if (resizeObserver) {
         resizeObserver.disconnect();
