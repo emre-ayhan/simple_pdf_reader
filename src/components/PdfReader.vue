@@ -689,12 +689,12 @@ defineExpose({
                     <li class="nav-item btn-group" v-for="({ color }, index) in initialStrokeStyles">
                         <ToolItem class="nav-link" icon="circle-fill" :action="handleStrokeStyleButtonClick" :value="index" :active="color === drawColor" :style="`color: ${color} !important`" />
                         <div class="dropdown-menu dropdown-menu-dark show rounded-3 mt-5 p-3" v-if="showStrokeStyleMenu && !index">
-                            <div class="row">
+                            <div class="row align-items-center g-3">
                                 <div class="form-label col-4">{{ $t('Color') }}</div>
-                                <label class="form-label col-8">{{ $t('Thickness') }}</label>
-                                <div class="col-4">
+                                <div class="col-8">
                                     <input type="color" class="form-control form-control-sm form-control-color rounded-3" id="color-picker" :value="drawColor" title="Select color" @input="setInitialStrokeColor($event.target.value)" />
                                 </div>
+                                <label class="form-label col-4">{{ $t('Thickness') }}</label>
                                 <div class="col-8 d-flex align-items-center">
                                     <input type="range" class="form-range" min="1" max="10" :value="activeStrokeStyle?.thickness" @input="setInitialStrokeThickness($event.target.value)" />
                                     <input type="text" class="form-control-plaintext" min="1" max="10" :value="activeStrokeStyle?.thickness" readonly />
