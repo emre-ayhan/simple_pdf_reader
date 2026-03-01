@@ -675,7 +675,7 @@ defineExpose({
                     <ToolItem class="nav-link" label="Thumbnail Sidebar" icon="layout-sidebar-inset" :active="isThumbnailSidebarVisible" :action="toggleThumbnailSidebar" />
                 </li>
                 <!-- Search -->
-                <PageSearch :pages="pages" :disabled="textActionsDisabled" :scrollToPage="scrollToPage" />
+                <PageSearch :fileid="fileId" :pages="pages" :disabled="textActionsDisabled" :scrollToPage="scrollToPage" />
 
                 <!-- Reset Form -->
                 <li class="nav-item" v-if="isTextSelectionMode && activePage.annotations?.length">

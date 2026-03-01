@@ -5,6 +5,7 @@ import { ref, watch, computed, onMounted } from 'vue';
 // Define props to receive the necessary data from parent
 const props = defineProps({
     disabled: Boolean,
+    fileid: String,
     pages: { type: Object, required: true },
     scrollToPage: { type: Function }
 });
@@ -20,7 +21,8 @@ const showSearch = () => {
     if (props.disabled) return;
     if (searchToolbar.value) {
         searchToolbar.value.show();
-        const input = searchToolbar.value.querySelector('input[type="search"]');
+        const toast = searchToolbar.value._element;
+        const input = toast.querySelector('input[type="search"]');
         if (input) {
             input.focus();
         }
@@ -285,7 +287,7 @@ watch(() => props.pages, () => {
 }, { deep: true });
 
 onMounted(() => {
-    searchToolbar.value = new Toast('#search-toolbar', {
+    searchToolbar.value = new Toast(`#search-toolbar-${props.fileid}`, {
         autohide: true,
         delay: 5000
     });
@@ -310,7 +312,7 @@ defineExpose({
         <i class="bi bi-search"></i>
     </a>
     <div class="toast-container position-fixed start-0 top-0">
-        <div id="search-toolbar" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+        <div :id="`search-toolbar-${fileid}`" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
             <div class="toast-body">
                 <div class="d-flex align-items-start gap-2">
                     <div>
