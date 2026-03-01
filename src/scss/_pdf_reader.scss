@@ -273,9 +273,10 @@
     }
 
     .quil-editor {
-        border: 1px solid $dark;
+        border: 1px solid $dark-bg-subtle;
         border-radius: $border-radius-lg;
         background-color: rgba(255, 255, 255, 0.95);
+        box-shadow: $box-shadow-sm;
         overflow: hidden;
         height: 100%;
         display: flex;
@@ -283,7 +284,6 @@
 
         .ql-toolbar {
             border: none;
-            border-bottom: 1px solid $border-color;
             background: $dark-bg-subtle;
         }
 
