@@ -22,7 +22,7 @@ const box = ref(null);
 let quill = null;
 let resizeObserver = null;
 const dragState = ref(null);
-const emit = defineEmits(['update:modelValue', 'save', 'cancel', 'resize', 'drag']);
+const emit = defineEmits(['update:modelValue', 'save', 'cancel', 'resize', 'drag', 'simple-mode']);
 
 const parsePx = (value, fallback = 0) => {
     const n = parseFloat(value);
@@ -172,8 +172,11 @@ onBeforeUnmount(() => {
         <div class="quil-editor">
             <div ref="editor"></div>
             <div class="quil-editor-actions">
-                <button type="button" class="btn btn-sm btn-dark" @click="handleSave">Save</button>
-                <button type="button" class="btn btn-sm btn-outline-dark" @click="handleCancel">Cancel</button>
+                <button type="button" class="btn btn-sm btn-link link-dark me-auto" @click="emit('simple-mode')">
+                    {{ $t('Switch to Simple Mode') }}
+                </button>
+                <button type="button" class="btn btn-sm btn-dark" @click="handleSave">{{ $t('Save') }}</button>
+                <button type="button" class="btn btn-sm btn-outline-dark" @click="handleCancel">{{ $t('Cancel') }}</button>
             </div>
         </div>
     </div>

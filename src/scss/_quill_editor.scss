@@ -10,6 +10,20 @@
     overflow: hidden;
     min-width: var(--text-editor-min-width);
     min-height: auto;
+    border-radius: $border-radius-lg;
+
+    &.simple-mode {
+        .form-control {
+            border: 1px solid $dark-bg-subtle;
+            border-radius: $border-radius-lg;
+            background-color: rgba(255, 255, 255, 0.75) !important;
+
+            &:focus {
+                outline: none !important;
+                box-shadow: none !important;
+            }
+        }
+    }
     
     &:not(.simple-mode) {
         resize: both;
@@ -29,7 +43,7 @@
     .quil-editor {
         border: 1px solid $dark-bg-subtle;
         border-radius: $border-radius-lg;
-        background-color: $white;
+        background-color: rgba(255, 255, 255, 0.75);
         box-shadow: $box-shadow-sm;
         overflow: visible;
         width: 100%;

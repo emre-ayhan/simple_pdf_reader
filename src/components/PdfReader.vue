@@ -15,6 +15,7 @@ import ContextMenu from "./ContextMenu.vue";
 import ToolItem from "./ToolItem.vue";
 import PdfForm from "./PdfForm.vue";
 import QuillEditor from "./QuillEditor.vue";
+import SimpleTextEditor from "./SimpleTextEditor.vue";
 
 // Cursor Style
 const cursorStyle = computed(() => {
@@ -828,9 +829,14 @@ defineExpose({
             </div>
 
             <template v-if="!!textEditorPosition">
-                <div class="text-editor-box simple-mode border border-dark rounded-3" :style="{ ...textEditorPosition, height: 'auto' }" v-if="textEditorSimpleMode">
-                    <input type="text" class="form-control border-0 rounded-3" :placeholder="$t('Type text...')" v-model="textEditorHtml" @keydown.enter.prevent="commitTextEditor" @keydown.esc.prevent="closeTextEditor" @contextmenu.prevent />
-                </div>
+                <SimpleTextEditor
+                    v-if="textEditorSimpleMode"
+                    :style="textEditorPosition"
+                    v-model="textEditorHtml"
+                    @enter="commitTextEditor"
+                    @cancel="closeTextEditor"
+                    @advance="textEditorSimpleMode = false"
+                />
                 <QuillEditor
                     v-else
                     :placeholder="$t('Type text...')"
@@ -840,6 +846,7 @@ defineExpose({
                     @cancel="closeTextEditor"
                     @resize="updateTextEditorSize"
                     @drag="updateTextEditorPosition"
+                    @simple-mode="textEditorSimpleMode = true"
                 />
             </template>
 

@@ -188,7 +188,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
     const textEditorHtml = ref('');
     const textEditorBounds = ref(null); // Canvas coordinates
     const textEditorPosition = ref(null)
-    const textEditorSimpleMode = ref(true);
+    const textEditorSimpleMode = ref(false);
     const editingTextStroke = ref(null); // { pageId, pageIndex, strokeIndex }
     const textEditorPreferredSize = ref({ width: 420, height: 256 });
 
@@ -699,9 +699,17 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
     };
 
     const normalizeTextStrokeContent = (content) => {
+        if (textEditorSimpleMode.value && textEditorHtml.value) {
+            return {
+                text: textEditorHtml.value,
+                html: textEditorHtml.value
+            };
+        }
+
         if (!content) {
             return { text: '', html: '' };
         }
+
 
         if (typeof content === 'string') {
             const html = content;
