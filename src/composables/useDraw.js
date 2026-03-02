@@ -234,7 +234,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
             const scaleY = canvas.height / rect.height;
             
             redrawAllStrokes();
-            ctx.strokeStyle = boundingBoxColors.rotate;
+            ctx.strokeStyle = BOUNDING_BOX_HANDLE_COLOR;
             ctx.lineWidth = 1;
             ctx.setLineDash([5, 5]);
             
@@ -3414,10 +3414,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         redrawAllStrokes();
     };
 
-    const boundingBoxColors = {
-        default: '#2a7fff',
-        rotate: '#ff2a7f'
-    };
+    const BOUNDING_BOX_HANDLE_COLOR = '#2a7fff';
 
     const drawSelectionBoundingBox = () => {
         const strokeIndex = selectedStroke.value.strokeIndex;
@@ -3439,7 +3436,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         const first = stroke[0];
         
         ctx.save();
-        ctx.strokeStyle = boundingBoxColors.default;
+        ctx.strokeStyle = BOUNDING_BOX_HANDLE_COLOR;
         ctx.lineWidth = 2;
         
         let minX, minY, maxX, maxY, padding = SELECTION_PADDING;
@@ -3508,17 +3505,24 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                     { x: minX, y: (minY + maxY) / 2, handle: 'w' },
                     { x: maxX, y: (minY + maxY) / 2, handle: 'e' }
                 ];
-                let rotationAvailable = first.type !== 'highlight-rect' && first.type !== 'text';
+                
+                const rotationAvailable = first.type !== 'highlight-rect' && first.type !== 'text';
                 handles.forEach(h => {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.strokeStyle = BOUNDING_BOX_HANDLE_COLOR;
+                    ctx.lineWidth = 2; // Ensure handle border is visible
+                    ctx.beginPath();
+                    
                     if (h.handle === 'ne' && rotationAvailable) {
-                        ctx.fillStyle = boundingBoxColors.rotate;
-                        ctx.beginPath();
+                        // Draw circle for rotate handle
                         ctx.arc(h.x, h.y, handleSize / 2, 0, Math.PI * 2);
-                        ctx.fill();
                     } else {
-                        ctx.fillStyle = boundingBoxColors.default;
-                        ctx.fillRect(h.x - handleSize / 2, h.y - handleSize / 2, handleSize, handleSize);
+                        // Draw square handles for everything else
+                        ctx.rect(h.x - handleSize / 2, h.y - handleSize / 2, handleSize, handleSize);
                     }
+                    
+                    ctx.fill();
+                    ctx.stroke();
                 });
             }
         }
