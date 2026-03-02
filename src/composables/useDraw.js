@@ -189,7 +189,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
     const textEditorHtml = ref('');
     const textEditorBounds = ref(null); // Canvas coordinates
     const textEditorPosition = ref(null)
-    const textEditorSimpleMode = ref(false);
+    const textEditorSimpleMode = ref(true);
     const editingTextStroke = ref(null); // { pageId, pageIndex, strokeIndex }
     const textEditorPreferredSize = ref({ width: 420, height: 256 });
 
