@@ -180,6 +180,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
     // Text mode variables
     const DEFAULT_TEXT_COLOR = '#000000';
+    const TEXT_RENDER_OVERFLOW_ALLOWANCE_FACTOR = 0.2;
     const isTextInputMode = ref(false);
     const textPosition = ref(null);
     const textCanvasIndex = ref(-1);
@@ -604,7 +605,8 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
         const safeWidth = Math.max(20, width || 20);
         const safeHeight = Math.max(lineHeight, height || lineHeight);
-        const maxY = y + safeHeight;
+        const overflowAllowance = Math.max(2, lineHeight * TEXT_RENDER_OVERFLOW_ALLOWANCE_FACTOR);
+        const maxY = y + safeHeight + overflowAllowance;
         const paragraphs = String(text).split('\n');
         let cursorY = y;
 
@@ -788,8 +790,8 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         const htmlValue = String(html || '').trim();
         if (!htmlValue) return [];
 
-        const pushNewline = (tokens) => {
-            if (tokens.length === 0 || tokens[tokens.length - 1].type === 'newline') return;
+        const pushNewline = (tokens, { allowConsecutive = false } = {}) => {
+            if (!allowConsecutive && (tokens.length === 0 || tokens[tokens.length - 1].type === 'newline')) return;
             tokens.push({ type: 'newline' });
         };
 
@@ -886,7 +888,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
                 const tag = node.tagName;
                 if (tag === 'BR') {
-                    pushNewline(tokens);
+                    pushNewline(tokens, { allowConsecutive: true });
                     return;
                 }
 
@@ -941,7 +943,8 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
         const safeWidth = Math.max(20, width || 20);
         const safeHeight = Math.max(baseStyle.fontSize * 1.35, height || 20);
-        const maxY = y + safeHeight;
+        const overflowAllowance = Math.max(2, baseStyle.fontSize * TEXT_RENDER_OVERFLOW_ALLOWANCE_FACTOR);
+        const maxY = y + safeHeight + overflowAllowance;
         const minFont = 8;
         const indentStep = 32;
 
@@ -1248,10 +1251,12 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         }
 
         maxLineWidth = Math.max(maxLineWidth, getIndentPixels(lineIndentLevel) + cursorX);
+        const measuredHeight = totalY + lineHeight;
+        const bottomPadding = Math.max(2, lineHeight * TEXT_RENDER_OVERFLOW_ALLOWANCE_FACTOR);
 
         return {
             width: Math.max(24, wrapWidth ? Math.min(maxLineWidth, wrapWidth) : maxLineWidth),
-            height: Math.max(24, totalY + lineHeight)
+            height: Math.max(24, measuredHeight + bottomPadding)
         };
     };
 
