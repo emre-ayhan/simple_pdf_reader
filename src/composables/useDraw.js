@@ -1100,9 +1100,9 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 const chunkWidth = ctx.measureText(part).width;
 
                 const indentPixels = getIndentPixels(lineIndentLevel);
-                const availableWidth = wrapWidth ? Math.max(8, wrapWidth - indentPixels) : null;
+                const availableWidth = width ? Math.max(8, width - indentPixels) : null;
 
-                if (lineWidth + chunkWidth > availableWidth && lineWidth > 0) {
+                if (availableWidth !== null && lineWidth + chunkWidth > availableWidth && lineWidth > 0) {
                     if (!flushLine(false)) return;
                     applyLineStyle(style);
                 }

@@ -595,7 +595,7 @@ useWindowEvents(fileId, {
             action: (event) => {
                 if (!hasActiveTool.value) return;
                 event.preventDefault();
-                if (isDrawing.value) {
+                if (isDrawing.value || isTextInputMode.value) {
                     toggleStrokeSelectionMode();
                     return;
                 }
