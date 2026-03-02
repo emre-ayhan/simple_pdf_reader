@@ -1100,7 +1100,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 const chunkWidth = ctx.measureText(part).width;
 
                 const indentPixels = getIndentPixels(lineIndentLevel);
-                const availableWidth = Math.max(8, safeWidth - indentPixels);
+                const availableWidth = wrapWidth ? Math.max(8, wrapWidth - indentPixels) : null;
 
                 if (lineWidth + chunkWidth > availableWidth && lineWidth > 0) {
                     if (!flushLine(false)) return;
@@ -1872,36 +1872,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 maxY = Math.max(maxY, ry);
             });
             return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
-        } else {
-            // Pen strokes: rotate points if needed and compute AABB
-            const angle = first.rotation || 0;
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            let cx = 0, cy = 0;
-            if (angle) {
-                // compute center from unrotated bounds
-                let uMinX = Infinity, uMinY = Infinity, uMaxX = -Infinity, uMaxY = -Infinity;
-                for (let p of stroke) { uMinX = Math.min(uMinX, p.x); uMinY = Math.min(uMinY, p.y); uMaxX = Math.max(uMaxX, p.x); uMaxY = Math.max(uMaxY, p.y); }
-                cx = (uMinX + uMaxX) / 2; cy = (uMinY + uMaxY) / 2;
-                const cosA = Math.cos(angle), sinA = Math.sin(angle);
-                for (let p of stroke) {
-                    const dx = p.x - cx, dy = p.y - cy;
-                    const rx = cx + dx * cosA - dy * sinA;
-                    const ry = cy + dx * sinA + dy * cosA;
-                    minX = Math.min(minX, rx);
-                    minY = Math.min(minY, ry);
-                    maxX = Math.max(maxX, rx);
-                    maxY = Math.max(maxY, ry);
-                }
-            } else {
-                for (let p of stroke) {
-                    minX = Math.min(minX, p.x);
-                    minY = Math.min(minY, p.y);
-                    maxX = Math.max(maxX, p.x);
-                    maxY = Math.max(maxY, p.y);
-                }
-            }
-            return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
-        }
+ }
     };
 
     // Compute unrotated bounds (ignores `rotation`), used for oriented selection box
@@ -1974,46 +1945,19 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
     const getResizeHandle = (x, y, bounds, stroke) => {
         if (!bounds) return null;
-        if (stroke?.[0]?.type === 'text') return null;
         
         const handleSize = 8;
         const threshold = handleSize;
-        const handles = [];
-        const angle = stroke && stroke[0] && stroke[0].type !== 'highlight-rect' ? (stroke[0].rotation || 0) : 0;
-        if (angle) {
-            const bLocal = getUnrotatedBounds(stroke, SELECTION_PADDING);
-            if (!bLocal) return null;
-            const cx = (bLocal.minX + bLocal.maxX) / 2;
-            const cy = (bLocal.minY + bLocal.maxY) / 2;
-            const cosA = Math.cos(angle), sinA = Math.sin(angle);
-            const localPoints = [
-                { x: bLocal.minX, y: bLocal.minY, handle: 'nw' },
-                { x: bLocal.maxX, y: bLocal.minY, handle: 'ne' },
-                { x: bLocal.minX, y: bLocal.maxY, handle: 'sw' },
-                { x: bLocal.maxX, y: bLocal.maxY, handle: 'se' },
-                { x: (bLocal.minX + bLocal.maxX) / 2, y: bLocal.minY, handle: 'n' },
-                { x: (bLocal.minX + bLocal.maxX) / 2, y: bLocal.maxY, handle: 's' },
-                { x: bLocal.minX, y: (bLocal.minY + bLocal.maxY) / 2, handle: 'w' },
-                { x: bLocal.maxX, y: (bLocal.minY + bLocal.maxY) / 2, handle: 'e' }
-            ];
-            localPoints.forEach(p => {
-                const dx = p.x - cx, dy = p.y - cy;
-                const gx = cx + dx * cosA - dy * sinA;
-                const gy = cy + dx * sinA + dy * cosA;
-                handles.push({ x: gx, y: gy, handle: p.handle });
-            });
-        } else {
-            handles.push(
-                { x: bounds.minX, y: bounds.minY, handle: 'nw' },
-                { x: bounds.maxX, y: bounds.minY, handle: 'ne' },
-                { x: bounds.minX, y: bounds.maxY, handle: 'sw' },
-                { x: bounds.maxX, y: bounds.maxY, handle: 'se' },
-                { x: (bounds.minX + bounds.maxX) / 2, y: bounds.minY, handle: 'n' },
-                { x: (bounds.minX + bounds.maxX) / 2, y: bounds.maxY, handle: 's' },
-                { x: bounds.minX, y: (bounds.minY + bounds.maxY) / 2, handle: 'w' },
-                { x: bounds.maxX, y: (bounds.minY + bounds.maxY) / 2, handle: 'e' }
-            );
-        }
+        const handles = [
+            { x: bounds.minX, y: bounds.minY, handle: 'nw' },
+            { x: bounds.maxX, y: bounds.minY, handle: 'ne' },
+            { x: bounds.minX, y: bounds.maxY, handle: 'sw' },
+            { x: bounds.maxX, y: bounds.maxY, handle: 'se' },
+            { x: (bounds.minX + bounds.maxX) / 2, y: bounds.minY, handle: 'n' },
+            { x: (bounds.minX + bounds.maxX) / 2, y: bounds.maxY, handle: 's' },
+            { x: bounds.minX, y: (bounds.minY + bounds.maxY) / 2, handle: 'w' },
+            { x: bounds.maxX, y: (bounds.minY + bounds.maxY) / 2, handle: 'e' }
+        ];
         
         for (let h of handles) {
             if (Math.abs(x - h.x) <= threshold && Math.abs(y - h.y) <= threshold) {
@@ -2140,7 +2084,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 // Check if clicking on a resize handle of already selected stroke
                 // Disable resizing when multiple selection is active
                 if (selectedStrokes.value.length <= 1 && selectedStroke.value && selectedStroke.value.pageId === page.id) {
-                        const handlePadding = 5;
+                        const handlePadding = SELECTION_PADDING;
                             const bounds = getStrokeBounds(selectedStroke.value.stroke, SELECTION_PADDING);
                             let handle = getResizeHandle(x, y, bounds, selectedStroke.value.stroke);
                             // Treat top-right corner as rotation handle for all strokes (single selection), except highlight-rect/text
@@ -2152,7 +2096,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                     
                     if (handle) {
                         const firstSel = selectedStroke.value.stroke[0];
-                        if ((handle === 'rotate' || handle === 'ne') && firstSel.type !== 'highlight-rect') {
+                        if ((handle === 'rotate' || handle === 'ne') && firstSel.type !== 'highlight-rect' && firstSel.type !== 'text') {
                             isRotating.value = true;
                             resizeHandle.value = handle;
                             dragStartPos.value = { x, y };
@@ -2427,16 +2371,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                     const boundsPadding = resizeStartBounds.value.padding ?? 0;
                     if (!startBounds || !startRawBounds) return;
                     
-                    // Transform dx/dy into local coordinate space if rotated
-                    const angle = first.rotation || 0;
-                    if (angle !== 0) {
-                        const cosA = Math.cos(-angle);
-                        const sinA = Math.sin(-angle);
-                        const localDx = dx * cosA - dy * sinA;
-                        const localDy = dx * sinA + dy * cosA;
-                        dx = localDx;
-                        dy = localDy;
-                    }
+                    // Resize handles are axis-aligned; keep drag deltas in screen/canvas axes.
                     
                     // Calculate new bounds based on resize handle
                     let newMinX = startBounds.minX;
@@ -2517,12 +2452,57 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                     // Get original stroke to calculate scaling from
                     const originalStroke = selectedStroke.value.originalStroke;
                     const origFirst = originalStroke[0];
+
+                    // Fixed Anchor Logic for Rotated Resizing
+                    // 1. Determine the Fixed Anchor Point (A) on the Reference AABB (startRawBounds)
+                    let anchorX, anchorY;
+                    const scBounds = startRawBounds;
                     
-                    if (origFirst.type === 'image') {
-                        first.x = newRawMinX;
-                        first.y = newRawMinY;
-                        first.width = newRawMaxX - newRawMinX;
-                        first.height = newRawMaxY - newRawMinY;
+                    if (handle === 'nw') { anchorX = scBounds.maxX; anchorY = scBounds.maxY; }
+                    else if (handle === 'ne') { anchorX = scBounds.minX; anchorY = scBounds.maxY; }
+                    else if (handle === 'sw') { anchorX = scBounds.maxX; anchorY = scBounds.minY; }
+                    else if (handle === 'se') { anchorX = scBounds.minX; anchorY = scBounds.minY; }
+                    else if (handle === 'n') { anchorX = (scBounds.minX + scBounds.maxX)/2; anchorY = scBounds.maxY; }
+                    else if (handle === 's') { anchorX = (scBounds.minX + scBounds.maxX)/2; anchorY = scBounds.minY; }
+                    else if (handle === 'w') { anchorX = scBounds.maxX; anchorY = (scBounds.minY + scBounds.maxY)/2; }
+                    else if (handle === 'e') { anchorX = scBounds.minX; anchorY = (scBounds.minY + scBounds.maxY)/2; }
+                    else { anchorX = (scBounds.minX + scBounds.maxX)/2; anchorY = (scBounds.minY + scBounds.maxY)/2; }
+
+                    if (origFirst.type === 'text' || origFirst.type === 'image') {
+                        const origHalfW = origFirst.width / 2;
+                        const origHalfH = origFirst.height / 2;
+                        const origCenterX = origFirst.x + origHalfW;
+                        const origCenterY = origFirst.y + origHalfH;
+
+                        let finalScaleX = scaleXFactor;
+                        let finalScaleY = scaleYFactor;
+
+                        if (origFirst.type === 'text') {
+                            const originalFontSize = Math.max(8, Number(origFirst.fontSize) || 16);
+                            const fontScale = Math.max(0.25, Math.sqrt(scaleXFactor * scaleYFactor));
+                            first.fontSize = Math.max(8, Math.round(originalFontSize * fontScale));
+                            
+                            first.width = origFirst.width * fontScale;
+                            first.height = origFirst.height * fontScale;
+                            
+                            // Use fontScale for dimension scaling, but keep AABB scale for position
+                            // to ensure anchor behavior
+                        } else {
+                            first.width = origFirst.width * scaleXFactor;
+                            first.height = origFirst.height * scaleYFactor;
+                        }
+
+                        // Update Center relative to Anchor using AABB scale factors
+                        const newCenterX = anchorX + (origCenterX - anchorX) * scaleXFactor;
+                        const newCenterY = anchorY + (origCenterY - anchorY) * scaleYFactor;
+                        
+                        first.x = newCenterX - (first.width / 2);
+                        first.y = newCenterY - (first.height / 2);
+
+                        if (origFirst.type === 'text') {
+                            first.editorWidth = first.width;
+                            first.editorHeight = first.height;
+                        }
                     } else if (origFirst.type === 'highlight-rect') {
                         // Scale all rectangles in the compound highlight
                         const origRects = origFirst.rects || [{ x: origFirst.x, y: origFirst.y, width: origFirst.width, height: origFirst.height }];
@@ -2545,10 +2525,6 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                             rect.width = origRect.width * scaleXFactor;
                             rect.height = origRect.height * scaleYFactor;
                         });
-                    } else if (origFirst.type === 'text') {
-                        first.x = newRawMinX;
-                        first.y = newRawMinY;
-                        first.fontSize = Math.max(8, Math.round(origFirst.fontSize * Math.min(scaleXFactor, scaleYFactor)));
                     } else if (origFirst.type === 'circle') {
                         // Calculate new center and radii for ellipse
                         const newWidth = newRawMaxX - newRawMinX;
@@ -3439,8 +3415,8 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
     };
 
     const boundingBoxColors = {
-        default: '#0000ff',
-        rotate: '#ff0000'
+        default: '#2a7fff',
+        rotate: '#ff2a7f'
     };
 
     const drawSelectionBoundingBox = () => {
@@ -3503,91 +3479,47 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         } 
         
         else {
-            const angle = first.rotation || 0;
-            const rotationAllowed = first.type !== 'highlight-rect';
-            if (rotationAllowed && angle) {
-                // Oriented selection box: compute unrotated bounds and draw in rotated space
-                const bLocal = getUnrotatedBounds(stroke, SELECTION_PADDING);
-                if (!bLocal) { ctx.restore(); return; }
-                const cx = (bLocal.minX + bLocal.maxX) / 2;
-                const cy = (bLocal.minY + bLocal.maxY) / 2;
-                const w = (bLocal.maxX - bLocal.minX);
-                const h = (bLocal.maxY - bLocal.minY);
-                ctx.translate(cx, cy);
-                ctx.rotate(angle);
-                if (shouldDrawBorder) {
-                    ctx.strokeRect(bLocal.minX - cx, bLocal.minY - cy, w, h);
-                }
-                // Single selection: draw rotated handles (except text)
-                if (!multi && first.type !== 'text') {
-                    ctx.setLineDash([]);
-                    const handleSize = 8;
-                    const handlesLocal = [
-                        { x: bLocal.minX - cx, y: bLocal.minY - cy, handle: 'nw' },
-                        { x: bLocal.maxX - cx, y: bLocal.minY - cy, handle: 'ne' },
-                        { x: bLocal.minX - cx, y: bLocal.maxY - cy, handle: 'sw' },
-                        { x: bLocal.maxX - cx, y: bLocal.maxY - cy, handle: 'se' },
-                        { x: (bLocal.minX + bLocal.maxX) / 2 - cx, y: bLocal.minY - cy, handle: 'n' },
-                        { x: (bLocal.minX + bLocal.maxX) / 2 - cx, y: bLocal.maxY - cy, handle: 's' },
-                        { x: bLocal.minX - cx, y: (bLocal.minY + bLocal.maxY) / 2 - cy, handle: 'w' },
-                        { x: bLocal.maxX - cx, y: (bLocal.minY + bLocal.maxY) / 2 - cy, handle: 'e' }
-                    ];
-                    handlesLocal.forEach(h => {
-                        if (h.handle === 'ne') {
-                            ctx.fillStyle = boundingBoxColors.rotate;
-                            ctx.beginPath();
-                            ctx.arc(h.x, h.y, handleSize / 2, 0, Math.PI * 2);
-                            ctx.fill();
-                        } else {
-                            ctx.fillStyle = boundingBoxColors.default;
-                            ctx.fillRect(h.x - handleSize / 2, h.y - handleSize / 2, handleSize, handleSize);
-                        }
-                    });
-                }
-            } else {
-                const b = getStrokeBounds(stroke, 0);
-                if (!b) { ctx.restore(); return; }
-                minX = b.minX;
-                minY = b.minY;
-                maxX = b.maxX;
-                maxY = b.maxY;
+            const b = getStrokeBounds(stroke, 0);
+            if (!b) { ctx.restore(); return; }
+            minX = b.minX;
+            minY = b.minY;
+            maxX = b.maxX;
+            maxY = b.maxY;
 
-                minX -= padding;
-                minY -= padding;
-                maxX += padding;
-                maxY += padding;
-                
-                if (shouldDrawBorder) {
-                    ctx.strokeRect(minX, minY, maxX - minX, maxY - minY);
-                }
-                
-                if (!multi && first.type !== 'text') {
-                    ctx.setLineDash([]);
-                    const handleSize = 8;
-                    const handles = [
-                        { x: minX, y: minY, handle: 'nw' },
-                        { x: maxX, y: minY, handle: 'ne' },
-                        { x: minX, y: maxY, handle: 'sw' },
-                        { x: maxX, y: maxY, handle: 'se' },
-                        { x: (minX + maxX) / 2, y: minY, handle: 'n' },
-                        { x: (minX + maxX) / 2, y: maxY, handle: 's' },
-                        { x: minX, y: (minY + maxY) / 2, handle: 'w' },
-                        { x: maxX, y: (minY + maxY) / 2, handle: 'e' }
-                    ];
-                    // Rotation availability: single selection and not highlight-rect
-                    let rotationAvailable = first.type !== 'highlight-rect';
-                    handles.forEach(h => {
-                        if (h.handle === 'ne' && rotationAvailable) {
-                            ctx.fillStyle = boundingBoxColors.rotate;
-                            ctx.beginPath();
-                            ctx.arc(h.x, h.y, handleSize / 2, 0, Math.PI * 2);
-                            ctx.fill();
-                        } else {
-                            ctx.fillStyle = boundingBoxColors.default;
-                            ctx.fillRect(h.x - handleSize / 2, h.y - handleSize / 2, handleSize, handleSize);
-                        }
-                    });
-                }
+            minX -= padding;
+            minY -= padding;
+            maxX += padding;
+            maxY += padding;
+            
+            if (shouldDrawBorder) {
+                ctx.strokeRect(minX, minY, maxX - minX, maxY - minY);
+            }
+            
+            if (!multi) {
+                ctx.setLineDash([]);
+                const handleSize = 8;
+                const handles = [
+                    { x: minX, y: minY, handle: 'nw' },
+                    { x: maxX, y: minY, handle: 'ne' },
+                    { x: minX, y: maxY, handle: 'sw' },
+                    { x: maxX, y: maxY, handle: 'se' },
+                    { x: (minX + maxX) / 2, y: minY, handle: 'n' },
+                    { x: (minX + maxX) / 2, y: maxY, handle: 's' },
+                    { x: minX, y: (minY + maxY) / 2, handle: 'w' },
+                    { x: maxX, y: (minY + maxY) / 2, handle: 'e' }
+                ];
+                let rotationAvailable = first.type !== 'highlight-rect' && first.type !== 'text';
+                handles.forEach(h => {
+                    if (h.handle === 'ne' && rotationAvailable) {
+                        ctx.fillStyle = boundingBoxColors.rotate;
+                        ctx.beginPath();
+                        ctx.arc(h.x, h.y, handleSize / 2, 0, Math.PI * 2);
+                        ctx.fill();
+                    } else {
+                        ctx.fillStyle = boundingBoxColors.default;
+                        ctx.fillRect(h.x - handleSize / 2, h.y - handleSize / 2, handleSize, handleSize);
+                    }
+                });
             }
         }
         
