@@ -14,7 +14,7 @@ import PageNumber from "./PageNumber.vue";
 import ContextMenu from "./ContextMenu.vue";
 import ToolItem from "./ToolItem.vue";
 import PdfForm from "./PdfForm.vue";
-import QuilEditor from "./QuilEditor.vue";
+import QuillEditor from "./QuillEditor.vue";
 
 // Cursor Style
 const cursorStyle = computed(() => {
@@ -115,6 +115,7 @@ const {
     isTextInputMode,
     textEditorHtml,
     textEditorPosition,
+    textEditorSimpleMode,
     isSelectionMode,
     isPenHovering,
     isStrokeHovering,
@@ -826,16 +827,21 @@ defineExpose({
                 </template>
             </div>
 
-            <QuilEditor
-                v-if="!!textEditorPosition"
-                :placeholder="$t('Type text...')"
-                :style="textEditorPosition"
-                v-model="textEditorHtml"
-                @save="commitTextEditor"
-                @cancel="closeTextEditor"
-                @resize="updateTextEditorSize"
-                @drag="updateTextEditorPosition"
-            />
+            <template v-if="!!textEditorPosition">
+                <div class="text-editor-box simple-mode border border-dark rounded-3" :style="{ ...textEditorPosition, height: 'auto' }" v-if="textEditorSimpleMode">
+                    <input type="text" class="form-control border-0 rounded-3" :placeholder="$t('Type text...')" v-model="textEditorHtml" @keydown.enter.prevent="commitTextEditor" @keydown.esc.prevent="closeTextEditor" @contextmenu.prevent />
+                </div>
+                <QuillEditor
+                    v-else
+                    :placeholder="$t('Type text...')"
+                    :style="textEditorPosition"
+                    v-model="textEditorHtml"
+                    @save="commitTextEditor"
+                    @cancel="closeTextEditor"
+                    @resize="updateTextEditorSize"
+                    @drag="updateTextEditorPosition"
+                />
+            </template>
 
             <!-- Stroke Menu -->
             <div v-if="showStrokeMenu && selectedStroke" 

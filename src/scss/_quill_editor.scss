@@ -7,10 +7,14 @@
     position: fixed;
     z-index: 9998;
     pointer-events: all;
-    resize: both;
     overflow: hidden;
     min-width: var(--text-editor-min-width);
-    min-height: var(--text-editor-min-height);
+    min-height: auto;
+    
+    &:not(.simple-mode) {
+        resize: both;
+        min-height: var(--text-editor-min-height);
+    }
 
     &:has(.ql-picker.ql-expanded) {
         overflow: visible;

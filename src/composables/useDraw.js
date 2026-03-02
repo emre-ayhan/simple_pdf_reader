@@ -188,6 +188,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
     const textEditorHtml = ref('');
     const textEditorBounds = ref(null); // Canvas coordinates
     const textEditorPosition = ref(null)
+    const textEditorSimpleMode = ref(true);
     const editingTextStroke = ref(null); // { pageId, pageIndex, strokeIndex }
     const textEditorPreferredSize = ref({ width: 420, height: 256 });
 
@@ -2288,7 +2289,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
             openTextEditor({
                 bounds: { x: clampedX, y: clampedY, width, height },
-                content: '<p><br></p>',
+                content: '',
                 strokeRef: null
             });
 
@@ -4073,6 +4074,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         fontSize,
         textboxPosition,
         textEditorPosition,
+        textEditorSimpleMode,
         textEditorHtml,
         isSelectionMode,
         selectionStart,
