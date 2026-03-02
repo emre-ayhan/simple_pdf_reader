@@ -688,7 +688,7 @@ defineExpose({
             <!-- Toolbar -->
             <ul ref="toolbar" class="navbar-nav mx-auto gap-1 d-none d-lg-flex">
                 <!-- Drawing -->
-                <template v-if="isDrawing || isTextHighlightMode">
+                <template v-if="isDrawing || isTextHighlightMode || (isTextInputMode && textEditorSimpleMode)">
                     <li class="nav-item btn-group" v-for="({ color }, index) in initialStrokeStyles">
                         <ToolItem class="nav-link" icon="circle-fill" :action="handleStrokeStyleButtonClick" :value="index" :active="color === drawColor" :style="`color: ${color} !important`" />
                         <div class="dropdown-menu dropdown-menu-dark show rounded-3 mt-5 p-3" v-if="showStrokeStyleMenu && !index">

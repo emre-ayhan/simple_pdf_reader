@@ -1,6 +1,6 @@
 <script setup>
 import Quill from 'quill';
-import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue';
+import { ref, onMounted, onBeforeUnmount, nextTick, computed } from 'vue';
 
 const props = defineProps({
     modelValue: {
@@ -134,6 +134,11 @@ onMounted(() => {
     // Set initial content
     quill.clipboard.dangerouslyPasteHTML(props.modelValue)
 
+    quill.on('text-change', () => {
+        let value = quill.root.innerHTML == '<p><br></p>' ? '' : quill.root.innerHTML;
+        emit('update:modelValue', value);
+    });
+
     nextTick(() => {
         if (!box.value) return;
 
@@ -172,10 +177,10 @@ onBeforeUnmount(() => {
         <div class="quil-editor">
             <div ref="editor"></div>
             <div class="quil-editor-actions">
-                <button type="button" class="btn btn-sm btn-link link-dark me-auto" @click="emit('simple-mode')">
+                <button type="button" class="btn btn-sm btn-link link-dark me-auto" @click="emit('simple-mode')" v-if="!modelValue">
                     {{ $t('Switch to Simple Mode') }}
                 </button>
-                <button type="button" class="btn btn-sm btn-dark" @click="handleSave">{{ $t('Save') }}</button>
+                <button type="button" class="btn btn-sm btn-dark" :class="{ disabled: !modelValue }" @click="handleSave">{{ $t('Save') }}</button>
                 <button type="button" class="btn btn-sm btn-outline-dark" @click="handleCancel">{{ $t('Cancel') }}</button>
             </div>
         </div>

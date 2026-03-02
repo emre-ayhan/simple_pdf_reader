@@ -699,13 +699,6 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
     };
 
     const normalizeTextStrokeContent = (content) => {
-        if (textEditorSimpleMode.value && textEditorHtml.value) {
-            return {
-                text: textEditorHtml.value,
-                html: textEditorHtml.value
-            };
-        }
-
         if (!content) {
             return { text: '', html: '' };
         }
@@ -1577,9 +1570,11 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 height: bounds.height
             };
             const initialFontSize = fontSize.value * scale;
+            const color = textEditorSimpleMode.value ? drawColor.value : DEFAULT_TEXT_COLOR;
+
             const fittedBounds = getFittedTextStrokeBounds({
                 content: normalizedContent,
-                color: DEFAULT_TEXT_COLOR,
+                color,
                 fontSize: initialFontSize,
                 bounds: editorBounds
             });
@@ -1592,7 +1587,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 height: fittedBounds.height,
                 editorWidth: editorBounds.width,
                 editorHeight: editorBounds.height,
-                color: DEFAULT_TEXT_COLOR,
+                color,
                 thickness: drawThickness.value,
                 type: 'text',
                 content: normalizedContent,
