@@ -177,8 +177,8 @@ onBeforeUnmount(() => {
         <div class="quil-editor">
             <div ref="editor"></div>
             <div class="quil-editor-actions">
-                <button type="button" class="btn btn-sm btn-link link-dark me-auto" @click="emit('simple-mode')" v-if="!modelValue">
-                    {{ $t('Switch to Simple Mode') }}
+                <button type="button" class="btn btn-sm btn-link link-dark py-0 align-self-end me-auto" @click="emit('simple-mode')" v-if="!modelValue">
+                    <small>{{ $t('Switch to Simple Mode') }}</small>
                 </button>
                 <button type="button" class="btn btn-sm btn-dark" :class="{ disabled: !modelValue }" @click="handleSave">{{ $t('Save') }}</button>
                 <button type="button" class="btn btn-sm btn-outline-dark" @click="handleCancel">{{ $t('Cancel') }}</button>

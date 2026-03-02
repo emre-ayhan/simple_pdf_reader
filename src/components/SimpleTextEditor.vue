@@ -31,8 +31,9 @@ onMounted(() => {
     <div class="text-editor-box simple-mode" :style="{ ...style, height: 'auto', width: 'auto' }" @contextmenu.stop.prevent>
         <input ref="simpleEditor" type="text" class="form-control" :placeholder="$t('Type text...')" :value="modelValue" @input="onInput" @keydown.enter.prevent="emit('enter', modelValue)" @keydown.esc.prevent="emit('cancel')" />
         <div class="d-flex justify-content-end">
-            <button type="button" class="btn btn-sm btn-link link-dark py-0" @click="emit('advance')">
-                {{ $t('Switch to Advanced Mode') }}
+            <button type="button" class="btn btn-sm btn-link link-secondary py-0" @click="emit('advance')">
+                <small>{{ $t('Switch to Advanced Mode') }}
+                </small>
             </button>
         </div>
     </div>
