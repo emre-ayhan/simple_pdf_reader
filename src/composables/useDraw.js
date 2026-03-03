@@ -4864,6 +4864,10 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
                 const stroke = selectedStroke.value.stroke;
                 let minX, minY, maxX, maxY;
+                const toClientPoint = (point) => ({
+                    x: cRect.left + point.x * scaleXToClient,
+                    y: cRect.top + point.y * scaleYToClient
+                });
 
                 const bbox = getStrokeBounds(stroke, SELECTION_PADDING);
                 if (bbox) {
@@ -4883,27 +4887,56 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                     const menuWidth = rect.width;
                     const menuHeight = rect.height;
 
-                    // Anchor menu top-right to stroke bottom-right with a small offset
-                    let desiredRight = clientMaxX + offset;
-                    let desiredTop = clientMaxY + offset;
-                    let desiredLeft = desiredRight - menuWidth;
+                    const rotatedSelection = getRotatedSelectionGeometry(stroke, SELECTION_PADDING);
+                    let desiredLeft;
+                    let desiredTop;
 
-                    // If right placement overflows, place menu to the left of the stroke
-                    if (desiredRight > viewportWidth - margin) {
-                        desiredRight = clientMinX - offset;
+                    if (rotatedSelection?.corners?.length === 4) {
+                        const points = [...rotatedSelection.corners];
+                        if (rotatedSelection.handles?.e) points.push(rotatedSelection.handles.e);
+                        if (rotatedSelection.handles?.se) points.push(rotatedSelection.handles.se);
+                        const rotateHandle = getRotateHandlePosition({ rotatedSelection, offset: 24 });
+                        if (rotateHandle) points.push({ x: rotateHandle.x, y: rotateHandle.y });
+
+                        const clientPoints = points.map(toClientPoint);
+                        const rightAnchor = clientPoints.reduce((best, point) => (
+                            !best || (point.x + point.y * 0.2) > (best.x + best.y * 0.2) ? point : best
+                        ), null);
+                        const leftAnchor = clientPoints.reduce((best, point) => (
+                            !best || (point.x - point.y * 0.2) < (best.x - best.y * 0.2) ? point : best
+                        ), null);
+
+                        desiredLeft = (rightAnchor?.x ?? clientMaxX) + offset;
+                        desiredTop = (rightAnchor?.y ?? clientMaxY) - (menuHeight / 2);
+
+                        if (desiredLeft + menuWidth > viewportWidth - margin) {
+                            desiredLeft = (leftAnchor?.x ?? clientMinX) - offset - menuWidth;
+                        }
+
+                        if (desiredTop + menuHeight > viewportHeight - margin) {
+                            desiredTop = viewportHeight - margin - menuHeight;
+                        }
+                        if (desiredTop < margin) {
+                            desiredTop = margin;
+                        }
+                    } else {
+                        let desiredRight = clientMaxX + offset;
+                        desiredTop = clientMaxY + offset;
                         desiredLeft = desiredRight - menuWidth;
+
+                        if (desiredRight > viewportWidth - margin) {
+                            desiredRight = clientMinX - offset;
+                            desiredLeft = desiredRight - menuWidth;
+                        }
+
+                        if (desiredTop + menuHeight > viewportHeight - margin) {
+                            desiredTop = clientMinY - offset - menuHeight;
+                        }
                     }
 
-                    // If bottom placement overflows, move menu above the stroke
-                    if (desiredTop + menuHeight > viewportHeight - margin) {
-                        desiredTop = clientMinY - offset - menuHeight;
-                    }
-
-                    // Clamp to viewport margins to keep fully visible
                     desiredLeft = Math.min(Math.max(margin, desiredLeft), viewportWidth - margin - menuWidth);
                     desiredTop = Math.min(Math.max(margin, desiredTop), viewportHeight - margin - menuHeight);
 
-                    // Convert desired top-left into transform-adjusted center coordinates
                     preferredX = desiredLeft + halfW;
                     preferredY = desiredTop - offsetY;
                 }
