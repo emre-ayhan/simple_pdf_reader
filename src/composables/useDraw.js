@@ -265,7 +265,6 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
     const selectedStrokes = ref([]); // For multi-selection
     const selectedStroke = ref(null); // { pageIndex, strokeIndex, stroke }
     const isDragging = ref(false);
-    const dragOffset = ref({ x: 0, y: 0 });
     const dragStartPos = ref(null);
     const strokeMenu = ref(null);
     const showStrokeMenu = ref(false);
@@ -277,7 +276,6 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
     const rotateStartCenter = ref(null);
     const rotateStartAngle = ref(0); // angle of rotate-handle vector at rotation start
     const rotatePointerAngleOffset = ref(0); // pointer angle relative to rotate-handle angle at drag start
-    const resizeScaleMode = ref(null); // 'bbox' | 'center'
 
     const resizeCursor = computed(() => {
         if ((!isBoundingBoxHovering.value) && !isResizing.value && !isRotating.value) return null;
@@ -1892,6 +1890,67 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
     const SELECTION_PADDING = 10;
 
+    const getBoundsFromPoints = (points = [], padding = 0) => {
+        if (!Array.isArray(points) || points.length === 0) return null;
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        points.forEach(point => {
+            minX = Math.min(minX, point.x);
+            minY = Math.min(minY, point.y);
+            maxX = Math.max(maxX, point.x);
+            maxY = Math.max(maxY, point.y);
+        });
+        const pad = Math.max(0, Number(padding) || 0);
+        return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
+    };
+
+    const getShapeControlPoints = (first) => {
+        if (!first) return null;
+        if (first.type === 'line') {
+            return [{ x: first.startX, y: first.startY }, { x: first.endX, y: first.endY }];
+        }
+
+        if (first.type === 'rectangle') {
+            return [
+                { x: first.startX, y: first.startY },
+                { x: first.endX, y: first.startY },
+                { x: first.endX, y: first.endY },
+                { x: first.startX, y: first.endY }
+            ];
+        }
+
+        if (first.type === 'circle') {
+            let rx;
+            let ry;
+            if (first.radiusX !== undefined || first.radiusY !== undefined) {
+                rx = first.radiusX !== undefined ? first.radiusX : Math.abs(first.endX - first.startX);
+                ry = first.radiusY !== undefined ? first.radiusY : Math.abs(first.endY - first.startY);
+            } else {
+                const radius = Math.sqrt((first.endX - first.startX) ** 2 + (first.endY - first.startY) ** 2);
+                rx = radius;
+                ry = radius;
+            }
+            return [
+                { x: first.startX - rx, y: first.startY - ry },
+                { x: first.startX + rx, y: first.startY - ry },
+                { x: first.startX + rx, y: first.startY + ry },
+                { x: first.startX - rx, y: first.startY + ry }
+            ];
+        }
+
+        return null;
+    };
+
+    const getHighlightRectsBounds = (first, padding = 0) => {
+        if (!first) return null;
+        const rects = first.rects || [{ x: first.x, y: first.y, width: first.width, height: first.height }];
+        const points = [];
+        rects.forEach(rect => {
+            points.push({ x: rect.x, y: rect.y });
+            points.push({ x: rect.x + rect.width, y: rect.y + rect.height });
+        });
+        return getBoundsFromPoints(points, padding);
+    };
+
     const getStrokeBounds = (stroke, padding = 5) => {
         if (!stroke || stroke.length === 0) return null;
         
@@ -1925,15 +1984,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
             return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
         } else if (first.type === 'highlight-rect') {
             // Do NOT support rotation for highlight rectangles; compute simple union bounds
-            const rects = first.rects || [{ x: first.x, y: first.y, width: first.width, height: first.height }];
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            rects.forEach(rect => {
-                minX = Math.min(minX, rect.x);
-                minY = Math.min(minY, rect.y);
-                maxX = Math.max(maxX, rect.x + rect.width);
-                maxY = Math.max(maxY, rect.y + rect.height);
-            });
-            return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
+            return getHighlightRectsBounds(first, pad);
         } else if (first.type === 'text') {
             const textBox = getTextBoxSize(stroke);
             if (!textBox) return null;
@@ -1962,37 +2013,14 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
             return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
         } else if (first.type === 'line' || first.type === 'rectangle' || first.type === 'circle') {
             const angle = first.rotation || 0;
-            let points = [];
-            if (first.type === 'line') {
-                points = [ { x: first.startX, y: first.startY }, { x: first.endX, y: first.endY } ];
-            } else if (first.type === 'rectangle') {
-                points = [
-                    { x: first.startX, y: first.startY },
-                    { x: first.endX, y: first.startY },
-                    { x: first.endX, y: first.endY },
-                    { x: first.startX, y: first.endY }
-                ];
-            } else if (first.type === 'circle') {
-                // Use bounding box of ellipse or circle
-                let rx, ry;
-                if (first.radiusX !== undefined || first.radiusY !== undefined) {
-                    rx = first.radiusX !== undefined ? first.radiusX : Math.abs(first.endX - first.startX);
-                    ry = first.radiusY !== undefined ? first.radiusY : Math.abs(first.endY - first.startY);
-                } else {
-                    const radius = Math.sqrt((first.endX - first.startX) ** 2 + (first.endY - first.startY) ** 2);
-                    rx = radius; ry = radius;
-                }
-                points = [
-                    { x: first.startX - rx, y: first.startY - ry },
-                    { x: first.startX + rx, y: first.startY - ry },
-                    { x: first.startX + rx, y: first.startY + ry },
-                    { x: first.startX - rx, y: first.startY + ry }
-                ];
-            }
+            const points = getShapeControlPoints(first) || [];
             // Center by unrotated bounds
-            let uMinX = Infinity, uMinY = Infinity, uMaxX = -Infinity, uMaxY = -Infinity;
-            points.forEach(p => { uMinX = Math.min(uMinX, p.x); uMinY = Math.min(uMinY, p.y); uMaxX = Math.max(uMaxX, p.x); uMaxY = Math.max(uMaxY, p.y); });
-            const center = getStrokeRotationCenter(stroke) || { x: (uMinX + uMaxX) / 2, y: (uMinY + uMaxY) / 2 };
+            const unrotated = getBoundsFromPoints(points, 0);
+            if (!unrotated) return null;
+            const center = getStrokeRotationCenter(stroke) || {
+                x: (unrotated.minX + unrotated.maxX) / 2,
+                y: (unrotated.minY + unrotated.maxY) / 2
+            };
             const cx = center.x;
             const cy = center.y;
             const cosA = Math.cos(angle);
@@ -2009,13 +2037,12 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
             });
             return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
         } else {
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            for (let p of stroke) {
-                minX = Math.min(minX, p.x);
-                minY = Math.min(minY, p.y);
-                maxX = Math.max(maxX, p.x);
-                maxY = Math.max(maxY, p.y);
-            }
+            const rawBounds = getBoundsFromPoints(stroke, 0);
+            if (!rawBounds) return null;
+            const minX = rawBounds.minX;
+            const minY = rawBounds.minY;
+            const maxX = rawBounds.maxX;
+            const maxY = rawBounds.maxY;
 
             const angle = first.rotation || 0;
             if (!angle) {
@@ -2057,15 +2084,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         if (first.type === 'image') {
             return { minX: first.x - pad, minY: first.y - pad, maxX: first.x + first.width + pad, maxY: first.y + first.height + pad };
         } else if (first.type === 'highlight-rect') {
-            const rects = first.rects || [{ x: first.x, y: first.y, width: first.width, height: first.height }];
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            rects.forEach(rect => {
-                minX = Math.min(minX, rect.x);
-                minY = Math.min(minY, rect.y);
-                maxX = Math.max(maxX, rect.x + rect.width);
-                maxY = Math.max(maxY, rect.y + rect.height);
-            });
-            return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
+            return getHighlightRectsBounds(first, pad);
         } else if (first.type === 'text') {
             const textBox = getTextBoxSize(stroke);
             if (!textBox) return null;
@@ -2076,44 +2095,10 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 maxY: first.y + textBox.height + pad
             };
         } else if (first.type === 'line' || first.type === 'rectangle' || first.type === 'circle') {
-            let points = [];
-            if (first.type === 'line') {
-                points = [ { x: first.startX, y: first.startY }, { x: first.endX, y: first.endY } ];
-            } else if (first.type === 'rectangle') {
-                points = [
-                    { x: first.startX, y: first.startY },
-                    { x: first.endX, y: first.startY },
-                    { x: first.endX, y: first.endY },
-                    { x: first.startX, y: first.endY }
-                ];
-            } else if (first.type === 'circle') {
-                let rx, ry;
-                if (first.radiusX !== undefined || first.radiusY !== undefined) {
-                    rx = first.radiusX !== undefined ? first.radiusX : Math.abs(first.endX - first.startX);
-                    ry = first.radiusY !== undefined ? first.radiusY : Math.abs(first.endY - first.startY);
-                } else {
-                    const radius = Math.sqrt((first.endX - first.startX) ** 2 + (first.endY - first.startY) ** 2);
-                    rx = radius; ry = radius;
-                }
-                points = [
-                    { x: first.startX - rx, y: first.startY - ry },
-                    { x: first.startX + rx, y: first.startY - ry },
-                    { x: first.startX + rx, y: first.startY + ry },
-                    { x: first.startX - rx, y: first.startY + ry }
-                ];
-            }
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            points.forEach(p => { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); });
-            return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
+            const points = getShapeControlPoints(first);
+            return getBoundsFromPoints(points, pad);
         } else {
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            for (let p of stroke) {
-                minX = Math.min(minX, p.x);
-                minY = Math.min(minY, p.y);
-                maxX = Math.max(maxX, p.x);
-                maxY = Math.max(maxY, p.y);
-            }
-            return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
+            return getBoundsFromPoints(stroke, pad);
         }
     };
 
@@ -2300,177 +2285,6 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         return null;
     };
 
-    const scaleStrokeFromOriginal = (liveStroke, originalStroke, center, scaleX, scaleY) => {
-        if (!liveStroke?.length || !originalStroke?.length || !center) return;
-
-        const first = liveStroke[0];
-        const origFirst = originalStroke[0];
-
-        const scalePoint = (point) => ({
-            x: center.x + (point.x - center.x) * scaleX,
-            y: center.y + (point.y - center.y) * scaleY
-        });
-
-        if (origFirst.type === 'image' || origFirst.type === 'text') {
-            const topLeft = scalePoint({ x: origFirst.x, y: origFirst.y });
-            first.x = topLeft.x;
-            first.y = topLeft.y;
-            first.width = Math.max(10, origFirst.width * scaleX);
-            first.height = Math.max(10, origFirst.height * scaleY);
-
-            if (origFirst.type === 'text') {
-                const fontScale = Math.max(0.25, Math.sqrt(Math.abs(scaleX * scaleY)));
-                first.fontSize = Math.max(8, Math.round((Number(origFirst.fontSize) || 16) * fontScale));
-                first.editorWidth = first.width;
-                first.editorHeight = first.height;
-            }
-            return;
-        }
-
-        if (origFirst.type === 'highlight-rect') {
-            const origRects = origFirst.rects || [{ x: origFirst.x, y: origFirst.y, width: origFirst.width, height: origFirst.height }];
-            if (!first.rects) first.rects = [];
-            first.rects = origRects.map((rect) => {
-                const p = scalePoint({ x: rect.x, y: rect.y });
-                return {
-                    x: p.x,
-                    y: p.y,
-                    width: Math.max(1, rect.width * scaleX),
-                    height: Math.max(1, rect.height * scaleY)
-                };
-            });
-            if (first.rects[0]) {
-                first.x = first.rects[0].x;
-                first.y = first.rects[0].y;
-                first.width = first.rects[0].width;
-                first.height = first.rects[0].height;
-            }
-            return;
-        }
-
-        if (origFirst.type === 'line' || origFirst.type === 'rectangle') {
-            const start = scalePoint({ x: origFirst.startX, y: origFirst.startY });
-            const end = scalePoint({ x: origFirst.endX, y: origFirst.endY });
-            first.startX = start.x;
-            first.startY = start.y;
-            first.endX = end.x;
-            first.endY = end.y;
-            first.x = first.startX;
-            first.y = first.startY;
-            return;
-        }
-
-        if (origFirst.type === 'circle') {
-            const centerPoint = scalePoint({ x: origFirst.startX, y: origFirst.startY });
-            first.startX = centerPoint.x;
-            first.startY = centerPoint.y;
-            first.endX = center.x + (origFirst.endX - center.x) * scaleX;
-            first.endY = center.y + (origFirst.endY - center.y) * scaleY;
-
-            if (origFirst.radiusX !== undefined || origFirst.radiusY !== undefined) {
-                first.radiusX = Math.max(1, (origFirst.radiusX !== undefined ? origFirst.radiusX : Math.abs(origFirst.endX - origFirst.startX)) * scaleX);
-                first.radiusY = Math.max(1, (origFirst.radiusY !== undefined ? origFirst.radiusY : Math.abs(origFirst.endY - origFirst.startY)) * scaleY);
-            }
-
-            first.x = first.startX;
-            first.y = first.startY;
-            return;
-        }
-
-        for (let i = 0; i < liveStroke.length; i++) {
-            const origPoint = originalStroke[i];
-            if (!origPoint) continue;
-            const p = scalePoint({ x: origPoint.x, y: origPoint.y });
-            liveStroke[i].x = p.x;
-            liveStroke[i].y = p.y;
-        }
-    };
-
-    const scaleStrokeFromOriginalWithAnchor = (liveStroke, originalStroke, anchor, scaleX, scaleY) => {
-        if (!liveStroke?.length || !originalStroke?.length || !anchor) return;
-
-        const first = liveStroke[0];
-        const origFirst = originalStroke[0];
-
-        const scalePoint = (point) => ({
-            x: anchor.x + (point.x - anchor.x) * scaleX,
-            y: anchor.y + (point.y - anchor.y) * scaleY
-        });
-
-        if (origFirst.type === 'image' || origFirst.type === 'text') {
-            const topLeft = scalePoint({ x: origFirst.x, y: origFirst.y });
-            first.x = topLeft.x;
-            first.y = topLeft.y;
-            first.width = Math.max(10, origFirst.width * scaleX);
-            first.height = Math.max(10, origFirst.height * scaleY);
-
-            if (origFirst.type === 'text') {
-                const fontScale = Math.max(0.25, Math.sqrt(Math.abs(scaleX * scaleY)));
-                first.fontSize = Math.max(8, Math.round((Number(origFirst.fontSize) || 16) * fontScale));
-                first.editorWidth = first.width;
-                first.editorHeight = first.height;
-            }
-            return;
-        }
-
-        if (origFirst.type === 'highlight-rect') {
-            const origRects = origFirst.rects || [{ x: origFirst.x, y: origFirst.y, width: origFirst.width, height: origFirst.height }];
-            first.rects = origRects.map((rect) => {
-                const p = scalePoint({ x: rect.x, y: rect.y });
-                return {
-                    x: p.x,
-                    y: p.y,
-                    width: Math.max(1, rect.width * scaleX),
-                    height: Math.max(1, rect.height * scaleY)
-                };
-            });
-            if (first.rects[0]) {
-                first.x = first.rects[0].x;
-                first.y = first.rects[0].y;
-                first.width = first.rects[0].width;
-                first.height = first.rects[0].height;
-            }
-            return;
-        }
-
-        if (origFirst.type === 'line' || origFirst.type === 'rectangle') {
-            const start = scalePoint({ x: origFirst.startX, y: origFirst.startY });
-            const end = scalePoint({ x: origFirst.endX, y: origFirst.endY });
-            first.startX = start.x;
-            first.startY = start.y;
-            first.endX = end.x;
-            first.endY = end.y;
-            first.x = first.startX;
-            first.y = first.startY;
-            return;
-        }
-
-        if (origFirst.type === 'circle') {
-            const centerPoint = scalePoint({ x: origFirst.startX, y: origFirst.startY });
-            first.startX = centerPoint.x;
-            first.startY = centerPoint.y;
-            first.endX = anchor.x + (origFirst.endX - anchor.x) * scaleX;
-            first.endY = anchor.y + (origFirst.endY - anchor.y) * scaleY;
-
-            if (origFirst.radiusX !== undefined || origFirst.radiusY !== undefined) {
-                first.radiusX = Math.max(1, (origFirst.radiusX !== undefined ? origFirst.radiusX : Math.abs(origFirst.endX - origFirst.startX)) * scaleX);
-                first.radiusY = Math.max(1, (origFirst.radiusY !== undefined ? origFirst.radiusY : Math.abs(origFirst.endY - origFirst.startY)) * scaleY);
-            }
-
-            first.x = first.startX;
-            first.y = first.startY;
-            return;
-        }
-
-        for (let i = 0; i < liveStroke.length; i++) {
-            const origPoint = originalStroke[i];
-            if (!origPoint) continue;
-            const p = scalePoint({ x: origPoint.x, y: origPoint.y });
-            liveStroke[i].x = p.x;
-            liveStroke[i].y = p.y;
-        }
-    };
-
     const mapValueBetweenBounds = (value, fromMin, fromMax, toMin, toMax) => {
         const span = fromMax - fromMin;
         if (Math.abs(span) < 0.0001) return (toMin + toMax) / 2;
@@ -2581,119 +2395,6 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
             x: center.x + dx * cosA - dy * sinA,
             y: center.y + dx * sinA + dy * cosA
         };
-    };
-
-    const transformStrokeFromOriginalDisplayedBounds = (liveStroke, originalStroke, fromBounds, toBounds, center, angle) => {
-        if (!liveStroke?.length || !originalStroke?.length || !fromBounds || !toBounds || !center) return;
-
-        const first = liveStroke[0];
-        const origFirst = originalStroke[0];
-
-        const mapWorldPoint = (point) => {
-            const displayPoint = rotatePointAround(point, center, angle);
-            const mappedDisplay = {
-                x: mapValueBetweenBounds(displayPoint.x, fromBounds.minX, fromBounds.maxX, toBounds.minX, toBounds.maxX),
-                y: mapValueBetweenBounds(displayPoint.y, fromBounds.minY, fromBounds.maxY, toBounds.minY, toBounds.maxY)
-            };
-            return rotatePointAround(mappedDisplay, center, -angle);
-        };
-
-        const mapRectToLocalAABB = (x, y, width, height) => {
-            const corners = [
-                mapWorldPoint({ x, y }),
-                mapWorldPoint({ x: x + width, y }),
-                mapWorldPoint({ x: x + width, y: y + height }),
-                mapWorldPoint({ x, y: y + height })
-            ];
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            corners.forEach(c => {
-                minX = Math.min(minX, c.x);
-                minY = Math.min(minY, c.y);
-                maxX = Math.max(maxX, c.x);
-                maxY = Math.max(maxY, c.y);
-            });
-            return { minX, minY, maxX, maxY };
-        };
-
-        if (origFirst.type === 'image' || origFirst.type === 'text') {
-            const mapped = mapRectToLocalAABB(origFirst.x, origFirst.y, origFirst.width, origFirst.height);
-            first.x = mapped.minX;
-            first.y = mapped.minY;
-            first.width = Math.max(1, mapped.maxX - mapped.minX);
-            first.height = Math.max(1, mapped.maxY - mapped.minY);
-            if (origFirst.type === 'text') {
-                const scaleX = Math.abs((toBounds.maxX - toBounds.minX) / Math.max(1, fromBounds.maxX - fromBounds.minX));
-                const scaleY = Math.abs((toBounds.maxY - toBounds.minY) / Math.max(1, fromBounds.maxY - fromBounds.minY));
-                const fontScale = Math.max(0.25, Math.sqrt(scaleX * scaleY));
-                first.fontSize = Math.max(8, Math.round((Number(origFirst.fontSize) || 16) * fontScale));
-                first.editorWidth = first.width;
-                first.editorHeight = first.height;
-            }
-            return;
-        }
-
-        if (origFirst.type === 'highlight-rect') {
-            const origRects = origFirst.rects || [{ x: origFirst.x, y: origFirst.y, width: origFirst.width, height: origFirst.height }];
-            first.rects = origRects.map(rect => {
-                const mapped = mapRectToLocalAABB(rect.x, rect.y, rect.width, rect.height);
-                return {
-                    x: mapped.minX,
-                    y: mapped.minY,
-                    width: Math.max(1, mapped.maxX - mapped.minX),
-                    height: Math.max(1, mapped.maxY - mapped.minY)
-                };
-            });
-            if (first.rects[0]) {
-                first.x = first.rects[0].x;
-                first.y = first.rects[0].y;
-                first.width = first.rects[0].width;
-                first.height = first.rects[0].height;
-            }
-            return;
-        }
-
-        if (origFirst.type === 'line' || origFirst.type === 'rectangle') {
-            const start = mapWorldPoint({ x: origFirst.startX, y: origFirst.startY });
-            const end = mapWorldPoint({ x: origFirst.endX, y: origFirst.endY });
-            first.startX = start.x;
-            first.startY = start.y;
-            first.endX = end.x;
-            first.endY = end.y;
-            first.x = first.startX;
-            first.y = first.startY;
-            return;
-        }
-
-        if (origFirst.type === 'circle') {
-            const centerPoint = mapWorldPoint({ x: origFirst.startX, y: origFirst.startY });
-            first.startX = centerPoint.x;
-            first.startY = centerPoint.y;
-
-            const endPoint = mapWorldPoint({ x: origFirst.endX, y: origFirst.endY });
-            first.endX = endPoint.x;
-            first.endY = endPoint.y;
-
-            if (origFirst.radiusX !== undefined || origFirst.radiusY !== undefined) {
-                const scaleX = Math.abs((toBounds.maxX - toBounds.minX) / Math.max(1, fromBounds.maxX - fromBounds.minX));
-                const scaleY = Math.abs((toBounds.maxY - toBounds.minY) / Math.max(1, fromBounds.maxY - fromBounds.minY));
-                const rx = origFirst.radiusX !== undefined ? origFirst.radiusX : Math.abs(origFirst.endX - origFirst.startX);
-                const ry = origFirst.radiusY !== undefined ? origFirst.radiusY : Math.abs(origFirst.endY - origFirst.startY);
-                first.radiusX = Math.max(1, rx * scaleX);
-                first.radiusY = Math.max(1, ry * scaleY);
-            }
-
-            first.x = first.startX;
-            first.y = first.startY;
-            return;
-        }
-
-        for (let i = 0; i < liveStroke.length; i++) {
-            const origPoint = originalStroke[i];
-            if (!origPoint) continue;
-            const mapped = mapWorldPoint({ x: origPoint.x, y: origPoint.y });
-            liveStroke[i].x = mapped.x;
-            liveStroke[i].y = mapped.y;
-        }
     };
 
     const translateStrokeBy = (stroke, dx, dy) => {
@@ -2911,7 +2612,6 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                             const resizeCenter = rawBounds
                                 ? { x: (rawBounds.minX + rawBounds.maxX) / 2, y: (rawBounds.minY + rawBounds.maxY) / 2 }
                                 : { x, y };
-                            resizeScaleMode.value = 'bbox';
                             resizeStartBounds.value = {
                                 padded: { ...bounds },
                                 raw: rawBounds,
@@ -3724,7 +3424,6 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
             isRotating.value = false;
             resizeHandle.value = null;
             resizeStartBounds.value = null;
-            resizeScaleMode.value = null;
             rotatePointerAngleOffset.value = 0;
             isMouseDown.value = false;
             activePointerId.value = null;
@@ -3908,7 +3607,6 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         isResizing.value = false;
         resizeHandle.value = null;
         resizeStartBounds.value = null;
-        resizeScaleMode.value = null;
         showStrokeMenu.value = false;
         isSelectModeActive.value = false;
         handToolActive.value = false;

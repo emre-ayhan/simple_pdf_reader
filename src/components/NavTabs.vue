@@ -71,7 +71,6 @@ onBeforeUnmount(() => {
                 </li>
             </template>
         </template>
-        <li class="vr bg-secondary" v-if="activeTabIndex !== tabs.length - 1"></li>
         <li class="nav-item" role="presentation">
             <button class="nav-link nav-add" id="add-tab" type="button" role="tab" aria-selected="false" :disabled="isLastTabOnEmptyState" @click="openNewTab" :title="$t('New Tab')">
                 <i class="bi bi-plus-lg"></i>
