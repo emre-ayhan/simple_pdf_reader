@@ -42,6 +42,7 @@
     }
 
     .quil-editor {
+        position: relative;
         border: 1px solid $dark-bg-subtle;
         border-radius: $border-radius-lg;
         background-color: $white;
@@ -53,6 +54,7 @@
         flex-direction: column;
 
         .ql-toolbar {
+            height: auto !important;
             border: none;
             border-top-left-radius: $border-radius-lg;
             border-top-right-radius: $border-radius-lg;
@@ -89,6 +91,7 @@
 
 
         .quil-editor-actions {
+            height: 48px;
             display: flex;
             justify-content: flex-end;
             border-bottom-left-radius: $border-radius-lg;

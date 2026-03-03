@@ -178,6 +178,8 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
     // Text mode variables
     const DEFAULT_TEXT_COLOR = '#000000';
     const TEXT_RENDER_OVERFLOW_ALLOWANCE_FACTOR = 0.2;
+    const TEXT_EDITOR_DRAG_THRESHOLD = 6;
+    const ADVANCED_EDITOR_EXTRA_HEIGHT = 120;
     const isTextInputMode = ref(false);
     const textPosition = ref(null);
     const textCanvasIndex = ref(-1);
@@ -187,6 +189,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
     const textEditorBounds = ref(null); // Canvas coordinates
     const textEditorPosition = ref(null)
     const textEditorSimpleMode = ref(true);
+    const textEditorChromeHeight = ref(ADVANCED_EDITOR_EXTRA_HEIGHT);
     const editingTextStroke = ref(null); // { pageId, pageIndex, strokeIndex }
     const textEditorPreferredSize = ref({ width: 420, height: 256 });
 
@@ -251,6 +254,65 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
             captureSelection();
         } else if (isSelectModeActive.value) {
             selectStrokeInSelectionBox();
+        } else if (isTextInputMode.value) {
+            const page = activePage.value;
+            const canvas = page?.drawingCanvas || null;
+            if (canvas && selectionStart.value && selectionEnd.value) {
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+
+                const dragWidthCss = Math.abs(selectionEnd.value.x - selectionStart.value.x);
+                const dragHeightCss = Math.abs(selectionEnd.value.y - selectionStart.value.y);
+                const isDragSelection = dragWidthCss >= TEXT_EDITOR_DRAG_THRESHOLD || dragHeightCss >= TEXT_EDITOR_DRAG_THRESHOLD;
+
+                if (!isDragSelection) {
+                    const pt = getCanvasPointFromEvent(canvas, e);
+                    if (pt) {
+                        const { x, y } = pt;
+                        const preferredSize = getPreferredTextEditorSize();
+                        const width = Math.min(preferredSize.width, canvas.width);
+                        const height = Math.min(preferredSize.height, canvas.height);
+                        const clampedX = Math.max(0, Math.min(x, Math.max(0, canvas.width - width)));
+                        const clampedY = Math.max(0, Math.min(y, Math.max(0, canvas.height - height)));
+
+                        textEditorSimpleMode.value = true;
+                        textPosition.value = { x, y };
+                        textCanvasIndex.value = activePage.value.index;
+
+                        openTextEditor({
+                            bounds: { x: clampedX, y: clampedY, width, height },
+                            content: '',
+                            strokeRef: null
+                        });
+
+                        redrawAllStrokes();
+                    }
+                } else {
+                    textEditorSimpleMode.value = false;
+
+                    const sx = Math.min(selectionStart.value.x, selectionEnd.value.x) * scaleX;
+                    const sy = Math.min(selectionStart.value.y, selectionEnd.value.y) * scaleY;
+                    const ex = Math.max(selectionStart.value.x, selectionEnd.value.x) * scaleX;
+                    const ey = Math.max(selectionStart.value.y, selectionEnd.value.y) * scaleY;
+
+                    const width = Math.max(24, ex - sx);
+                    const rawHeight = Math.max(24, ey - sy) + getAdvancedEditorChromeHeight();
+                    const maxAvailableHeight = Math.max(24, canvas.height - sy);
+                    const height = Math.min(rawHeight, maxAvailableHeight);
+
+                    textPosition.value = { x: sx, y: sy };
+                    textCanvasIndex.value = activePage.value.index;
+
+                    openTextEditor({
+                        bounds: { x: sx, y: sy, width, height },
+                        content: '',
+                        strokeRef: null
+                    });
+
+                    redrawAllStrokes();
+                }
+            }
         }
 
         isSelecting.value = false;
@@ -796,6 +858,28 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
             text: fallbackText,
             html: fallbackText ? convertPlainTextToHtml(fallbackText) : ''
         };
+    };
+
+    const shouldUseAdvancedEditorForTextStroke = (first, content) => {
+        if (!first) return false;
+
+        const textValue = String(content?.text || '');
+        if (/\r?\n/.test(textValue)) return true;
+
+        const htmlValue = String(content?.html || '').trim();
+        if (htmlValue) {
+            const hasRichFormatting = /<(strong|b|em|i|u|s|strike|sup|sub|a|span|ul|ol|li|h[1-6]|blockquote|code|pre)\b|style=|class="[^"]*ql-/i.test(htmlValue);
+            if (hasRichFormatting) return true;
+
+            const blockBreaks = (htmlValue.match(/<(br|p|div|li|h[1-6])\b/gi) || []).length;
+            if (blockBreaks > 1) return true;
+        }
+
+        const fontPx = Math.max(8, Number(first.fontSize) || 16);
+        const strokeHeight = Math.max(0, Number(first.height) || 0);
+        if (strokeHeight > (fontPx * 1.9)) return true;
+
+        return false;
     };
 
     const parseInlineStyle = (styleText = '') => {
@@ -1431,6 +1515,30 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         };
     };
 
+    const getAdvancedEditorChromeHeight = () => {
+        const measured = Number(textEditorChromeHeight.value);
+        if (Number.isFinite(measured) && measured >= 0) {
+            return measured;
+        }
+        return ADVANCED_EDITOR_EXTRA_HEIGHT;
+    };
+
+    const getAdvancedTextContentBounds = (editorBounds) => {
+        const safeBounds = editorBounds || { x: 0, y: 0, width: 24, height: 24 };
+        const measuredChrome = getAdvancedEditorChromeHeight();
+        const chromeHeight = Math.min(
+            measuredChrome,
+            Math.max(0, Number(safeBounds.height || 0) - 24)
+        );
+
+        return {
+            x: safeBounds.x,
+            y: safeBounds.y,
+            width: Math.max(24, Number(safeBounds.width) || 24),
+            height: Math.max(24, Number(safeBounds.height || 24) - chromeHeight)
+        };
+    };
+
     const rememberTextEditorSize = (width, height) => {
         const minSize = getTextEditorMinSize();
         const resolved = {
@@ -1493,9 +1601,13 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         };
     };
 
-    const updateTextEditorSize = ({ width, height }) => {
+    const updateTextEditorSize = ({ width, height, chromeHeight }) => {
         if (!textEditorPosition.value || !textEditorBounds.value) return;
         const minSize = getTextEditorMinSize();
+
+        if (Number.isFinite(Number(chromeHeight))) {
+            textEditorChromeHeight.value = Math.max(0, Number(chromeHeight));
+        }
 
         const requestedWidth = Math.max(minSize.width, Number(width) || 0);
         const requestedHeight = Math.max(minSize.height, Number(height) || 0);
@@ -1609,12 +1721,14 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 stroke[0].editorWidth = editorBounds.width;
                 stroke[0].editorHeight = editorBounds.height;
 
-                const fittedBounds = getFittedTextStrokeBounds({
-                    content: normalizedContent,
-                    color: stroke[0].color,
-                    fontSize: stroke[0].fontSize,
-                    bounds: editorBounds
-                });
+                const fittedBounds = textEditorSimpleMode.value
+                    ? getFittedTextStrokeBounds({
+                        content: normalizedContent,
+                        color: stroke[0].color,
+                        fontSize: stroke[0].fontSize,
+                        bounds: editorBounds
+                    })
+                    : getAdvancedTextContentBounds(editorBounds);
 
                 stroke[0].x = fittedBounds.x;
                 stroke[0].y = fittedBounds.y;
@@ -1641,12 +1755,14 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
             const initialFontSize = fontSize.value * scale;
             const color = textEditorSimpleMode.value ? drawColor.value : DEFAULT_TEXT_COLOR;
 
-            const fittedBounds = getFittedTextStrokeBounds({
-                content: normalizedContent,
-                color,
-                fontSize: initialFontSize,
-                bounds: editorBounds
-            });
+            const fittedBounds = textEditorSimpleMode.value
+                ? getFittedTextStrokeBounds({
+                    content: normalizedContent,
+                    color,
+                    fontSize: initialFontSize,
+                    bounds: editorBounds
+                })
+                : getAdvancedTextContentBounds(editorBounds);
 
             const textStroke = [{
                 id,
@@ -2724,32 +2840,14 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
             const canvasIndex = getCanvasIndexFromEvent(e);
             if (canvasIndex === -1) return;
-            
             const canvas = activePage.value.drawingCanvas || null;
-            const pt = getCanvasPointFromEvent(canvas, e);
-            if (!pt) return;
-            const { x, y } = pt;
-
-            if (!canvas) return;
-
-            const preferredSize = getPreferredTextEditorSize();
-            const width = Math.min(preferredSize.width, canvas.width);
-            const height = Math.min(preferredSize.height, canvas.height);
-            const clampedX = Math.max(0, Math.min(x, Math.max(0, canvas.width - width)));
-            const clampedY = Math.max(0, Math.min(y, Math.max(0, canvas.height - height)));
-
-            textPosition.value = { x, y };
-            textCanvasIndex.value = activePage.value.index;
-
-            openTextEditor({
-                bounds: { x: clampedX, y: clampedY, width, height },
-                content: '',
-                strokeRef: null
-            });
-
-            stopEvent(e);
-            redrawAllStrokes();
-
+            handleSelectionStart(e);
+            isMouseDown.value = true;
+            currentCanvasIndex = canvasIndex;
+            if (canvas && e.pointerId !== undefined) {
+                canvas.setPointerCapture(e.pointerId);
+            }
+            activePointerId.value = e.pointerId;
             return;
         }
         
@@ -3243,7 +3341,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
         
         // Handle selection rectangle
-        if ((isSelectionMode.value || isSelectModeActive.value) && isSelecting.value) {
+        if ((isSelectionMode.value || isSelectModeActive.value || isTextInputMode.value) && isSelecting.value) {
             handleSelectionRectangle(e);
             return;
         }
@@ -3434,8 +3532,22 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         };
 
         // Handle selection complete
-        if ((isSelectionMode.value || isSelectModeActive.value) && isSelecting.value && selectionStart.value && selectionEnd.value) {
+        if ((isSelectionMode.value || isSelectModeActive.value || isTextInputMode.value) && isSelecting.value && selectionStart.value && selectionEnd.value) {
             handleSelectionEnd(e);
+
+            const canvas = activePage.value.drawingCanvas || null;
+            if (canvas && e && e.pointerId !== undefined) {
+                try {
+                    canvas.releasePointerCapture(e.pointerId);
+                } catch (err) {
+                    // Ignore if capture was already released
+                }
+            }
+
+            activePointerId.value = null;
+            activePointerType.value = null;
+            dragStartPos.value = null;
+            currentCanvasIndex = -1;
             return;
         }
         
@@ -3970,7 +4082,14 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         if (selectedStroke.value.stroke?.[0]?.type !== 'text') return;
 
         const first = selectedStroke.value.stroke[0];
+        const content = getTextStrokeContent(first);
+        textEditorSimpleMode.value = !shouldUseAdvancedEditorForTextStroke(first, content);
         const preferredSize = getPreferredTextEditorSize();
+        const advancedEditorHeight = Math.max(
+            24,
+            Number(first.editorHeight)
+                || (Math.max(24, Number(first.height) || 24) + getAdvancedEditorChromeHeight())
+        );
 
         showStrokeMenu.value = false;
 
@@ -3979,14 +4098,14 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 x: first.x,
                 y: first.y,
                 width: first.editorWidth || preferredSize.width,
-                height: first.editorHeight || preferredSize.height
+                height: textEditorSimpleMode.value ? (first.editorHeight || preferredSize.height) : advancedEditorHeight
             },
-            content: getTextStrokeContent(first).html,
             strokeRef: {
                 pageId: selectedStroke.value.pageId,
                 pageIndex: selectedStroke.value.pageIndex,
                 strokeIndex: selectedStroke.value.strokeIndex
-            }
+            },
+            content: textEditorSimpleMode.value ? content.text : content.html
         });
 
         redrawAllStrokes();

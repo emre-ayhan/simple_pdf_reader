@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, nextTick, onMounted, onUnmounted, onBeforeUnmount } from "vue";
+import { ref, computed, nextTick, onMounted, onUnmounted, onBeforeUnmount, watch } from "vue";
 import { Electron } from "../composables/useElectron";
 import { useFile } from "../composables/useFile";
 import { useDraw } from "../composables/useDraw";
@@ -193,6 +193,13 @@ const touchAction = computed(() => {
 
 const isViewLocked = ref(false);
 const isThumbnailSidebarVisible = ref(false);
+const hasDismissedTextGestureHint = ref(false);
+
+watch(() => textEditorPosition.value, (position) => {
+    if (position) {
+        hasDismissedTextGestureHint.value = true;
+    }
+});
 
 const toggleThumbnailSidebar = () => {
     isThumbnailSidebarVisible.value = !isThumbnailSidebarVisible.value;
@@ -841,7 +848,6 @@ defineExpose({
                     v-model="textEditorHtml"
                     @enter="commitTextEditor"
                     @cancel="closeTextEditor"
-                    @advance="textEditorSimpleMode = false"
                 />
                 <QuillEditor
                     v-else
@@ -852,9 +858,16 @@ defineExpose({
                     @cancel="closeTextEditor"
                     @resize="updateTextEditorSize"
                     @drag="updateTextEditorPosition"
-                    @simple-mode="textEditorSimpleMode = true"
                 />
             </template>
+
+            <div
+                v-else-if="isTextInputMode && !hasDismissedTextGestureHint"
+                class="position-fixed top-50 start-50 translate-middle text-center bg-secondary-subtle text-secondary rounded-3 px-3 py-2"
+                style="z-index: 5; pointer-events: none;"
+            >
+                <small>{{ $t('Click for simple text, select area to input advanced text') }}</small>
+            </div>
 
             <!-- Stroke Menu -->
             <div v-if="showStrokeMenu && selectedStroke" 

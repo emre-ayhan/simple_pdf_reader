@@ -9,7 +9,12 @@ const props = defineProps({
     },
     style: {
         type: Object,
-        default: () => ({})
+        default: () => ({
+            left: '0px',
+            top: '0px',
+            width: '300px',
+            height: '220px'
+        })
     },
     placeholder: {
         type: String,
@@ -17,12 +22,29 @@ const props = defineProps({
     }
 });
 
+const { left, top, width, height } = props.style;
+
 const editor = ref(null);
 const box = ref(null);
 let quill = null;
 let resizeObserver = null;
+let chromeObserver = null;
 const dragState = ref(null);
-const emit = defineEmits(['update:modelValue', 'save', 'cancel', 'resize', 'drag', 'simple-mode']);
+const emit = defineEmits(['update:modelValue', 'save', 'cancel', 'resize', 'drag']);
+
+const emitEditorMetrics = () => {
+    if (!box.value) return;
+
+    const toolbarEl = box.value.querySelector('.ql-toolbar');
+    const actionsEl = box.value.querySelector('.quil-editor-actions');
+    const rect = box.value.getBoundingClientRect();
+
+    emit('resize', {
+        width: rect.width,
+        height: rect.height,
+        chromeHeight: Math.max(0, (toolbarEl?.offsetHeight || 0) + (actionsEl?.offsetHeight || 0))
+    });
+};
 
 const parsePx = (value, fallback = 0) => {
     const n = parseFloat(value);
@@ -145,25 +167,40 @@ onMounted(() => {
         resizeObserver = new ResizeObserver((entries) => {
             const entry = entries?.[0];
             if (!entry) return;
-            emit('resize', {
-                width: entry.contentRect.width,
-                height: entry.contentRect.height
-            });
+            emitEditorMetrics();
         });
 
         resizeObserver.observe(box.value);
+
+        const toolbarEl = box.value.querySelector('.ql-toolbar');
+        const actionsEl = box.value.querySelector('.quil-editor-actions');
+        chromeObserver = new ResizeObserver(() => {
+            emitEditorMetrics();
+        });
+
+        if (toolbarEl) chromeObserver.observe(toolbarEl);
+        if (actionsEl) chromeObserver.observe(actionsEl);
+
+        emitEditorMetrics();
     });
 
+    window.addEventListener('resize', emitEditorMetrics);
     window.addEventListener('pointerdown', handleGlobalPointerDown, true);
 });
 
 onBeforeUnmount(() => {
     stopDragging();
+    window.removeEventListener('resize', emitEditorMetrics);
     window.removeEventListener('pointerdown', handleGlobalPointerDown, true);
 
     if (resizeObserver) {
         resizeObserver.disconnect();
         resizeObserver = null;
+    }
+
+    if (chromeObserver) {
+        chromeObserver.disconnect();
+        chromeObserver = null;
     }
 
     if (quill) {
@@ -177,9 +214,6 @@ onBeforeUnmount(() => {
         <div class="quil-editor">
             <div ref="editor"></div>
             <div class="quil-editor-actions">
-                <button type="button" class="btn btn-sm btn-link link-dark py-0 align-self-end me-auto" @click="emit('simple-mode')" v-if="!modelValue">
-                    <small>{{ $t('Switch to Simple Mode') }}</small>
-                </button>
                 <button type="button" class="btn btn-sm btn-dark" :class="{ disabled: !modelValue }" @click="handleSave">{{ $t('Save') }}</button>
                 <button type="button" class="btn btn-sm btn-outline-dark" @click="handleCancel">{{ $t('Cancel') }}</button>
             </div>
