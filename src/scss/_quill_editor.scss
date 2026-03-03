@@ -93,6 +93,7 @@
         .quil-editor-actions {
             height: 48px;
             display: flex;
+            align-items: center;
             justify-content: flex-end;
             border-bottom-left-radius: $border-radius-lg;
             border-bottom-right-radius: $border-radius-lg;

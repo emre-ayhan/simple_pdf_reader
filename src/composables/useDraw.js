@@ -190,6 +190,8 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
     const textEditorPosition = ref(null)
     const textEditorSimpleMode = ref(true);
     const textEditorChromeHeight = ref(ADVANCED_EDITOR_EXTRA_HEIGHT);
+    const textEditorToolbarHeight = ref(72);
+    const textEditorFooterHeight = ref(Math.max(0, ADVANCED_EDITOR_EXTRA_HEIGHT - 72));
     const editingTextStroke = ref(null); // { pageId, pageIndex, strokeIndex }
     const textEditorPreferredSize = ref({ width: 420, height: 256 });
 
@@ -297,15 +299,18 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                     const ey = Math.max(selectionStart.value.y, selectionEnd.value.y) * scaleY;
 
                     const width = Math.max(24, ex - sx);
-                    const rawHeight = Math.max(24, ey - sy) + getAdvancedEditorChromeHeight();
-                    const maxAvailableHeight = Math.max(24, canvas.height - sy);
+                    const selectedHeight = Math.max(24, ey - sy);
+                    const toolbarHeight = getAdvancedEditorToolbarHeight();
+                    const editorY = Math.max(0, sy - toolbarHeight);
+                    const rawHeight = selectedHeight + getAdvancedEditorChromeHeight();
+                    const maxAvailableHeight = Math.max(24, canvas.height - editorY);
                     const height = Math.min(rawHeight, maxAvailableHeight);
 
                     textPosition.value = { x: sx, y: sy };
                     textCanvasIndex.value = activePage.value.index;
 
                     openTextEditor({
-                        bounds: { x: sx, y: sy, width, height },
+                        bounds: { x: sx, y: editorY, width, height },
                         content: '',
                         strokeRef: null
                     });
@@ -1523,17 +1528,36 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         return ADVANCED_EDITOR_EXTRA_HEIGHT;
     };
 
+    const getAdvancedEditorToolbarHeight = () => {
+        const measured = Number(textEditorToolbarHeight.value);
+        if (Number.isFinite(measured) && measured >= 0) {
+            return measured;
+        }
+        return 72;
+    };
+
+    const getAdvancedEditorFooterHeight = () => {
+        const measured = Number(textEditorFooterHeight.value);
+        if (Number.isFinite(measured) && measured >= 0) {
+            return measured;
+        }
+        return Math.max(0, getAdvancedEditorChromeHeight() - getAdvancedEditorToolbarHeight());
+    };
+
     const getAdvancedTextContentBounds = (editorBounds) => {
         const safeBounds = editorBounds || { x: 0, y: 0, width: 24, height: 24 };
-        const measuredChrome = getAdvancedEditorChromeHeight();
+        const toolbarHeight = getAdvancedEditorToolbarHeight();
+        const footerHeight = getAdvancedEditorFooterHeight();
+        const totalChrome = toolbarHeight + footerHeight;
         const chromeHeight = Math.min(
-            measuredChrome,
+            totalChrome,
             Math.max(0, Number(safeBounds.height || 0) - 24)
         );
+        const appliedToolbar = Math.min(toolbarHeight, chromeHeight);
 
         return {
             x: safeBounds.x,
-            y: safeBounds.y,
+            y: safeBounds.y + appliedToolbar,
             width: Math.max(24, Number(safeBounds.width) || 24),
             height: Math.max(24, Number(safeBounds.height || 24) - chromeHeight)
         };
@@ -1601,12 +1625,22 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         };
     };
 
-    const updateTextEditorSize = ({ width, height, chromeHeight }) => {
+    const updateTextEditorSize = ({ width, height, chromeHeight, toolbarHeight, footerHeight }) => {
         if (!textEditorPosition.value || !textEditorBounds.value) return;
         const minSize = getTextEditorMinSize();
 
+        if (Number.isFinite(Number(toolbarHeight))) {
+            textEditorToolbarHeight.value = Math.max(0, Number(toolbarHeight));
+        }
+
+        if (Number.isFinite(Number(footerHeight))) {
+            textEditorFooterHeight.value = Math.max(0, Number(footerHeight));
+        }
+
         if (Number.isFinite(Number(chromeHeight))) {
             textEditorChromeHeight.value = Math.max(0, Number(chromeHeight));
+        } else {
+            textEditorChromeHeight.value = Math.max(0, textEditorToolbarHeight.value + textEditorFooterHeight.value);
         }
 
         const requestedWidth = Math.max(minSize.width, Number(width) || 0);
@@ -4085,6 +4119,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         const content = getTextStrokeContent(first);
         textEditorSimpleMode.value = !shouldUseAdvancedEditorForTextStroke(first, content);
         const preferredSize = getPreferredTextEditorSize();
+        const toolbarHeight = getAdvancedEditorToolbarHeight();
         const advancedEditorHeight = Math.max(
             24,
             Number(first.editorHeight)
@@ -4096,7 +4131,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         openTextEditor({
             bounds: {
                 x: first.x,
-                y: first.y,
+                y: textEditorSimpleMode.value ? first.y : Math.max(0, first.y - toolbarHeight),
                 width: first.editorWidth || preferredSize.width,
                 height: textEditorSimpleMode.value ? (first.editorHeight || preferredSize.height) : advancedEditorHeight
             },

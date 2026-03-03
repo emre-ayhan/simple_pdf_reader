@@ -30,7 +30,18 @@ let quill = null;
 let resizeObserver = null;
 let chromeObserver = null;
 const dragState = ref(null);
+const showResizeWarning = ref(false);
 const emit = defineEmits(['update:modelValue', 'save', 'cancel', 'resize', 'drag']);
+
+const updateContentOverflowState = () => {
+    if (!quill?.root) {
+        showResizeWarning.value = false;
+        return;
+    }
+
+    const contentEl = quill.root;
+    showResizeWarning.value = contentEl.scrollHeight > (contentEl.clientHeight + 1);
+};
 
 const emitEditorMetrics = () => {
     if (!box.value) return;
@@ -38,11 +49,15 @@ const emitEditorMetrics = () => {
     const toolbarEl = box.value.querySelector('.ql-toolbar');
     const actionsEl = box.value.querySelector('.quil-editor-actions');
     const rect = box.value.getBoundingClientRect();
+    const toolbarHeight = Math.max(0, toolbarEl?.offsetHeight || 0);
+    const footerHeight = Math.max(0, actionsEl?.offsetHeight || 0);
 
     emit('resize', {
         width: rect.width,
         height: rect.height,
-        chromeHeight: Math.max(0, (toolbarEl?.offsetHeight || 0) + (actionsEl?.offsetHeight || 0))
+        toolbarHeight,
+        footerHeight,
+        chromeHeight: toolbarHeight + footerHeight
     });
 };
 
@@ -117,6 +132,8 @@ const handleDragStart = (e) => {
 };
 
 const handleSave = () => {
+    if (showResizeWarning.value) return;
+
     // avoid offset mapping crashes by returning focus to body first
     try { quill?.blur(); } catch(e) {}
     
@@ -159,6 +176,7 @@ onMounted(() => {
     quill.on('text-change', () => {
         let value = quill.root.innerHTML == '<p><br></p>' ? '' : quill.root.innerHTML;
         emit('update:modelValue', value);
+        updateContentOverflowState();
     });
 
     nextTick(() => {
@@ -168,6 +186,7 @@ onMounted(() => {
             const entry = entries?.[0];
             if (!entry) return;
             emitEditorMetrics();
+            updateContentOverflowState();
         });
 
         resizeObserver.observe(box.value);
@@ -176,21 +195,25 @@ onMounted(() => {
         const actionsEl = box.value.querySelector('.quil-editor-actions');
         chromeObserver = new ResizeObserver(() => {
             emitEditorMetrics();
+            updateContentOverflowState();
         });
 
         if (toolbarEl) chromeObserver.observe(toolbarEl);
         if (actionsEl) chromeObserver.observe(actionsEl);
 
         emitEditorMetrics();
+        updateContentOverflowState();
     });
 
     window.addEventListener('resize', emitEditorMetrics);
+    window.addEventListener('resize', updateContentOverflowState);
     window.addEventListener('pointerdown', handleGlobalPointerDown, true);
 });
 
 onBeforeUnmount(() => {
     stopDragging();
     window.removeEventListener('resize', emitEditorMetrics);
+    window.removeEventListener('resize', updateContentOverflowState);
     window.removeEventListener('pointerdown', handleGlobalPointerDown, true);
 
     if (resizeObserver) {
@@ -214,7 +237,16 @@ onBeforeUnmount(() => {
         <div class="quil-editor">
             <div ref="editor"></div>
             <div class="quil-editor-actions">
-                <button type="button" class="btn btn-sm btn-dark" :class="{ disabled: !modelValue }" @click="handleSave">{{ $t('Save') }}</button>
+                <div v-if="showResizeWarning" class="small text-danger text-center flex-fill fst-italic lh-1">
+                    <div class="d-flex align-items-center justify-content-center gap-2">
+                        <i class="bi-exclamation-triangle-fill fs-5"></i>
+                        <div>
+                            <div>{{ $t("Content doesn't fit in the editor area.") }}</div>
+                            <div>{{ $t('Resize the editor to see all content.') }}</div>
+                        </div>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-sm btn-dark" :class="{ disabled: !modelValue }" @click="handleSave" v-else>{{ $t('Save') }}</button>
                 <button type="button" class="btn btn-sm btn-outline-dark" @click="handleCancel">{{ $t('Cancel') }}</button>
             </div>
         </div>
