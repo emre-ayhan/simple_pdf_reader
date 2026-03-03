@@ -47,6 +47,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
 
             const canvas = page?.canvas;
             const drawCanvas = page?.drawingCanvas;
+            const annotationSvg = page?.annotationSvg;
             if (!canvas || !drawCanvas) return;
 
             canvas.style.width = '';
@@ -60,6 +61,12 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             canvas.width = viewport.width;
             drawCanvas.height = viewport.height;
             drawCanvas.width = viewport.width;
+
+            if (annotationSvg) {
+                annotationSvg.setAttribute('viewBox', `0 0 ${viewport.width} ${viewport.height}`);
+                annotationSvg.setAttribute('width', `${viewport.width}`);
+                annotationSvg.setAttribute('height', `${viewport.height}`);
+            }
 
             page.drawingContext = drawCanvas.getContext('2d', { willReadFrequently: true });
 
@@ -269,6 +276,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             rendered: false,
             canvas: null,
             textLayer: null,
+            annotationSvg: null,
             drawingCanvas: null,
             drawingContext: null,
             strokes: [],

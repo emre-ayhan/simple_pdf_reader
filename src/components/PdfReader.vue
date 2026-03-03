@@ -806,6 +806,12 @@ defineExpose({
                             <div class="text-layer" :class="{ 'text-selectable': isTextSelectionMode }" :ref="el => page.textLayer = el"></div>
                             <!-- Interactive form field overlay -->
                             <PdfForm :page="page" :disabled="!isTextSelectionMode" @button-action="handlePdfButtonAction" />
+                            <svg
+                                :ref="el => page.annotationSvg = el"
+                                class="annotation-layer"
+                                preserveAspectRatio="none"
+                                xmlns="http://www.w3.org/2000/svg"
+                            ></svg>
                             <canvas 
                                 :ref="el => page.drawingCanvas = el"
                                 class="drawing-canvas"
@@ -852,12 +858,13 @@ defineExpose({
 
             <!-- Stroke Menu -->
             <div v-if="showStrokeMenu && selectedStroke" 
-                 ref="strokeMenu"
-                 class="stroke-menu" 
-                 :style="{ 
-                     left: strokeMenuPosition.x + 'px', 
-                     top: strokeMenuPosition.y + 'px'
-                 }">
+                ref="strokeMenu"
+                class="stroke-menu" 
+                :style="{ 
+                    left: strokeMenuPosition.x + 'px', 
+                    top: strokeMenuPosition.y + 'px'
+                }"
+            >
                 <div class="stroke-menu-content">
                     <div class="stroke-menu-section">
                         <div class="stroke-menu-colors dropdown-center">
