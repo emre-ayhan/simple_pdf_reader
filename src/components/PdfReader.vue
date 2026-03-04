@@ -811,7 +811,7 @@ defineExpose({
                     <ToolItem class="nav-link" label="Drawing Selection" shortcut="P" icon="cursor-fill" :active="isSelectModeActive" :action="toggleStrokeSelectionMode" />
                 </li>
                 <li class="nav-item">
-                    <ToolItem class="nav-link" label="Text Selection" shortcut="S" icon="cursor-text" :active="isTextSelectionMode" :action="toggleTextSelection" />
+                    <ToolItem class="nav-link" label="Text Selection" shortcut="S" icon="cursor-text" :active="isTextSelectionMode" :disabled="textActionsDisabled" :action="toggleTextSelection" />
                 </li>
 
                 <!-- Pagination -->
