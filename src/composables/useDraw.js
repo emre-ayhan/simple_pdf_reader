@@ -2984,77 +2984,11 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
                     }
                 }
             }
-
-            const pageSelections = Array.isArray(selectedStrokes.value)
-                ? selectedStrokes.value.filter(s => s.pageIndex === canvasIndex)
-                : [];
-
-            if (pageSelections.length > 0) {
-                let hitCurrentSelection = false;
-
-                if (pageSelections.length > 1) {
-                    let minX = Infinity;
-                    let minY = Infinity;
-                    let maxX = -Infinity;
-                    let maxY = -Infinity;
-                    pageSelections.forEach(sel => {
-                        const bounds = getStrokeBounds(sel.stroke, 0);
-                        if (!bounds) return;
-                        minX = Math.min(minX, bounds.minX);
-                        minY = Math.min(minY, bounds.minY);
-                        maxX = Math.max(maxX, bounds.maxX);
-                        maxY = Math.max(maxY, bounds.maxY);
-                    });
-
-                    if (Number.isFinite(minX) && Number.isFinite(minY) && Number.isFinite(maxX) && Number.isFinite(maxY)) {
-                        const padded = {
-                            minX: minX - SELECTION_PADDING,
-                            minY: minY - SELECTION_PADDING,
-                            maxX: maxX + SELECTION_PADDING,
-                            maxY: maxY + SELECTION_PADDING
-                        };
-                        hitCurrentSelection = x >= padded.minX && x <= padded.maxX && y >= padded.minY && y <= padded.maxY;
-                    }
-                } else {
-                    const primaryStroke = (selectedStroke.value && selectedStroke.value.pageId === page.id)
-                        ? selectedStroke.value.stroke
-                        : pageSelections[0]?.stroke;
-
-                    if (primaryStroke) {
-                        const rotatedSelection = getRotatedSelectionGeometry(primaryStroke, SELECTION_PADDING);
-                        if (rotatedSelection) {
-                            hitCurrentSelection = isPointInsideOrNearRotatedSelection(x, y, rotatedSelection, 4);
-                        } else {
-                            const bounds = getStrokeBounds(primaryStroke, SELECTION_PADDING);
-                            if (bounds) {
-                                hitCurrentSelection = x >= bounds.minX && x <= bounds.maxX && y >= bounds.minY && y <= bounds.maxY;
-                            }
-                        }
-                    }
-                }
-
-                if (hitCurrentSelection) {
-                    isDragging.value = false;
-                    dragStartPos.value = { x, y };
-                    lastX = x;
-                    lastY = y;
-                    isMouseDown.value = true;
-                    currentCanvasIndex = canvasIndex;
-                    if (canvas && e.pointerId !== undefined) {
-                        canvas.setPointerCapture(e.pointerId);
-                    }
-                    activePointerId.value = e.pointerId;
-                    redrawAllStrokes();
-                    drawSelectionBoundingBox();
-                    stopEvent(e);
-                    return;
-                }
-            }
             
             const found = findStrokeAtPoint(x, y);
 
             if (found) {
-                    const additiveSelection = !!e.ctrlKey || !!e.shiftKey;
+                    const shift = !!e.shiftKey;
 
                     const newSelection = {
                         pageId: page.id,
@@ -3064,17 +2998,11 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
                         originalStroke: JSON.parse(JSON.stringify(found.stroke))
                     };
 
-                    if (additiveSelection) {
+                    if (shift) {
                         // Toggle multi-selection
                         const idx = selectedStrokes.value.findIndex(s => s.pageIndex === canvasIndex && s.strokeIndex === found.strokeIndex);
                         if (idx === -1) {
-                            selectedStrokes.value.push({
-                                pageId: page.id,
-                                pageIndex: canvasIndex,
-                                strokeIndex: found.strokeIndex,
-                                stroke: found.stroke,
-                                originalStroke: JSON.parse(JSON.stringify(found.stroke))
-                            });
+                            selectedStrokes.value.push({ pageId: page.id, pageIndex: canvasIndex, strokeIndex: found.strokeIndex, stroke: found.stroke });
                         } else {
                             selectedStrokes.value.splice(idx, 1);
                         }
@@ -3090,15 +3018,14 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
                         return;
                     }
 
-                    // Non-additive click: always collapse to a single selected stroke
-                    // so a user can drag/edit one stroke even after a multi-selection.
-                    selectedStrokes.value = [{
-                        pageId: page.id,
-                        pageIndex: canvasIndex,
-                        strokeIndex: found.strokeIndex,
-                        stroke: found.stroke,
-                        originalStroke: JSON.parse(JSON.stringify(found.stroke))
-                    }];
+                    // Non-ctrl click: if multi-selection is active and clicking a member, keep multi-selection
+                    const isMemberOfSelection = Array.isArray(selectedStrokes.value)
+                        && selectedStrokes.value.some(s => s.pageIndex === canvasIndex && s.strokeIndex === found.strokeIndex);
+                    const multiActive = Array.isArray(selectedStrokes.value) && selectedStrokes.value.length > 1;
+                    if (!(multiActive && isMemberOfSelection)) {
+                        // Collapse to single selection only when clicking outside current multi-selection
+                        selectedStrokes.value = [{ pageId: page.id, pageIndex: canvasIndex, strokeIndex: found.strokeIndex, stroke: found.stroke }];
+                    }
                     selectedStroke.value = newSelection;
                     
                     // Prepare for potential dragging (left-click only)
@@ -4759,21 +4686,14 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         const existingOverlay = svgLayer.querySelector('.annotation-selection-overlay');
         if (existingOverlay) existingOverlay.remove();
 
-        const strokes = page.strokes || [];
-        const pageSelections = Array.isArray(selectedStrokes.value)
-            ? selectedStrokes.value.filter(s => s.pageIndex === page.index)
-            : [];
-        const multi = pageSelections.length > 1;
-        const primarySelection = (selectedStroke.value && selectedStroke.value.pageId === page.id)
-            ? selectedStroke.value
-            : (pageSelections[0] || null);
+        if (!selectedStroke.value || selectedStroke.value.pageId !== page.id) return;
 
-        if (!multi && !primarySelection) return;
-
-        const strokeIndex = primarySelection?.strokeIndex;
+        const strokeIndex = selectedStroke.value.strokeIndex;
         if (strokeIndex === undefined) return;
 
-        const stroke = strokes[strokeIndex] || primarySelection?.stroke;
+        const strokes = page.strokes || [];
+        const multi = Array.isArray(selectedStrokes.value) && selectedStrokes.value.filter(s => s.pageIndex === page.index).length > 1;
+        const stroke = strokes[strokeIndex];
         if ((!stroke || stroke.length === 0) && !multi) return;
 
         let minX, minY, maxX, maxY;
@@ -4784,7 +4704,8 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
             minY = Infinity;
             maxX = -Infinity;
             maxY = -Infinity;
-            pageSelections.forEach(sel => {
+            selectedStrokes.value.forEach(sel => {
+                if (sel.pageIndex !== page.index) return;
                 const b = getStrokeBounds(sel.stroke, 0);
                 if (!b) return;
                 minX = Math.min(minX, b.minX);
@@ -4957,13 +4878,9 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         svgLayer.replaceChildren();
 
         const strokes = page.strokes || [];
-        const pageSelections = Array.isArray(selectedStrokes.value)
-            ? selectedStrokes.value.filter(s => s.pageIndex === page.index)
-            : [];
-        const fallbackSelectedIndex = pageSelections[0]?.strokeIndex;
         const selectedIndex = (selectedStroke.value && selectedStroke.value.pageId === page.id)
             ? selectedStroke.value.strokeIndex
-            : (Number.isInteger(fallbackSelectedIndex) ? fallbackSelectedIndex : -1);
+            : -1;
 
         strokes.forEach((stroke, index) => {
             if (index === selectedIndex) return;
@@ -4972,11 +4889,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
 
         if (selectedIndex >= 0 && strokes[selectedIndex]) {
             appendStrokeToSvg(svgLayer, strokes[selectedIndex], selectedIndex);
-            drawSelectionBoundingBox();
-            return;
-        }
-
-        if (pageSelections.length > 0) {
             drawSelectionBoundingBox();
         }
     };
