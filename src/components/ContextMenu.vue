@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref, nextTick } from 'vue';
+import { onMounted, ref, nextTick, onUnmounted } from 'vue';
 
 const props = defineProps({
     parent: {
@@ -12,6 +12,7 @@ const emit = defineEmits(['show', 'hide']);
 
 const show = ref(false);
 const menuRef = ref(null);
+const preventPenContextMenu = ref(true);
 
 const style = ref({
     top: 0,
@@ -19,14 +20,25 @@ const style = ref({
 });
 
 const handleContextMenu = async (event) => {
+    if (event.type === 'pointermove') {
+        if (event.pointerType === 'pen') {
+            preventPenContextMenu.value = event.buttons !== 2;
+        }
+        return;
+    }
+
     event.preventDefault();
     event.stopPropagation();
-    if (event.pointerType === 'pen') return;
-    
+
     if (event.type === 'click') {
         show.value = false;
         emit('hide');
         return;
+    }
+
+    if (event.type === 'contextmenu' && event.pointerType === 'pen') {
+        const isPenSecondaryButton = event.button === 2 || event.buttons === 2 || !preventPenContextMenu.value;
+        if (!isPenSecondaryButton) return;
     }
 
     show.value = true;
@@ -79,8 +91,15 @@ const handleContextMenu = async (event) => {
 };
 
 onMounted(() => {
+    document.querySelector(props.parent).addEventListener('pointermove', handleContextMenu);
     document.querySelector(props.parent).addEventListener('contextmenu', handleContextMenu);
     document.querySelector(props.parent).addEventListener('click', handleContextMenu);
+});
+
+onUnmounted(() => {
+    document.querySelector(props.parent).removeEventListener('pointermove', handleContextMenu);
+    document.querySelector(props.parent).removeEventListener('contextmenu', handleContextMenu);
+    document.querySelector(props.parent).removeEventListener('click', handleContextMenu);
 });
 
 </script>
