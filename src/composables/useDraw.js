@@ -141,7 +141,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         return el.closest?.('.pdf-reader') || el;
     };
 
-    const initialStrokeIndex = ref(0);
+    const selectedStrokeIndex = ref(0);
 
     const showStrokeStyleMenu = ref(false);
 
@@ -181,8 +181,8 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         }
     })
 
-    storeGet('initialStrokeIndex', 0).then(value => {
-        initialStrokeIndex.value = value;
+    storeGet('selectedStrokeIndex', 0).then(value => {
+        selectedStrokeIndex.value = value;
         const style = strokeStyles.value[value];
         if (!style) return;
         drawStyle.value = normalizeDrawStyle(style);
@@ -263,8 +263,8 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         }
 
         drawStyle.value = normalizeDrawStyle(style);
-        initialStrokeIndex.value = index;
-        storeSet('initialStrokeIndex', index);
+        selectedStrokeIndex.value = index;
+        storeSet('selectedStrokeIndex', index);
     }
 
 
@@ -438,6 +438,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
     const rotateStartCenter = ref(null);
     const rotateStartAngle = ref(0); // angle of rotate-handle vector at rotation start
     const rotatePointerAngleOffset = ref(0); // pointer angle relative to rotate-handle angle at drag start
+    const suppressNextSelectionClick = ref(false);
 
     const resizeCursor = computed(() => {
         if ((!isBoundingBoxHovering.value) && !isResizing.value && !isRotating.value) return null;
@@ -553,6 +554,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
     };
 
     const selectStrokes = (strokes) => {
+        if (!isSelectModeActive.value) return;
         if (!Array.isArray(strokes) || strokes.length === 0) return;
         const page = activePage.value;
 
@@ -1571,6 +1573,28 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         const fallbackWidth = ctx.measureText(content.text || '').width + 8;
         const fallbackHeight = Math.max(first.fontSize * 1.5, 28);
         const isSimpleMode = getStoredTextEditorMode(first) === 'simple';
+        const explicitWidth = Number(first.width);
+        const explicitHeight = Number(first.height);
+        const rotationWidth = Number(first.rotationBoxWidth);
+        const rotationHeight = Number(first.rotationBoxHeight);
+        const hasRotation = Math.abs(Number(first.rotation || 0)) > 0.0001;
+
+        if (isSimpleMode && hasRotation) {
+            return {
+                width: Math.max(
+                    24,
+                    Number.isFinite(rotationWidth) && rotationWidth > 0
+                        ? rotationWidth
+                        : (Number.isFinite(explicitWidth) && explicitWidth > 0 ? explicitWidth : fallbackWidth)
+                ),
+                height: Math.max(
+                    24,
+                    Number.isFinite(rotationHeight) && rotationHeight > 0
+                        ? rotationHeight
+                        : (Number.isFinite(explicitHeight) && explicitHeight > 0 ? explicitHeight : fallbackHeight)
+                )
+            };
+        }
 
         if (isSimpleMode) {
             const singleLineText = String(content.text || '').replace(/\r?\n+/g, ' ').replace(/\s{2,}/g, ' ').trim();
@@ -1582,8 +1606,6 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
             };
         }
 
-        const explicitWidth = Number(first.width);
-        const explicitHeight = Number(first.height);
         return {
             width: Math.max(24, Number.isFinite(explicitWidth) && explicitWidth > 0 ? explicitWidth : fallbackWidth),
             height: Math.max(24, Number.isFinite(explicitHeight) && explicitHeight > 0 ? explicitHeight : fallbackHeight)
@@ -1908,6 +1930,10 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 stroke[0].y = fittedBounds.y;
                 stroke[0].width = fittedBounds.width;
                 stroke[0].height = fittedBounds.height;
+                if (getStoredTextEditorMode(stroke[0]) === 'simple') {
+                    stroke[0].rotationBoxWidth = stroke[0].width;
+                    stroke[0].rotationBoxHeight = stroke[0].height;
+                }
 
                 strokeChangeCallback({
                     id: stroke[0].id,
@@ -1963,6 +1989,8 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
             if (textEditorSimpleMode.value && textStroke[0]) {
                 textStroke[0].width = Math.max(SIMPLE_TEXT_STROKE_MIN_WIDTH, textStroke[0].width + 24);
+                textStroke[0].rotationBoxWidth = textStroke[0].width;
+                textStroke[0].rotationBoxHeight = textStroke[0].height;
             }
 
             activePage.value.strokes.push(textStroke);
@@ -2533,7 +2561,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
     const getResizeHandle = (x, y, bounds, stroke, padding = 8) => {
         const first = stroke?.[0] || null;
         if (first?.type === 'highlight-rect') return null;
-        const rotationAvailable = first && first.type !== 'highlight-rect' && first.type !== 'text';
+        const rotationAvailable = first && first.type !== 'highlight-rect';
         const rotatedSelection = getRotatedSelectionGeometry(stroke, padding);
         if (rotatedSelection?.handles) {
             if (rotationAvailable) {
@@ -2871,7 +2899,21 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 
                 if (handle) {
                     const firstSel = selectedStroke.value.stroke[0];
-                    if (handle === 'rotate' && firstSel.type !== 'highlight-rect' && firstSel.type !== 'text') {
+                    if (handle === 'rotate' && firstSel.type !== 'highlight-rect') {
+                        if (firstSel.type === 'text') {
+                            const textBox = getTextBoxSize(selectedStroke.value.stroke);
+                            if (textBox) {
+                                firstSel.rotationBoxWidth = textBox.width;
+                                firstSel.rotationBoxHeight = textBox.height;
+                                if (!Number.isFinite(Number(firstSel.width)) || Number(firstSel.width) <= 0) {
+                                    firstSel.width = textBox.width;
+                                }
+                                if (!Number.isFinite(Number(firstSel.height)) || Number(firstSel.height) <= 0) {
+                                    firstSel.height = textBox.height;
+                                }
+                            }
+                        }
+
                         isRotating.value = true;
                         resizeHandle.value = handle;
                         dragStartPos.value = { x, y };
@@ -3736,8 +3778,10 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 }
             }
             
+            const didTransformStroke = isDragging.value || isResizing.value || isRotating.value;
+
             // Redraw without highlight after drag/resize
-            if (isDragging.value || isResizing.value || isRotating.value) {
+            if (didTransformStroke) {
                 redrawAllStrokes();
                 // Redraw highlight to show final position
                 if (selectedStroke.value) {
@@ -3759,6 +3803,10 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                     }
                     drawSelectionBoundingBox();
                 }
+            }
+
+            if (didTransformStroke) {
+                suppressNextSelectionClick.value = true;
             }
 
             isDragging.value = false;
@@ -3971,6 +4019,12 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         handToolActive.value = false;
         showStrokeMenu.value = false;
         showStrokeStyleMenu.value = false;
+
+        // Ensure any visible selection overlay is cleared immediately
+        document.querySelectorAll('.annotation-selection-overlay').forEach((overlay) => overlay.remove());
+        // Also clear any native text selection that might be lingering, which can interfere with interactions
+        window.getSelection()?.removeAllRanges();
+        redrawAllStrokes();
     };
 
     const changeStrokeColor = (newColor) => {
@@ -4294,6 +4348,14 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
     };
 
     const handleStrokeMenu = (e) => {
+        if (!isSelectModeActive.value) return;
+
+        if (suppressNextSelectionClick.value) {
+            suppressNextSelectionClick.value = false;
+            stopEvent(e);
+            return;
+        }
+
         const canvasIndex = getCanvasIndexFromEvent(e);
         if (canvasIndex === -1) return;
         
@@ -4719,7 +4781,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                     { x: minX, y: (minY + maxY) / 2, handle: 'w' },
                     { x: maxX, y: (minY + maxY) / 2, handle: 'e' }
                 ];
-            const rotationAvailable = first.type !== 'highlight-rect' && first.type !== 'text';
+            const rotationAvailable = first.type !== 'highlight-rect';
             handles.forEach(h => {
                 overlayGroup.appendChild(createSvgElement('rect', {
                     x: h.x - handleSize / 2,

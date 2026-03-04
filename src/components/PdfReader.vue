@@ -223,7 +223,6 @@ const lockView = () => {
 
 const resetAllTools = () => {
     resetToolState();
-    window.getSelection()?.removeAllRanges();
     document.removeEventListener('mouseup', handleTextSelectionMouseUp);
 };
 
