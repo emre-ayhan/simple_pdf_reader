@@ -772,7 +772,7 @@ defineExpose({
                                             <label class="form-label mb-1">{{ $t('Thickness') }}</label>
                                         </div>
                                         <template v-for="value in [1, 2, 4, 6, 8]">
-                                            <div class="col text-center py-1 rounded-3 hoverable" :class="{ active: activeStrokeStyle?.thickness == value }" role="button" @click="setStrokeThickness(value)">
+                                            <div class="col text-center py-1 px-0 rounded-3 hoverable" :class="{ active: activeStrokeStyle?.thickness == value }" role="button" @click="setStrokeThickness(value)">
                                                 <svg width="32" height="32" viewBox="0 0 32 32">
                                                     <circle cx="16" cy="16" :r="value * 1.75" :fill="drawStyle.color" :opacity="drawStyle.opacity" />
                                                 </svg>

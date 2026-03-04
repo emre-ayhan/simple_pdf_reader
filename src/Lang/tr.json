@@ -135,5 +135,11 @@
     "Next": "Sonraki",
     "Prev": "Önceki",
     "Switch to Simple Mode": "Basit Moda Geç",
-    "Switch to Advanced Mode": "Gelişmiş Moda Geç"
+    "Switch to Advanced Mode": "Gelişmiş Moda Geç",
+    "Filled": "Dolu",
+    "Style": "Stil",
+    "solid": "düz",
+    "dashed": "kesikli",
+    "dotted": "noktalı",
+    "Opacity": "Opaklık"
 }

@@ -378,7 +378,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                         textCanvasIndex.value = activePage.value.index;
 
                         openTextEditor({
-                            bounds: { x: clampedX, y: clampedY, width, height },
+                            bounds: { x: clampedX, y: clampedY + 24, width, height },
                             content: '',
                             strokeRef: null
                         });
