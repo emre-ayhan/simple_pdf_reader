@@ -1,6 +1,6 @@
 <script setup>
-import { Toast } from 'bootstrap';
-import { ref, watch, computed, onMounted } from 'vue';
+import { ref, watch, computed } from 'vue';
+import BsToast from './BsToast.vue';
 
 // Define props to receive the necessary data from parent
 const props = defineProps({
@@ -21,7 +21,7 @@ const showSearch = () => {
     if (props.disabled) return;
     if (searchToolbar.value) {
         searchToolbar.value.show();
-        const toast = searchToolbar.value._element;
+        const toast = searchToolbar.value.getElement();
         const input = toast.querySelector('input[type="search"]');
         if (input) {
             input.focus();
@@ -286,75 +286,57 @@ watch(() => props.pages, () => {
     if (search.value) performSearch(false);
 }, { deep: true });
 
-onMounted(() => {
-    searchToolbar.value = new Toast(`#search-toolbar-${props.fileid}`, {
-        autohide: true,
-        delay: 5000
-    });
-});
-
 defineExpose({
     search,
     caseSensitive,
     wholeWords
 });
 </script>
-<style scoped>
-.toast {
-    margin-top: 90px;
-    margin-left: 40px;
-    min-width: 400px;
-}
-</style>
 <template>
 <li class="nav-item btn-group">
     <a class="nav-link" :class="{ disabled }" href="#" @click="showSearch" :title="$t('Search')">
         <i class="bi bi-search"></i>
     </a>
-    <div class="toast-container position-fixed start-0 top-0">
-        <div :id="`search-toolbar-${fileid}`" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
-            <div class="toast-body">
-                <div class="d-flex align-items-start gap-2">
-                    <div>
-                        <div class="d-flex gap-2">
-                            <div class="position-relative">
-                                <i class="bi bi-search text-dark position-absolute top-50 start-0 translate-middle-y ps-2"></i>
-                                <input type="search" class="form-control rounded-3 ps-4" :placeholder="`${$t('Search')}...`" @keydown.enter.prevent="goToNextMatch" v-model="search" />
-                            </div>
-                            <div class="d-flex gap-1 mb-2 align-items-center">
-                                <span>{{ currentMatchIndex }}</span>
-                                <span>/</span>
-                                <span>{{ totalMatches }}</span>
-                            </div>
-                        </div>
-                        <div class="d-flex align-items-center justify-content-between gap-4 mt-2">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="searchCaseSensitive" v-model="caseSensitive">
-                                <label class="form-check-label small text-nowrap ms-1" for="searchCaseSensitive">{{ $t('Case Sensitive') }}</label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="searchWholeWords" v-model="wholeWords">
-                                <label class="form-check-label small text-nowrap ms-1" for="searchWholeWords">{{ $t('Whole Words') }}</label>
-                            </div>
-                        </div>
+    <bs-toast ref="searchToolbar" :id="`search-toolbar-${fileid}`">
+        <div class="d-flex align-items-start gap-2">
+            <div>
+                <div class="d-flex gap-2">
+                    <div class="position-relative">
+                        <i class="bi bi-search text-dark position-absolute top-50 start-0 translate-middle-y ps-2"></i>
+                        <input type="search" class="form-control rounded-3 ps-4" :placeholder="`${$t('Search')}...`" @keydown.enter.prevent="goToNextMatch" v-model="search" />
                     </div>
-                    <div class="vr bg-primary"></div>
-                    <ul class="navbar-nav flex-column gap-1">
-                        <li class="nav-item">
-                            <a href="#" class="nav-link" :class="{ disabled: !totalMatches }" :title="$t('Previous')" @click.prevent="goToPreviousMatch">
-                                <i class="bi bi-chevron-up"></i>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="#" class="nav-link" :class="{ disabled: !totalMatches }" :title="$t('Next')" @click.prevent="goToNextMatch">
-                                <i class="bi bi-chevron-down"></i>
-                            </a>
-                        </li>
-                    </ul>
-                    <button type="button" class="btn-close small ms-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                    <div class="d-flex gap-1 mb-2 align-items-center">
+                        <span>{{ currentMatchIndex }}</span>
+                        <span>/</span>
+                        <span>{{ totalMatches }}</span>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center justify-content-between gap-4 mt-2">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="searchCaseSensitive" v-model="caseSensitive">
+                        <label class="form-check-label small text-nowrap ms-1" for="searchCaseSensitive">{{ $t('Case Sensitive') }}</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="searchWholeWords" v-model="wholeWords">
+                        <label class="form-check-label small text-nowrap ms-1" for="searchWholeWords">{{ $t('Whole Words') }}</label>
+                    </div>
                 </div>
             </div>
+            <div class="vr bg-primary"></div>
+            <ul class="navbar-nav flex-column gap-1">
+                <li class="nav-item">
+                    <a href="#" class="nav-link" :class="{ disabled: !totalMatches }" :title="$t('Previous')" @click.prevent="goToPreviousMatch">
+                        <i class="bi bi-chevron-up"></i>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" :class="{ disabled: !totalMatches }" :title="$t('Next')" @click.prevent="goToNextMatch">
+                        <i class="bi bi-chevron-down"></i>
+                    </a>
+                </li>
+            </ul>
+            <button type="button" class="btn-close small ms-auto" data-bs-dismiss="toast" aria-label="Close"></button>
         </div>
-    </div>
+    </bs-toast>
 </li>
 </template>

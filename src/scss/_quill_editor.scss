@@ -117,3 +117,15 @@
         }
     }
 }
+
+foreignObject {
+    overflow: hidden;
+
+    .ql-container,
+    .ql-editor {
+        border: none !important;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+    }
+}

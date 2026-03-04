@@ -16,6 +16,7 @@ import ToolItem from "./ToolItem.vue";
 import PdfForm from "./PdfForm.vue";
 import QuillEditor from "./QuillEditor.vue";
 import SimpleTextEditor from "./SimpleTextEditor.vue";
+import BsToast from "./BsToast.vue";
 
 // Cursor Style
 const cursorStyle = computed(() => {
@@ -307,11 +308,19 @@ const selectEraser = () => {
     isEraser.value = !wasActive;
 };
 
+const textEditorAlert = ref(null);
+
 const selectText = () => {
     if (!isFileLoaded.value) return;
     const wasActive = isTextInputMode.value;
     resetAllTools();
     isTextInputMode.value = !wasActive;
+
+    if (!wasActive) {
+        nextTick(() => {
+            textEditorAlert.value?.show();
+        });
+    }
 };
 
 const toggleStrokeSelectionMode = () => {
@@ -860,14 +869,16 @@ defineExpose({
                     @drag="updateTextEditorPosition"
                 />
             </template>
-
-            <div
+            <bs-toast
+                ref="textEditorAlert"
+                :id="`text-editor-alert-${fileId}`"
+                position="top-50 start-50 translate-middle"
                 v-else-if="isTextInputMode && !hasDismissedTextGestureHint"
-                class="position-fixed top-50 start-50 translate-middle text-center bg-secondary-subtle text-secondary rounded-3 px-3 py-2"
-                style="z-index: 5; pointer-events: none;"
             >
-                <small>{{ $t('Click for simple text, select area to input advanced text') }}</small>
-            </div>
+                <div class="text-center">
+                    {{ $t('Click for simple text, select area to input advanced text') }}
+                </div>
+            </bs-toast>
 
             <!-- Stroke Menu -->
             <div v-if="showStrokeMenu && selectedStroke" 

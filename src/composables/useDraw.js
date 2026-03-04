@@ -180,6 +180,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
     const TEXT_RENDER_OVERFLOW_ALLOWANCE_FACTOR = 0.2;
     const TEXT_EDITOR_DRAG_THRESHOLD = 6;
     const ADVANCED_EDITOR_EXTRA_HEIGHT = 120;
+    const SIMPLE_TEXT_STROKE_MIN_WIDTH = 260;
     const isTextInputMode = ref(false);
     const textPosition = ref(null);
     const textCanvasIndex = ref(-1);
@@ -187,6 +188,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
     const textboxPosition = ref(null); // Screen position for the textbox
     const textEditorHtml = ref('');
     const textEditorBounds = ref(null); // Canvas coordinates
+    const textStrokeTargetBounds = ref(null);
     const textEditorPosition = ref(null)
     const textEditorSimpleMode = ref(true);
     const textEditorChromeHeight = ref(ADVANCED_EDITOR_EXTRA_HEIGHT);
@@ -867,6 +869,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
     const shouldUseAdvancedEditorForTextStroke = (first, content) => {
         if (!first) return false;
+        if (first.simpleSingleLine) return false;
 
         const textValue = String(content?.text || '');
         if (/\r?\n/.test(textValue)) return true;
@@ -879,10 +882,6 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
             const blockBreaks = (htmlValue.match(/<(br|p|div|li|h[1-6])\b/gi) || []).length;
             if (blockBreaks > 1) return true;
         }
-
-        const fontPx = Math.max(8, Number(first.fontSize) || 16);
-        const strokeHeight = Math.max(0, Number(first.height) || 0);
-        if (strokeHeight > (fontPx * 1.9)) return true;
 
         return false;
     };
@@ -1473,9 +1472,21 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         const fallbackWidth = ctx.measureText(content.text || '').width + 8;
         const fallbackHeight = Math.max(first.fontSize * 1.5, 28);
 
+        if (first.simpleSingleLine) {
+            const singleLineText = String(content.text || '').replace(/\r?\n+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+            const measuredWidth = ctx.measureText(singleLineText).width;
+            const rightSafety = Math.max(8, Math.round(fontPx * 0.5));
+            return {
+                width: Math.max(24, measuredWidth + rightSafety),
+                height: Math.max(24, fallbackHeight)
+            };
+        }
+
+        const explicitWidth = Number(first.width);
+        const explicitHeight = Number(first.height);
         return {
-            width: Math.max(24, first.width || fallbackWidth),
-            height: Math.max(24, first.height || fallbackHeight)
+            width: Math.max(24, Number.isFinite(explicitWidth) && explicitWidth > 0 ? explicitWidth : fallbackWidth),
+            height: Math.max(24, Number.isFinite(explicitHeight) && explicitHeight > 0 ? explicitHeight : fallbackHeight)
         };
     };
 
@@ -1699,7 +1710,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         };
     };
 
-    const openTextEditor = ({ bounds, content = '', strokeRef = null }) => {
+    const openTextEditor = ({ bounds, content = '', strokeRef = null, targetBounds = null }) => {
         if (!bounds) return;
         const preferredSize = getPreferredTextEditorSize();
         const normalizedBounds = {
@@ -1708,6 +1719,15 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
             height: Math.max(24, Number(bounds.height) || preferredSize.height)
         };
         textEditorBounds.value = normalizedBounds;
+
+        if (targetBounds) {
+            textStrokeTargetBounds.value = targetBounds;
+        } else if (!textEditorSimpleMode.value) {
+            textStrokeTargetBounds.value = getAdvancedTextContentBounds(normalizedBounds);
+        } else {
+            textStrokeTargetBounds.value = null;
+        }
+
         setTextEditorPosition(normalizedBounds);
         textEditorHtml.value = content;
         editingTextStroke.value = strokeRef;
@@ -1721,8 +1741,14 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
     const commitTextEditor = (content = null) => {
         const bounds = textEditorBounds.value;
         const normalizedContent = normalizeTextStrokeContent(content);
+        const singleLineText = normalizedContent.text.replace(/\r?\n+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+        const simpleModeContent = {
+            text: singleLineText,
+            html: singleLineText ? convertPlainTextToHtml(singleLineText) : ''
+        };
+        const contentToCommit = textEditorSimpleMode.value ? simpleModeContent : normalizedContent;
 
-        if (!bounds || !normalizedContent.text.trim()) {
+        if (!bounds || !contentToCommit.text.trim()) {
             closeTextEditor();
             redrawAllStrokes();
             return;
@@ -1749,20 +1775,34 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                     height: bounds.height
                 };
 
-                stroke[0].content = normalizedContent;
-                stroke[0].text = normalizedContent.text;
+                stroke[0].content = contentToCommit;
+                stroke[0].text = contentToCommit.text;
                 stroke[0].fontSize = stroke[0].fontSize || fontSize.value * scale;
+                const existingBaseFont = Number(stroke[0].baseFontSize);
+                stroke[0].baseFontSize = (Number.isFinite(existingBaseFont) && existingBaseFont > 0)
+                    ? existingBaseFont
+                    : Math.max(8, Number(stroke[0].fontSize) || 16);
+                stroke[0].simpleSingleLine = textEditorSimpleMode.value;
                 stroke[0].editorWidth = editorBounds.width;
                 stroke[0].editorHeight = editorBounds.height;
 
                 const fittedBounds = textEditorSimpleMode.value
                     ? getFittedTextStrokeBounds({
-                        content: normalizedContent,
+                        content: contentToCommit,
                         color: stroke[0].color,
                         fontSize: stroke[0].fontSize,
                         bounds: editorBounds
                     })
                     : getAdvancedTextContentBounds(editorBounds);
+
+                if (!textEditorSimpleMode.value && textStrokeTargetBounds.value) {
+                    fittedBounds.width = textStrokeTargetBounds.value.width;
+                    fittedBounds.height = textStrokeTargetBounds.value.height;
+                }
+
+                if (textEditorSimpleMode.value) {
+                    fittedBounds.width = Math.max(SIMPLE_TEXT_STROKE_MIN_WIDTH, fittedBounds.width + 24);
+                }
 
                 stroke[0].x = fittedBounds.x;
                 stroke[0].y = fittedBounds.y;
@@ -1791,12 +1831,17 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
             const fittedBounds = textEditorSimpleMode.value
                 ? getFittedTextStrokeBounds({
-                    content: normalizedContent,
+                    content: contentToCommit,
                     color,
                     fontSize: initialFontSize,
                     bounds: editorBounds
                 })
                 : getAdvancedTextContentBounds(editorBounds);
+
+            if (!textEditorSimpleMode.value && textStrokeTargetBounds.value) {
+                fittedBounds.width = textStrokeTargetBounds.value.width;
+                fittedBounds.height = textStrokeTargetBounds.value.height;
+            }
 
             const textStroke = [{
                 id,
@@ -1809,10 +1854,16 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 color,
                 thickness: drawThickness.value,
                 type: 'text',
-                content: normalizedContent,
-                text: normalizedContent.text,
-                fontSize: initialFontSize
+                content: contentToCommit,
+                text: contentToCommit.text,
+                fontSize: initialFontSize,
+                baseFontSize: initialFontSize,
+                simpleSingleLine: textEditorSimpleMode.value
             }];
+
+            if (textEditorSimpleMode.value && textStroke[0]) {
+                textStroke[0].width = Math.max(SIMPLE_TEXT_STROKE_MIN_WIDTH, textStroke[0].width + 24);
+            }
 
             activePage.value.strokes.push(textStroke);
             strokeChangeCallback({
@@ -2464,6 +2515,8 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 const scaleX = Math.abs((toBounds.maxX - toBounds.minX) / Math.max(1, fromBounds.maxX - fromBounds.minX));
                 const scaleY = Math.abs((toBounds.maxY - toBounds.minY) / Math.max(1, fromBounds.maxY - fromBounds.minY));
                 const fontScale = Math.max(0.25, Math.sqrt(scaleX * scaleY));
+                const baseFontSize = Math.max(8, Number(origFirst.baseFontSize) || Number(origFirst.fontSize) || 16);
+                first.baseFontSize = baseFontSize;
                 first.fontSize = Math.max(8, Math.round((Number(origFirst.fontSize) || 16) * fontScale));
                 first.editorWidth = first.width;
                 first.editorHeight = first.height;
@@ -3168,7 +3221,64 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                     else if (handle === 'e') { anchorX = scBounds.minX; anchorY = (scBounds.minY + scBounds.maxY)/2; }
                     else { anchorX = (scBounds.minX + scBounds.maxX)/2; anchorY = (scBounds.minY + scBounds.maxY)/2; }
 
-                    if (origFirst.type === 'text' || origFirst.type === 'image') {
+                    if (origFirst.type === 'text') {
+                        const targetBounds = {
+                            minX: adjustedRawMinX,
+                            minY: adjustedRawMinY,
+                            maxX: adjustedRawMaxX,
+                            maxY: adjustedRawMaxY
+                        };
+                        const isAdvancedText = !Boolean(origFirst.simpleSingleLine);
+                        const isSideResize = ['n', 's', 'e', 'w'].includes(handle);
+
+                        if (isAdvancedText && isSideResize) {
+                            const mapX = (value) => mapValueBetweenBounds(
+                                value,
+                                startRawBounds.minX,
+                                startRawBounds.maxX,
+                                targetBounds.minX,
+                                targetBounds.maxX
+                            );
+                            const mapY = (value) => mapValueBetweenBounds(
+                                value,
+                                startRawBounds.minY,
+                                startRawBounds.maxY,
+                                targetBounds.minY,
+                                targetBounds.maxY
+                            );
+
+                            const topLeft = {
+                                x: mapX(origFirst.x),
+                                y: mapY(origFirst.y)
+                            };
+                            const bottomRight = {
+                                x: mapX(origFirst.x + origFirst.width),
+                                y: mapY(origFirst.y + origFirst.height)
+                            };
+
+                            first.x = Math.min(topLeft.x, bottomRight.x);
+                            first.y = Math.min(topLeft.y, bottomRight.y);
+                            first.width = Math.max(1, Math.abs(bottomRight.x - topLeft.x));
+                            first.height = Math.max(1, Math.abs(bottomRight.y - topLeft.y));
+
+                            first.baseFontSize = Math.max(8, Number(origFirst.baseFontSize) || Number(origFirst.fontSize) || 16);
+                            first.fontSize = Math.max(8, Number(origFirst.fontSize) || first.baseFontSize);
+                            first.editorWidth = first.width;
+                            first.editorHeight = Math.max(24, first.height + getAdvancedEditorChromeHeight());
+                        } else {
+                            transformStrokeFromOriginalBounds(
+                                stroke,
+                                originalStroke,
+                                startRawBounds,
+                                targetBounds
+                            );
+
+                            first.editorWidth = first.width;
+                            first.editorHeight = first.simpleSingleLine
+                                ? first.height
+                                : Math.max(24, first.height + getAdvancedEditorChromeHeight());
+                        }
+                    } else if (origFirst.type === 'image') {
                         const origHalfW = origFirst.width / 2;
                         const origHalfH = origFirst.height / 2;
                         const origCenterX = origFirst.x + origHalfW;
@@ -3177,20 +3287,8 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                         let finalScaleX = scaleXFactor;
                         let finalScaleY = scaleYFactor;
 
-                        if (origFirst.type === 'text') {
-                            const originalFontSize = Math.max(8, Number(origFirst.fontSize) || 16);
-                            const fontScale = Math.max(0.25, Math.sqrt(scaleXFactor * scaleYFactor));
-                            first.fontSize = Math.max(8, Math.round(originalFontSize * fontScale));
-                            
-                            first.width = origFirst.width * fontScale;
-                            first.height = origFirst.height * fontScale;
-                            
-                            // Use fontScale for dimension scaling, but keep AABB scale for position
-                            // to ensure anchor behavior
-                        } else {
-                            first.width = origFirst.width * scaleXFactor;
-                            first.height = origFirst.height * scaleYFactor;
-                        }
+                        first.width = origFirst.width * scaleXFactor;
+                        first.height = origFirst.height * scaleYFactor;
 
                         // Update Center relative to Anchor using AABB scale factors
                         const newCenterX = anchorX + (origCenterX - anchorX) * scaleXFactor;
@@ -3199,10 +3297,6 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                         first.x = newCenterX - (first.width / 2);
                         first.y = newCenterY - (first.height / 2);
 
-                        if (origFirst.type === 'text') {
-                            first.editorWidth = first.width;
-                            first.editorHeight = first.height;
-                        }
                     } else if (origFirst.type === 'highlight-rect') {
                         // Scale all rectangles in the compound highlight
                         const origRects = origFirst.rects || [{ x: origFirst.x, y: origFirst.y, width: origFirst.width, height: origFirst.height }];
@@ -4140,7 +4234,8 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 pageIndex: selectedStroke.value.pageIndex,
                 strokeIndex: selectedStroke.value.strokeIndex
             },
-            content: textEditorSimpleMode.value ? content.text : content.html
+            content: textEditorSimpleMode.value ? content.text : content.html,
+            targetBounds: { width: first.width, height: first.height }
         });
 
         redrawAllStrokes();
@@ -4151,6 +4246,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
     const createSvgElement = (tag, attrs = {}) => {
         const el = document.createElementNS(SVG_NS, tag);
+
         Object.entries(attrs).forEach(([key, value]) => {
             if (value === null || value === undefined) return;
             el.setAttribute(key, String(value));
@@ -4299,6 +4395,27 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
             if (!textBox) return;
             const content = getTextStrokeContent(first);
             const html = content.html || convertPlainTextToHtml(content.text || '');
+            const isSimpleSingleLine = Boolean(first.simpleSingleLine);
+
+            if (isSimpleSingleLine) {
+                const baseFontSize = Math.max(8, Number(first.baseFontSize) || Number(first.fontSize) || 16);
+                const renderFontSize = Math.max(8, Number(first.fontSize) || baseFontSize);
+                const svgText = createSvgElement('text', {
+                    x: first.x + 2,
+                    y: first.y + 2,
+                    fill: first.color || DEFAULT_TEXT_COLOR,
+                    'font-family': 'Arial, sans-serif',
+                    'font-size': renderFontSize,
+                    'dominant-baseline': 'hanging',
+                    'text-rendering': 'geometricPrecision'
+                });
+                setStrokeMeta(svgText, strokeIndex);
+                if (transform) svgText.setAttribute('transform', transform);
+                svgText.textContent = String(content.text || '').replace(/\r?\n+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+                svgLayer.appendChild(svgText);
+                return;
+            }
+
             const foreignObject = createSvgElement('foreignObject', {
                 x: first.x,
                 y: first.y,
@@ -4307,21 +4424,39 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
             });
             setStrokeMeta(foreignObject, strokeIndex);
             if (transform) foreignObject.setAttribute('transform', transform);
+            const fontSize = Number(first.fontSize) || Number(first.baseFontSize);
+            const container = document.createElement('div');
+            container.classList.add('ql-container', 'ql-snow');
+            container.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
+            container.style.fontSize = `${fontSize}px`;
 
             const wrapper = document.createElement('div');
-            wrapper.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
-            wrapper.style.width = '100%';
-            wrapper.style.height = '100%';
-            wrapper.style.overflow = 'hidden';
-            wrapper.style.wordBreak = 'break-word';
-            wrapper.style.whiteSpace = 'pre-wrap';
+            wrapper.classList.add('ql-editor');
+            wrapper.style.wordBreak = isSimpleSingleLine ? 'normal' : 'break-word';
+            wrapper.style.whiteSpace = isSimpleSingleLine ? 'nowrap' : 'pre-wrap';
             wrapper.style.fontFamily = 'Arial, sans-serif';
-            wrapper.style.fontSize = `${Math.max(8, Number(first.fontSize) || 16)}px`;
             wrapper.style.color = first.color || DEFAULT_TEXT_COLOR;
-            wrapper.innerHTML = html;
 
-            foreignObject.appendChild(wrapper);
+            if (isSimpleSingleLine) {
+                wrapper.style.lineHeight = '1.25';
+                wrapper.style.paddingRight = '2px';
+                wrapper.textContent = String(content.text || '').replace(/\r?\n+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+            } else {
+                wrapper.innerHTML = html;
+                wrapper.style.padding = '12px 15px';
+                wrapper.style.lineHeight = '1.42';
+            }
+
+            container.appendChild(wrapper);
+            foreignObject.appendChild(container);
             svgLayer.appendChild(foreignObject);
+            const fittedHeight = Math.max(24, Math.ceil(wrapper.scrollHeight || 0));
+            foreignObject.setAttribute('height', String(fittedHeight));
+            foreignObject.style.height = `${fittedHeight}px`;
+
+            if (Number.isFinite(fittedHeight) && fittedHeight > 0) {
+                first.height = fittedHeight;
+            }
             return;
         }
 
