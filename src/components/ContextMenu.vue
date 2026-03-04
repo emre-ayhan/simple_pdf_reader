@@ -21,7 +21,8 @@ const style = ref({
 const handleContextMenu = async (event) => {
     event.preventDefault();
     event.stopPropagation();
-
+    if (event.pointerType === 'pen') return;
+    
     if (event.type === 'click') {
         show.value = false;
         emit('hide');
