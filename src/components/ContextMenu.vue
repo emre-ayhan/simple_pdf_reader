@@ -12,7 +12,7 @@ const emit = defineEmits(['show', 'hide']);
 
 const show = ref(false);
 const menuRef = ref(null);
-const preventPenContextMenu = ref(true);
+const isPenSecondaryActive = ref(true);
 
 const style = ref({
     top: 0,
@@ -22,7 +22,7 @@ const style = ref({
 const handleContextMenu = async (event) => {
     if (event.type === 'pointermove') {
         if (event.pointerType === 'pen') {
-            preventPenContextMenu.value = event.buttons !== 2;
+            isPenSecondaryActive.value = event.buttons !== 2;
         }
         return;
     }
@@ -37,7 +37,7 @@ const handleContextMenu = async (event) => {
     }
 
     if (event.type === 'contextmenu' && event.pointerType === 'pen') {
-        const isPenSecondaryButton = event.button === 2 || event.buttons === 2 || !preventPenContextMenu.value;
+        const isPenSecondaryButton = event.button === 2 || event.buttons === 2 || !isPenSecondaryActive.value;
         if (!isPenSecondaryButton) return;
     }
 
