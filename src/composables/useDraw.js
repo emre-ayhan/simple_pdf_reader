@@ -300,7 +300,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
     });
 
     // Selection & Capture variables
-    const isSelectionMode = ref(false);
+    const isCaptureSelectionMode = ref(false);
     const selectionStart = ref(null);
     const selectionEnd = ref(null);
     const isSelecting = ref(false);
@@ -347,7 +347,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
     }
 
     const handleSelectionEnd = (e) => {
-        if (isSelectionMode.value) {
+        if (isCaptureSelectionMode.value) {
             captureSelection();
         } else if (isSelectModeActive.value) {
             selectStrokeInSelectionBox();
@@ -418,7 +418,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         isSelecting.value = false;
         selectionStart.value = null;
         selectionEnd.value = null;
-        isSelectionMode.value = false;
+        isCaptureSelectionMode.value = false;
         stopEvent(e);
         isMouseDown.value = false;
     }
@@ -3056,7 +3056,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         }
 
         // Handle selection mode
-        if (isSelectionMode.value) {
+        if (isCaptureSelectionMode.value) {
             handleSelectionStart(e);
             return;
         }
@@ -3615,7 +3615,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
         
         // Handle selection rectangle
-        if ((isSelectionMode.value || isSelectModeActive.value || isTextInputMode.value) && isSelecting.value) {
+        if ((isCaptureSelectionMode.value || isSelectModeActive.value || isTextInputMode.value) && isSelecting.value) {
             handleSelectionRectangle(e);
             return;
         }
@@ -3824,7 +3824,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         };
 
         // Handle selection complete
-        if ((isSelectionMode.value || isSelectModeActive.value || isTextInputMode.value) && isSelecting.value && selectionStart.value && selectionEnd.value) {
+        if ((isCaptureSelectionMode.value || isSelectModeActive.value || isTextInputMode.value) && isSelecting.value && selectionStart.value && selectionEnd.value) {
             handleSelectionEnd(e);
 
             const canvas = activePage.value.drawingCanvas || null;
@@ -4001,12 +4001,13 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
     
     const resetToolState = () => {
         closeTextEditor();
-        isTextHighlightMode.value = false;
+        isCaptureSelectionMode.value = false;
+        isSelectModeActive.value = false;
         isTextSelectionMode.value = false;
+        isTextHighlightMode.value = false;
         isTextInputMode.value = false;
         isDrawing.value = false;
         isEraser.value = false;
-        isSelectionMode.value = false;
         isStrokeHovering.value = false;
         selectedStrokes.value = [];
         selectedStroke.value = null;
@@ -4015,13 +4016,10 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         resizeHandle.value = null;
         resizeStartBounds.value = null;
         showStrokeMenu.value = false;
-        isSelectModeActive.value = false;
         handToolActive.value = false;
         showStrokeMenu.value = false;
         showStrokeStyleMenu.value = false;
 
-        // Ensure any visible selection overlay is cleared immediately
-        document.querySelectorAll('.annotation-selection-overlay').forEach((overlay) => overlay.remove());
         // Also clear any native text selection that might be lingering, which can interfere with interactions
         window.getSelection()?.removeAllRanges();
         redrawAllStrokes();
@@ -5167,7 +5165,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         textEditorPosition,
         textEditorSimpleMode,
         textEditorHtml,
-        isSelectionMode,
+        isCaptureSelectionMode,
         selectionStart,
         selectionEnd,
         isPenHovering,
