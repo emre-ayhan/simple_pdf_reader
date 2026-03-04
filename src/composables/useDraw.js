@@ -18,6 +18,15 @@ const copyAsStroke = (stroke) => {
     copiedStrokes.value.push(copiedStroke.value);
 }
 
+const colorPalette = [
+    '#111827', '#1f2937', '#374151', '#6b7280', '#9ca3af',
+    '#1d4ed8', '#2563eb', '#3b82f6', '#0ea5e9', '#06b6d4',
+    '#0f766e', '#14b8a6', '#047857', '#10b981', '#22c55e',
+    '#84cc16', '#eab308', '#f59e0b', '#f97316', '#dc2626',
+    '#ef4444', '#f43f5e', '#ec4899', '#7c3aed', '#8b5cf6',
+    '#a855f7', '#d946ef', '#92400e', '#78350f', '#a16207',
+];
+
 const retrieveClipboardData = async () => {
     try {
         const clipboardItems = await navigator.clipboard.read();
@@ -96,29 +105,21 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         return el.closest?.('.pdf-reader') || el;
     };
 
-    const colors = [
-        'black', 'dimgray', 'gray', 'darkgray', 'silver', 'white',
-        'magenta', 'red', 'orangered', 'orange', 'gold', 'yellow',
-        'green', 'darkgreen', 'lime', 'teal', 'cyan', 'navy',
-        'blue', 'darkblue', 'royalblue', 'purple', 'magenta', 'pink',
-        'brown', 'sienna', 'olive', 'maroon'
-    ];
-
     const initialStrokeIndex = ref(0);
 
     const showStrokeStyleMenu = ref(false);
 
     const initialStrokeStyles = ref([{
-        color: '#0066ff',
+        color: '#1d4ed8',
         thickness: 2
     }, {
-        color: '#ff0000',
+        color: '#ef4444',
         thickness: 2
     }, {
-        color: '#00cc00',
+        color: '#22c55e',
         thickness: 2
     }, {
-        color: '#ff9900',
+        color: '#f97316',
         thickness: 2
     }]);
 
@@ -4944,6 +4945,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
     };
 
     return {
+        colorPalette,
         currentStroke,
         isTextHighlightMode,
         isTextSelectionMode,
@@ -4953,7 +4955,6 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         drawMode,
         drawColor,
         drawThickness,
-        colors,
         isTextInputMode,
         textPosition,
         textCanvasIndex,

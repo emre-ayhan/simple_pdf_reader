@@ -107,6 +107,7 @@ const strokeChangeCallback = (action) => {
 };
 
 const {
+    colorPalette,
     isSelectModeActive,
     isTextSelectionMode,
     isTextHighlightMode,
@@ -708,15 +709,23 @@ defineExpose({
                     <li class="nav-item btn-group" v-for="({ color }, index) in initialStrokeStyles">
                         <ToolItem class="nav-link" icon="circle-fill" :action="handleStrokeStyleButtonClick" :value="index" :active="color === drawColor" :style="`color: ${color} !important`" />
                         <div class="dropdown-menu dropdown-menu-dark show rounded-3 mt-5 p-3" v-if="showStrokeStyleMenu && !index">
-                            <div class="row align-items-center g-3">
-                                <div class="form-label col-4">{{ $t('Color') }}</div>
-                                <div class="col-8">
-                                    <input type="color" class="form-control form-control-sm form-control-color rounded-3" id="color-picker" :value="drawColor" title="Select color" @input="setInitialStrokeColor($event.target.value)" />
+                            <div class="row row-cols-5 g-2">
+                                <div class="form-label col-12">{{ $t('Color') }}</div>
+                                <template v-for="paletteColor in colorPalette">
+                                    <div class="col">
+                                        <button  type="button" class="btn" :class="{ 'border border-3 border-light': paletteColor === drawColor }" :style="{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: paletteColor }" @click="setInitialStrokeColor(paletteColor)"></button>
+                                    </div>
+                                </template>
+                                <div class="col-12 mt-3">
+                                    <input type="color" class="form-control-color" id="color-picker" :value="drawColor" title="Select color" @input="setInitialStrokeColor($event.target.value)" />
                                 </div>
-                                <label class="form-label col-4">{{ $t('Thickness') }}</label>
-                                <div class="col-8 d-flex align-items-center">
-                                    <input type="range" class="form-range" min="1" max="10" :value="activeStrokeStyle?.thickness" @input="setInitialStrokeThickness($event.target.value)" />
-                                    <input type="text" class="form-control-plaintext" min="1" max="10" :value="activeStrokeStyle?.thickness" readonly />
+                                <div class="col-12"><hr class="my-2"></div>
+                                <div class="col-12">
+                                    <label class="form-label">{{ $t('Thickness') }}</label>
+                                    <div class="d-flex align-items-center">
+                                        <input type="range" class="form-range" min="1" max="10" :value="activeStrokeStyle?.thickness" @input="setInitialStrokeThickness($event.target.value)" />
+                                        <input type="text" class="form-control-plaintext" min="1" max="10" :value="activeStrokeStyle?.thickness" readonly />
+                                    </div>
                                 </div>
                             </div>
                         </div>
