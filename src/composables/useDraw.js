@@ -68,7 +68,7 @@ const retrieveClipboardData = async () => {
     }
 }
 
-export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
+export function useDraw(pagesContainer, activePage, addToHistory) {
     const { get: storeGet, set: storeSet } = useStore();
     
     // Drawing variables
@@ -665,7 +665,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 translateStroke(newStroke, baseDX, baseDY);
 
                 page.strokes.push(newStroke);
-                strokeChangeCallback({ id: newId, type: 'add', page: page, stroke: newStroke });
+                addToHistory({ id: newId, type: 'add', page: page, stroke: newStroke });
                 const strokeIndex = page.strokes.length - 1;
                 newSelections.push({ pageIndex: page.index, pageId: page.id, strokeIndex, stroke: newStroke });
             });
@@ -704,7 +704,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         }
 
         page.strokes.push(newStroke);
-        strokeChangeCallback({
+        addToHistory({
             id: newId,
             type: 'add',
             page,
@@ -1935,7 +1935,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                     stroke[0].rotationBoxHeight = stroke[0].height;
                 }
 
-                strokeChangeCallback({
+                addToHistory({
                     id: stroke[0].id,
                     type: 'text-change',
                     page: activePage.value,
@@ -1994,7 +1994,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
             }
 
             activePage.value.strokes.push(textStroke);
-            strokeChangeCallback({
+            addToHistory({
                 id,
                 type: 'add',
                 page: activePage.value,
@@ -3752,7 +3752,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                             if (sel.pageIndex !== currentCanvasIndex) return;
                             const s = activePage.value.strokes[sel.strokeIndex];
                             if (!s) return;
-                            strokeChangeCallback({
+                            addToHistory({
                                 id: s[0].id,
                                 type: 'move',
                                 page: activePage.value,
@@ -3765,7 +3765,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                         showStrokeMenu.value = true;
                     } else {
                         const changeType = isRotating.value ? 'rotate' : (isResizing.value ? 'resize' : 'move');
-                        strokeChangeCallback({
+                        addToHistory({
                             id: stroke[0].id,
                             type: changeType,
                             page: activePage.value,
@@ -3897,7 +3897,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         }
 
         if (newStroke) {
-            strokeChangeCallback({
+            addToHistory({
                 id: currentStrokeId.value,
                 type: 'add',
                 page: activePage.value,
@@ -3913,6 +3913,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         }
         
         currentCanvasIndex = -1;
+        redrawAllStrokes();
     };
 
     const onPointerMove = (e) => {
@@ -4022,7 +4023,6 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
         // Also clear any native text selection that might be lingering, which can interfere with interactions
         window.getSelection()?.removeAllRanges();
-        redrawAllStrokes();
     };
 
     const changeStrokeColor = (newColor) => {
@@ -4041,7 +4041,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 for (let point of s) {
                     point.color = newColor;
                 }
-                strokeChangeCallback({
+                addToHistory({
                     id: s[0].id,
                     type: 'color-change',
                     page: activePage.value,
@@ -4057,7 +4057,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 for (let point of stroke) {
                     point.color = newColor;
                 }
-                strokeChangeCallback({
+                addToHistory({
                     id: stroke[0].id,
                     type: 'color-change',
                     page: activePage.value,
@@ -4089,7 +4089,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 for (let point of s) {
                     point.thickness = thicknessVal;
                 }
-                strokeChangeCallback({
+                addToHistory({
                     id: s[0].id,
                     type: 'thickness-change',
                     page: activePage.value,
@@ -4105,7 +4105,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 for (let point of stroke) {
                     point.thickness = thicknessVal;
                 }
-                strokeChangeCallback({
+                addToHistory({
                     id: stroke[0].id,
                     type: 'thickness-change',
                     page: activePage.value,
@@ -4136,7 +4136,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 const originalStroke = JSON.parse(JSON.stringify(s));
                 s[0].text = newText;
                 s[0].content = normalized;
-                strokeChangeCallback({
+                addToHistory({
                     id: s[0].id,
                     type: 'text-change',
                     page: activePage.value,
@@ -4151,7 +4151,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 const originalStroke = JSON.parse(JSON.stringify(stroke));
                 stroke[0].text = newText;
                 stroke[0].content = normalized;
-                strokeChangeCallback({
+                addToHistory({
                     id: stroke[0].id,
                     type: 'text-change',
                     page: activePage.value,
@@ -4185,7 +4185,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 const removals = sorted.map(index => ({ index, data: strokes[index] }));
                 // Splice descending to avoid reindexing issues
                 sorted.forEach(index => { strokes.splice(index, 1); });
-                strokeChangeCallback({
+                addToHistory({
                     id: removals[0]?.data?.[0]?.id,
                     type: 'erase',
                     page: activePage.value,
@@ -4205,7 +4205,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         const stroke = strokes[selectedStroke.value.strokeIndex];
         if (stroke) {
             strokes.splice(selectedStroke.value.strokeIndex, 1);
-            strokeChangeCallback({
+            addToHistory({
                 id: stroke[0].id,
                 type: 'erase',
                 page: activePage.value,
@@ -4250,7 +4250,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         
         activePage.value.strokes.push(highlightStroke);
         
-        strokeChangeCallback({
+        addToHistory({
             id,
             type: 'add',
             page: activePage.value,
@@ -4849,7 +4849,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         
         if (strokesToRemove.length > 0) {
             activePage.value.strokes = keptStrokes;
-            strokeChangeCallback({
+            addToHistory({
                 id: strokeId,
                 type: 'erase',
                 page: activePage.value,
