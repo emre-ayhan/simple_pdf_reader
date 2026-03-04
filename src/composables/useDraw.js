@@ -2537,6 +2537,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
     const getResizeHandle = (x, y, bounds, stroke, padding = 8) => {
         const first = stroke?.[0] || null;
+        if (first?.type === 'highlight-rect') return null;
         const rotationAvailable = first && first.type !== 'highlight-rect' && first.type !== 'text';
         const rotatedSelection = getRotatedSelectionGeometry(stroke, padding);
         if (rotatedSelection?.handles) {
@@ -4700,6 +4701,11 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
         if (!multi && stroke?.[0]) {
             const first = stroke[0];
+            const canResize = first.type !== 'highlight-rect';
+            if (!canResize) {
+                svgLayer.appendChild(overlayGroup);
+                return;
+            }
             const handleSize = 8;
             const handles = rotatedSelection?.handles
                 ? [
