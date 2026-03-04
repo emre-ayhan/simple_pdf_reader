@@ -972,23 +972,17 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         };
     };
 
-    const shouldUseAdvancedEditorForTextStroke = (first, content) => {
-        if (!first) return false;
-        if (first.simpleSingleLine) return false;
-
-        const textValue = String(content?.text || '');
-        if (/\r?\n/.test(textValue)) return true;
-
-        const htmlValue = String(content?.html || '').trim();
-        if (htmlValue) {
-            const hasRichFormatting = /<(strong|b|em|i|u|s|strike|sup|sub|a|span|ul|ol|li|h[1-6]|blockquote|code|pre)\b|style=|class="[^"]*ql-/i.test(htmlValue);
-            if (hasRichFormatting) return true;
-
-            const blockBreaks = (htmlValue.match(/<(br|p|div|li|h[1-6])\b/gi) || []).length;
-            if (blockBreaks > 1) return true;
+    const getStoredTextEditorMode = (first) => {
+        if (!first) return 'advanced';
+        if (first.editorMode === 'simple' || first.editorMode === 'advanced') {
+            return first.editorMode;
         }
+        return 'advanced';
+    };
 
-        return false;
+    const setStoredTextEditorMode = (first, isSimple) => {
+        if (!first) return;
+        first.editorMode = isSimple ? 'simple' : 'advanced';
     };
 
     const parseInlineStyle = (styleText = '') => {
@@ -1576,8 +1570,9 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         ctx.font = `${fontPx}px Arial`;
         const fallbackWidth = ctx.measureText(content.text || '').width + 8;
         const fallbackHeight = Math.max(first.fontSize * 1.5, 28);
+        const isSimpleMode = getStoredTextEditorMode(first) === 'simple';
 
-        if (first.simpleSingleLine) {
+        if (isSimpleMode) {
             const singleLineText = String(content.text || '').replace(/\r?\n+/g, ' ').replace(/\s{2,}/g, ' ').trim();
             const measuredWidth = ctx.measureText(singleLineText).width;
             const rightSafety = Math.max(8, Math.round(fontPx * 0.5));
@@ -1887,7 +1882,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 stroke[0].baseFontSize = (Number.isFinite(existingBaseFont) && existingBaseFont > 0)
                     ? existingBaseFont
                     : Math.max(8, Number(stroke[0].fontSize) || 16);
-                stroke[0].simpleSingleLine = textEditorSimpleMode.value;
+                setStoredTextEditorMode(stroke[0], textEditorSimpleMode.value);
                 stroke[0].editorWidth = editorBounds.width;
                 stroke[0].editorHeight = editorBounds.height;
 
@@ -1963,7 +1958,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 text: contentToCommit.text,
                 fontSize: initialFontSize,
                 baseFontSize: initialFontSize,
-                simpleSingleLine: textEditorSimpleMode.value
+                editorMode: textEditorSimpleMode.value ? 'simple' : 'advanced'
             }];
 
             if (textEditorSimpleMode.value && textStroke[0]) {
@@ -2857,97 +2852,96 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         if (isSelectModeActive.value) {
             textEditorPosition.value = null;
 
+            const page = activePage.value;
+            const canvasIndex = page.index;
+            if (canvasIndex === -1) return;
+
+            const canvas = page.drawingCanvas || null;
+            const pt = getCanvasPointFromEvent(canvas, e);
+            if (!pt) return;
+            const { x, y } = pt;
+
             // Handle drag mode
-            if (isStrokeHovering.value || selectedStroke.value) {
-                const page = activePage.value;
-                const canvasIndex = page.index;
-                if (canvasIndex === -1) return;
-
-                const canvas = page.drawingCanvas || null;
-                const pt = getCanvasPointFromEvent(canvas, e);
-                if (!pt) return;
-                const { x, y } = pt;
+            // Check if clicking on a resize handle of already selected stroke
+            // Disable resizing when multiple selection is active
+            if (selectedStrokes.value.length <= 1 && selectedStroke.value && selectedStroke.value.pageId === page.id) {
+                    const handlePadding = SELECTION_PADDING;
+                        const bounds = getStrokeBounds(selectedStroke.value.stroke, SELECTION_PADDING);
+                        let handle = getResizeHandle(x, y, bounds, selectedStroke.value.stroke, handlePadding);
                 
-                // Check if clicking on a resize handle of already selected stroke
-                // Disable resizing when multiple selection is active
-                if (selectedStrokes.value.length <= 1 && selectedStroke.value && selectedStroke.value.pageId === page.id) {
-                        const handlePadding = SELECTION_PADDING;
-                            const bounds = getStrokeBounds(selectedStroke.value.stroke, SELECTION_PADDING);
-                            let handle = getResizeHandle(x, y, bounds, selectedStroke.value.stroke, handlePadding);
-                    
-                    if (handle) {
-                        const firstSel = selectedStroke.value.stroke[0];
-                        if (handle === 'rotate' && firstSel.type !== 'highlight-rect' && firstSel.type !== 'text') {
-                            isRotating.value = true;
-                            resizeHandle.value = handle;
-                            dragStartPos.value = { x, y };
-                            const rotateCenter = getStrokeRotationCenter(selectedStroke.value.stroke)
-                                || (getStrokeBounds(selectedStroke.value.stroke, 0)
-                                    ? (() => {
-                                        const b = getStrokeBounds(selectedStroke.value.stroke, 0);
-                                        return { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 };
-                                    })()
-                                    : { x, y });
-                            rotateStartCenter.value = rotateCenter;
-                            firstSel.rotationCenterX = rotateCenter.x;
-                            firstSel.rotationCenterY = rotateCenter.y;
+                if (handle) {
+                    const firstSel = selectedStroke.value.stroke[0];
+                    if (handle === 'rotate' && firstSel.type !== 'highlight-rect' && firstSel.type !== 'text') {
+                        isRotating.value = true;
+                        resizeHandle.value = handle;
+                        dragStartPos.value = { x, y };
+                        const rotateCenter = getStrokeRotationCenter(selectedStroke.value.stroke)
+                            || (getStrokeBounds(selectedStroke.value.stroke, 0)
+                                ? (() => {
+                                    const b = getStrokeBounds(selectedStroke.value.stroke, 0);
+                                    return { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 };
+                                })()
+                                : { x, y });
+                        rotateStartCenter.value = rotateCenter;
+                        firstSel.rotationCenterX = rotateCenter.x;
+                        firstSel.rotationCenterY = rotateCenter.y;
 
-                            const rotateGeometry = getRotatedSelectionGeometry(selectedStroke.value.stroke, SELECTION_PADDING);
-                            const rotateHandlePos = getRotateHandlePosition({
-                                rotatedSelection: rotateGeometry,
-                                bounds: getStrokeBounds(selectedStroke.value.stroke, SELECTION_PADDING),
-                                offset: 24
-                            });
+                        const rotateGeometry = getRotatedSelectionGeometry(selectedStroke.value.stroke, SELECTION_PADDING);
+                        const rotateHandlePos = getRotateHandlePosition({
+                            rotatedSelection: rotateGeometry,
+                            bounds: getStrokeBounds(selectedStroke.value.stroke, SELECTION_PADDING),
+                            offset: 24
+                        });
 
-                            const startRefX = rotateHandlePos?.x ?? x;
-                            const startRefY = rotateHandlePos?.y ?? y;
-                            const startHandleAngle = Math.atan2(startRefY - rotateStartCenter.value.y, startRefX - rotateStartCenter.value.x);
-                            const startPointerAngle = Math.atan2(y - rotateStartCenter.value.y, x - rotateStartCenter.value.x);
-                            rotateStartAngle.value = startHandleAngle;
-                            rotatePointerAngleOffset.value = startPointerAngle - startHandleAngle;
-                            isMouseDown.value = true;
-                            currentCanvasIndex = canvasIndex;
-                            if (canvas && e.pointerId !== undefined) {
-                                canvas.setPointerCapture(e.pointerId);
-                            }
-                            activePointerId.value = e.pointerId;
-                            stopEvent(e);
-                            return;
-                        } else {
-                            isResizing.value = true;
-                            resizeHandle.value = handle;
-                            dragStartPos.value = { x, y };
-                            const originalStroke = JSON.parse(JSON.stringify(selectedStroke.value.stroke));
-                            const rawBounds = getStrokeBounds(originalStroke, 0);
-                            const localBounds = getUnrotatedBounds(originalStroke, 0);
-                            const resizeCenter = rawBounds
-                                ? { x: (rawBounds.minX + rawBounds.maxX) / 2, y: (rawBounds.minY + rawBounds.maxY) / 2 }
-                                : { x, y };
-                            resizeStartBounds.value = {
-                                padded: { ...bounds },
-                                raw: rawBounds,
-                                local: localBounds,
-                                padding: handlePadding,
-                                originalStroke,
-                                center: resizeCenter,
-                                startPointer: { x, y },
-                                startDistance: Math.max(1, Math.hypot(x - resizeCenter.x, y - resizeCenter.y))
-                            };
-                            isMouseDown.value = true;
-                            currentCanvasIndex = canvasIndex;
-                            if (canvas && e.pointerId !== undefined) {
-                                canvas.setPointerCapture(e.pointerId);
-                            }
-                            activePointerId.value = e.pointerId;
-                            stopEvent(e);
-                            return;
+                        const startRefX = rotateHandlePos?.x ?? x;
+                        const startRefY = rotateHandlePos?.y ?? y;
+                        const startHandleAngle = Math.atan2(startRefY - rotateStartCenter.value.y, startRefX - rotateStartCenter.value.x);
+                        const startPointerAngle = Math.atan2(y - rotateStartCenter.value.y, x - rotateStartCenter.value.x);
+                        rotateStartAngle.value = startHandleAngle;
+                        rotatePointerAngleOffset.value = startPointerAngle - startHandleAngle;
+                        isMouseDown.value = true;
+                        currentCanvasIndex = canvasIndex;
+                        if (canvas && e.pointerId !== undefined) {
+                            canvas.setPointerCapture(e.pointerId);
                         }
+                        activePointerId.value = e.pointerId;
+                        stopEvent(e);
+                        return;
+                    } else {
+                        isResizing.value = true;
+                        resizeHandle.value = handle;
+                        dragStartPos.value = { x, y };
+                        const originalStroke = JSON.parse(JSON.stringify(selectedStroke.value.stroke));
+                        const rawBounds = getStrokeBounds(originalStroke, 0);
+                        const localBounds = getUnrotatedBounds(originalStroke, 0);
+                        const resizeCenter = rawBounds
+                            ? { x: (rawBounds.minX + rawBounds.maxX) / 2, y: (rawBounds.minY + rawBounds.maxY) / 2 }
+                            : { x, y };
+                        resizeStartBounds.value = {
+                            padded: { ...bounds },
+                            raw: rawBounds,
+                            local: localBounds,
+                            padding: handlePadding,
+                            originalStroke,
+                            center: resizeCenter,
+                            startPointer: { x, y },
+                            startDistance: Math.max(1, Math.hypot(x - resizeCenter.x, y - resizeCenter.y))
+                        };
+                        isMouseDown.value = true;
+                        currentCanvasIndex = canvasIndex;
+                        if (canvas && e.pointerId !== undefined) {
+                            canvas.setPointerCapture(e.pointerId);
+                        }
+                        activePointerId.value = e.pointerId;
+                        stopEvent(e);
+                        return;
                     }
                 }
-                
-                const found = findStrokeAtPoint(x, y);
-    
-                if (found) {
+            }
+            
+            const found = findStrokeAtPoint(x, y);
+
+            if (found) {
                     const ctrl = !!e.ctrlKey;
 
                     const newSelection = {
@@ -3009,10 +3003,9 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                     stopEvent(e);
                     return;
                 }
-    
-                // stopEvent(e);
-                // return;
-            }
+
+            // stopEvent(e);
+            // return;
 
             // Start new selection rectangle
             handleSelectionStart(e);
@@ -3339,7 +3332,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                             maxX: adjustedRawMaxX,
                             maxY: adjustedRawMaxY
                         };
-                        const isAdvancedText = !Boolean(origFirst.simpleSingleLine);
+                        const isAdvancedText = getStoredTextEditorMode(origFirst) === 'advanced';
                         const isSideResize = ['n', 's', 'e', 'w'].includes(handle);
 
                         if (isAdvancedText && isSideResize) {
@@ -3385,7 +3378,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                             );
 
                             first.editorWidth = first.width;
-                            first.editorHeight = first.simpleSingleLine
+                            first.editorHeight = getStoredTextEditorMode(first) === 'simple'
                                 ? first.height
                                 : Math.max(24, first.height + getAdvancedEditorChromeHeight());
                         }
@@ -4301,8 +4294,6 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
     };
 
     const handleStrokeMenu = (e) => {
-        if (!isStrokeHovering.value) return;
-        
         const canvasIndex = getCanvasIndexFromEvent(e);
         if (canvasIndex === -1) return;
         
@@ -4343,7 +4334,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
         const first = selectedStroke.value.stroke[0];
         const content = getTextStrokeContent(first);
-        textEditorSimpleMode.value = !shouldUseAdvancedEditorForTextStroke(first, content);
+        textEditorSimpleMode.value = getStoredTextEditorMode(first) === 'simple';
         const preferredSize = getPreferredTextEditorSize();
         const toolbarHeight = getAdvancedEditorToolbarHeight();
         const advancedEditorHeight = Math.max(
@@ -4541,9 +4532,9 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
             if (!textBox) return;
             const content = getTextStrokeContent(first);
             const html = content.html || convertPlainTextToHtml(content.text || '');
-            const isSimpleSingleLine = Boolean(first.simpleSingleLine);
+            const isSimpleMode = getStoredTextEditorMode(first) === 'simple';
 
-            if (isSimpleSingleLine) {
+            if (isSimpleMode) {
                 const baseFontSize = Math.max(8, Number(first.baseFontSize) || Number(first.fontSize) || 16);
                 const renderFontSize = Math.max(8, Number(first.fontSize) || baseFontSize);
                 const svgText = createSvgElement('text', {
@@ -4578,12 +4569,12 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
             const wrapper = document.createElement('div');
             wrapper.classList.add('ql-editor');
-            wrapper.style.wordBreak = isSimpleSingleLine ? 'normal' : 'break-word';
-            wrapper.style.whiteSpace = isSimpleSingleLine ? 'nowrap' : 'pre-wrap';
+            wrapper.style.wordBreak = isSimpleMode ? 'normal' : 'break-word';
+            wrapper.style.whiteSpace = isSimpleMode ? 'nowrap' : 'pre-wrap';
             wrapper.style.fontFamily = 'Arial, sans-serif';
             wrapper.style.color = first.color || DEFAULT_TEXT_COLOR;
 
-            if (isSimpleSingleLine) {
+            if (isSimpleMode) {
                 wrapper.style.lineHeight = '1.25';
                 wrapper.style.paddingRight = '2px';
                 wrapper.textContent = String(content.text || '').replace(/\r?\n+/g, ' ').replace(/\s{2,}/g, ' ').trim();
