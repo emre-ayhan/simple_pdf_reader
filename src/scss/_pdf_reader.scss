@@ -69,17 +69,7 @@
 
         &.btn-group {
             .dropdown-menu {
-                min-width: 256px;
-
-                input[type="color"] {
-                    border: none !important;
-                    padding: 0 !important;
-                    cursor: pointer;
-                    outline: none !important;
-                    border-radius: $border-radius-lg !important;
-                    width: 100% !important;
-                    height: 16px !important;
-                }
+                min-width: 512px;
             }
         }
     }

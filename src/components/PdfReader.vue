@@ -20,7 +20,7 @@ import BsToast from "./BsToast.vue";
 
 // Cursor Style
 const cursorStyle = computed(() => {
-    const penCursorColor = encodeURIComponent(drawColor.value);
+    const penCursorColor = encodeURIComponent(drawStyle.value.color);
     if (resizeCursor.value) return resizeCursor.value;
     if (handToolActive.value) return isHandToolPanning.value ? 'grabbing' : 'grab';
     if (selectedStroke.value && (isStrokeHovering.value || isDragging.value)) return 'move';
@@ -114,7 +114,7 @@ const {
     isDrawing,
     isEraser,
     drawMode,
-    drawColor,
+    drawStyle,
     isTextInputMode,
     textEditorHtml,
     textEditorPosition,
@@ -149,6 +149,9 @@ const {
     activeStrokeStyle,
     setStrokeColor,
     setStrokeThickness,
+    setStrokeFill,
+    setStrokeOpacity,
+    setStrokeDash,
     showStrokeStyleMenu,
     handleStrokeStyleButtonClick,
     clampStrokeMenuPosition,
@@ -707,46 +710,76 @@ defineExpose({
                 <!-- Drawing -->
                 <template v-if="isDrawing || isTextHighlightMode || (isTextInputMode && textEditorSimpleMode)">
                     <li class="nav-item btn-group" v-for="({ color }, index) in strokeStyles">
-                        <ToolItem class="nav-link" icon="circle-fill" :action="handleStrokeStyleButtonClick" :value="index" :active="color === drawColor" :style="`color: ${color} !important`" />
+                        <ToolItem class="nav-link" icon="circle-fill" :action="handleStrokeStyleButtonClick" :value="index" :active="color === drawStyle.color" :style="`color: ${color} !important`" />
                         <div class="dropdown-menu dropdown-menu-dark show rounded-3 mt-5 p-3" v-if="showStrokeStyleMenu && !index">
-                            <div class="row row-cols-5 g-0">
-                                <div class="form-label col-12">{{ $t('Color') }}</div>
-                                <template v-for="paletteColor in colorPalette">
-                                    <div class="col hoverable py-1 rounded-3 text-center" :class="{ active: paletteColor === drawColor }">
-                                        <svg width="32" height="32" viewBox="0 0 32 32" @click="setStrokeColor(paletteColor)">
-                                            <circle cx="16" cy="16" r="14" :fill="paletteColor" role="button" />
-                                        </svg>
+                            <div class="row">
+                                <div class="col-6">
+                                    <div class="row row-cols-5 g-0">
+                                        <template v-for="paletteColor in colorPalette">
+                                            <div class="col hoverable py-1 rounded-3 text-center" :class="{ active: paletteColor === drawStyle.color }">
+                                                <svg width="32" height="32" viewBox="0 0 32 32" @click="setStrokeColor(paletteColor)">
+                                                    <circle cx="16" cy="16" r="14" :fill="paletteColor" role="button" />
+                                                </svg>
+                                            </div>
+                                        </template>
+                                        <div class="col-12 mt-2">
+                                            <svg width="100%" height="40" viewBox="0 0 100 40" preserveAspectRatio="none">
+                                                <defs>
+                                                    <linearGradient id="waveGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                                        <stop offset="0%" :style="`stop-color: ${drawStyle.color}; stop-opacity: 0.3`" />
+                                                        <stop offset="50%" :style="`stop-color: ${drawStyle.color}; stop-opacity: 1`" />
+                                                        <stop offset="100%" :style="`stop-color: ${drawStyle.color}; stop-opacity: 0.3`" />
+                                                    </linearGradient>
+                                                </defs>
+                                                <path
+                                                    d="M 0,20 Q 12.5,5 25,20 T 50,20 T 75,20 T 100,20"
+                                                    :stroke="drawStyle.color"
+                                                    :stroke-dasharray="drawStyle.dash === 'dashed' ? '8 6' : (drawStyle.dash === 'dotted' ? '1 6' : null)"
+                                                    :opacity="drawStyle.opacity"
+                                                    :stroke-width="drawStyle.thickness"
+                                                    fill="none"
+                                                    stroke-linecap="round"
+                                                />
+                                                <rect x="0" y="0" width="100" height="40" :fill="drawStyle.fill ? drawStyle.color : 'none'" />
+                                            </svg>
+                                        </div>
                                     </div>
-                                </template>
-                                <div class="col-12 mt-2">
-                                    <svg width="100%" height="40" viewBox="0 0 100 40" preserveAspectRatio="none">
-                                        <defs>
-                                            <linearGradient id="waveGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                                                <stop offset="0%" :style="`stop-color: ${drawColor}; stop-opacity: 0.3`" />
-                                                <stop offset="50%" :style="`stop-color: ${drawColor}; stop-opacity: 1`" />
-                                                <stop offset="100%" :style="`stop-color: ${drawColor}; stop-opacity: 0.3`" />
-                                            </linearGradient>
-                                        </defs>
-                                        <path
-                                            d="M 0,20 Q 12.5,5 25,20 T 50,20 T 75,20 T 100,20"
-                                            :stroke="drawColor"
-                                            stroke-width="2"
-                                            fill="none"
-                                            stroke-linecap="round"
-                                        />
-                                    </svg>
                                 </div>
-                                <div class="col-12"><hr></div>
-                                <div class="col-12">
-                                    <label class="form-label">{{ $t('Thickness') }}</label>
-                                </div>
-                                <template v-for="value in [1, 2, 4, 6, 8]">
-                                    <div class="col text-center py-1 rounded-3 hoverable" :class="{ active: activeStrokeStyle?.thickness == value }" role="button" @click="setStrokeThickness(value)">
-                                        <svg width="32" height="32" viewBox="0 0 32 32">
-                                            <circle cx="16" cy="16" :r="value * 1.75" :fill="drawColor" />
-                                        </svg>
+                                <div class="col-6 border-start border-secondary">
+                                    <div class="row row-cols-5">
+                                        <div class="col-12 d-flex align-items-center gap-2">
+                                            <label class="form-label" for="stroke-fill-toggle">{{ $t('Filled') }}</label>
+                                            <div class="form-check form-check-inline form-switch">
+                                                <input class="form-check-input" type="checkbox" :checked="drawStyle.fill" @change="setStrokeFill($event.target.checked)" id="stroke-fill-toggle" />
+                                            </div>
+                                        </div>
+                                        <div class="col-12">
+                                            <label class="form-label mb-1">{{ $t('Style') }}</label>
+                                            <template v-for="option in ['solid', 'dashed', 'dotted']">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="radio" name="dashOptions" :id="`dash-${option}`" :value="option" :checked="drawStyle.dash === option" @change="setStrokeDash(option)" />
+                                                    <label class="form-check-label text-capitalize" :for="`dash-${option}`">
+                                                        {{ $t(option) }}
+                                                    </label>
+                                                </div>
+                                            </template>
+                                        </div>
+                                        <div class="col-12 mt-2">
+                                            <label class="form-label mb-1">{{ $t('Opacity') }}: {{ Math.round(drawStyle.opacity * 100) }}%</label>
+                                            <input type="range" min="0.1" max="1" step="0.05" class="form-range" :value="drawStyle.opacity" @input="setStrokeOpacity($event.target.value)" />
+                                        </div>
+                                        <div class="col-12 mt-2">
+                                            <label class="form-label mb-1">{{ $t('Thickness') }}</label>
+                                        </div>
+                                        <template v-for="value in [1, 2, 4, 6, 8]">
+                                            <div class="col text-center py-1 rounded-3 hoverable" :class="{ active: activeStrokeStyle?.thickness == value }" role="button" @click="setStrokeThickness(value)">
+                                                <svg width="32" height="32" viewBox="0 0 32 32">
+                                                    <circle cx="16" cy="16" :r="value * 1.75" :fill="drawStyle.color" :opacity="drawStyle.opacity" />
+                                                </svg>
+                                            </div>
+                                        </template>
                                     </div>
-                                </template>
+                                </div>
                             </div>
                         </div>
                     </li>
@@ -872,7 +905,7 @@ defineExpose({
                                     touchAction: touchAction,
                                     zIndex: isTextSelectionMode ? 1 : 3
                                 }"
-                                :data-color="drawColor"
+                                :data-color="drawStyle.color"
                             ></canvas>
                         </div>
                     </div>

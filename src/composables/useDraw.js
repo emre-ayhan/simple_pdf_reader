@@ -78,12 +78,44 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
     const isDrawing = ref(false);
     const isEraser = ref(false);
     const drawMode = ref('pen'); // 'pen', 'line', 'rectangle', 'circle', 'text', 'highlight'
+
+    const normalizeDash = (dash) => {
+        const allowed = ['solid', 'dashed', 'dotted'];
+        return allowed.includes(dash) ? dash : 'solid';
+    };
+
+    const normalizeOpacity = (opacity) => {
+        const parsed = Number(opacity);
+        if (!Number.isFinite(parsed)) return 1;
+        return Math.max(0.05, Math.min(1, parsed));
+    };
+
+    const normalizeDrawStyle = (style = {}) => ({
+        color: typeof style.color === 'string' ? style.color : '#1d4ed8',
+        thickness: Math.max(1, Number(style.thickness) || 2),
+        fill: Boolean(style.fill),
+        opacity: normalizeOpacity(style.opacity),
+        dash: normalizeDash(style.dash)
+    });
+
+    const normalizeStrokeStylePreset = (style = {}) => {
+        const normalized = normalizeDrawStyle(style);
+        return {
+            color: normalized.color,
+            thickness: normalized.thickness,
+            fill: normalized.fill,
+            opacity: normalized.opacity,
+            dash: normalized.dash
+        };
+    };
+
     const drawStyle = ref({
         color: '#1d4ed8',
         thickness: 2,
+        fill: false,
+        opacity: 1,
+        dash: 'solid'
     });
-    const drawColor = ref('blue');
-    const drawThickness = ref(2);
     const currentStrokeId = ref(null);
     const currentStroke = ref([]); // Current stroke being drawn
     const isStrokeHovering = ref(false);
@@ -115,25 +147,37 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
     const strokeStyles = ref([{
         color: '#1d4ed8',
-        thickness: 2
+        thickness: 2,
+        fill: false,
+        opacity: 1,
+        dash: 'solid'
     }, {
         color: '#ef4444',
-        thickness: 2
+        thickness: 2,
+        fill: false,
+        opacity: 1,
+        dash: 'solid'
     }, {
         color: '#22c55e',
-        thickness: 2
+        thickness: 2,
+        fill: false,
+        opacity: 1,
+        dash: 'solid'
     }, {
         color: '#f97316',
-        thickness: 2
+        thickness: 2,
+        fill: false,
+        opacity: 1,
+        dash: 'solid'
     }]);
 
     const activeStrokeStyle = computed(() => {
-        return strokeStyles.value.find(style => style.color === drawColor.value) || null;
+        return strokeStyles.value.find(style => style.color === drawStyle.value.color) || null;
     });
 
     storeGet('strokeStyles').then(value => {
         if (Array.isArray(value) && value.length === 4) {
-            strokeStyles.value = value;
+            strokeStyles.value = value.map(style => normalizeStrokeStylePreset(style));
         }
     })
 
@@ -141,25 +185,70 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         initialStrokeIndex.value = value;
         const style = strokeStyles.value[value];
         if (!style) return;
-        drawColor.value = style.color;
-        drawThickness.value = style.thickness;
+        drawStyle.value = normalizeDrawStyle(style);
     });
 
     const setStrokeColor = (color) => {
-        const index = strokeStyles.value.findIndex(style => style.color === drawColor.value);
+        const index = strokeStyles.value.findIndex(style => style.color === drawStyle.value.color);
         
         if (index === -1) return;
         strokeStyles.value[index].color = color;
-        drawColor.value = color;
+        drawStyle.value = {
+            ...drawStyle.value,
+            color
+        };
         // Persist to store
         storeSet('strokeStyles', strokeStyles.value);
     }
 
     const setStrokeThickness = (thickness) => {
-        const index = strokeStyles.value.findIndex(style => style.color === drawColor.value);
+        const index = strokeStyles.value.findIndex(style => style.color === drawStyle.value.color);
+        const nextThickness = Math.max(1, Number(thickness) || 2);
         if (index === -1) return;
-        strokeStyles.value[index].thickness = thickness*1;
-        drawThickness.value = thickness*1;
+        strokeStyles.value[index].thickness = nextThickness;
+        drawStyle.value = {
+            ...drawStyle.value,
+            thickness: nextThickness
+        };
+        // Persist to store
+        storeSet('strokeStyles', strokeStyles.value);
+    }
+
+    const setStrokeFill = (fill) => {
+        const index = strokeStyles.value.findIndex(style => style.color === drawStyle.value.color);
+        const nextFill = Boolean(fill);
+        if (index === -1) return;
+        strokeStyles.value[index].fill = nextFill;
+        drawStyle.value = {
+            ...drawStyle.value,
+            fill: nextFill
+        };
+        // Persist to store
+        storeSet('strokeStyles', strokeStyles.value);
+    }
+
+    const setStrokeOpacity = (opacity) => {
+        const index = strokeStyles.value.findIndex(style => style.color === drawStyle.value.color);
+        const nextOpacity = normalizeOpacity(opacity);
+        if (index === -1) return;
+        strokeStyles.value[index].opacity = nextOpacity;
+        drawStyle.value = {
+            ...drawStyle.value,
+            opacity: nextOpacity
+        };
+        // Persist to store
+        storeSet('strokeStyles', strokeStyles.value);
+    }
+
+    const setStrokeDash = (dash) => {
+        const index = strokeStyles.value.findIndex(style => style.color === drawStyle.value.color);
+        const nextDash = normalizeDash(dash);
+        if (index === -1) return;
+        strokeStyles.value[index].dash = nextDash;
+        drawStyle.value = {
+            ...drawStyle.value,
+            dash: nextDash
+        };
         // Persist to store
         storeSet('strokeStyles', strokeStyles.value);
     }
@@ -168,13 +257,12 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         if (index < 0 || index >= strokeStyles.value.length) return;
         const style = strokeStyles.value[index];
 
-        if (style.color === drawColor.value) {
+        if (style.color === drawStyle.value.color) {
             showStrokeStyleMenu.value = !showStrokeStyleMenu.value;
             return;
         }
 
-        drawColor.value = style.color;
-        drawThickness.value = style.thickness;
+        drawStyle.value = normalizeDrawStyle(style);
         initialStrokeIndex.value = index;
         storeSet('initialStrokeIndex', index);
     }
@@ -715,12 +803,21 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
     };
 
     const drawShape = (ctx, type, startX, startY, endX, endY, stroke = null) => {
+        const style = stroke && !Array.isArray(stroke) ? stroke : {};
+        const shouldFill = Boolean(style.fill) && (type === 'rectangle' || type === 'circle');
+        if (shouldFill) {
+            ctx.fillStyle = style.color || '#1d4ed8';
+        }
+
         if (type === 'line') {
             ctx.beginPath();
             ctx.moveTo(startX, startY);
             ctx.lineTo(endX, endY);
             ctx.stroke();
         } else if (type === 'rectangle') {
+            if (shouldFill) {
+                ctx.fillRect(startX, startY, endX - startX, endY - startY);
+            }
             ctx.strokeRect(startX, startY, endX - startX, endY - startY);
         } else if (type === 'circle') {
             ctx.beginPath();
@@ -733,6 +830,9 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 // Draw as perfect circle
                 const radius = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2));
                 ctx.arc(startX, startY, radius, 0, 2 * Math.PI);
+            }
+            if (shouldFill) {
+                ctx.fill();
             }
             ctx.stroke();
         }
@@ -1832,7 +1932,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 height: bounds.height
             };
             const initialFontSize = fontSize.value * scale;
-            const color = textEditorSimpleMode.value ? drawColor.value : DEFAULT_TEXT_COLOR;
+            const color = textEditorSimpleMode.value ? drawStyle.value.color : DEFAULT_TEXT_COLOR;
 
             const fittedBounds = textEditorSimpleMode.value
                 ? getFittedTextStrokeBounds({
@@ -1857,7 +1957,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 editorWidth: editorBounds.width,
                 editorHeight: editorBounds.height,
                 color,
-                thickness: drawThickness.value,
+                thickness: drawStyle.value.thickness,
                 type: 'text',
                 content: contentToCommit,
                 text: contentToCommit.text,
@@ -2742,9 +2842,6 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
         if (textModesActive.value) return;
 
-        const dpr = window.devicePixelRatio || 1;
-        drawThickness.value = drawThickness.value * dpr;
-
         // Track active pointer type
         activePointerType.value = e.pointerType;
 
@@ -2757,6 +2854,8 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
         // Handle select mode
         if (isSelectModeActive.value) {
+            textEditorPosition.value = null;
+
             // Handle drag mode
             if (isStrokeHovering.value || selectedStroke.value) {
                 const page = activePage.value;
@@ -2986,8 +3085,11 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 id: currentStrokeId.value,
                 x: lastX,
                 y: lastY,
-                color: drawColor.value,
-                thickness: drawThickness.value,
+                color: drawStyle.value.color,
+                thickness: drawStyle.value.thickness,
+                fill: drawStyle.value.fill,
+                opacity: drawStyle.value.opacity,
+                dash: drawStyle.value.dash,
                 type: 'pen'
             }];
             drawingContext.beginPath();
@@ -3513,31 +3615,43 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 id: currentStrokeId.value,
                 x: currentX,
                 y: currentY,
-                color: drawColor.value,
-                thickness: drawThickness.value,
+                color: drawStyle.value.color,
+                thickness: drawStyle.value.thickness,
+                fill: drawStyle.value.fill,
+                opacity: drawStyle.value.opacity,
+                dash: drawStyle.value.dash,
                 type: 'pen'
             });
             
             drawingContext.lineTo(currentX, currentY);
-            drawingContext.strokeStyle = drawColor.value;
-            drawingContext.lineWidth = drawThickness.value;
+            drawingContext.strokeStyle = drawStyle.value.color;
+            drawingContext.lineWidth = drawStyle.value.thickness;
             drawingContext.lineCap = 'round';
             drawingContext.lineJoin = 'round';
+            drawingContext.globalAlpha = drawStyle.value.opacity;
+            drawingContext.setLineDash(drawStyle.value.dash === 'dashed' ? [8, 6] : (drawStyle.value.dash === 'dotted' ? [2, 6] : []));
             drawingContext.stroke();
+            drawingContext.setLineDash([]);
+            drawingContext.globalAlpha = 1;
         } else {
             // For shapes, restore snapshot and draw preview
             if (canvasSnapshot) {
                 drawingContext.putImageData(canvasSnapshot, 0, 0);
             }
             
-            drawingContext.strokeStyle = drawColor.value;
-            drawingContext.lineWidth = drawThickness.value;
+            drawingContext.strokeStyle = drawStyle.value.color;
+            drawingContext.lineWidth = drawStyle.value.thickness;
             drawingContext.lineCap = 'round';
             drawingContext.lineJoin = 'round';
+            drawingContext.globalAlpha = drawStyle.value.opacity;
+            drawingContext.setLineDash(drawStyle.value.dash === 'dashed' ? [8, 6] : (drawStyle.value.dash === 'dotted' ? [2, 6] : []));
             
             if (drawMode.value === 'line' || drawMode.value === 'rectangle' || drawMode.value === 'circle') {
-                drawShape(drawingContext, drawMode.value, startX, startY, currentX, currentY);
+                drawShape(drawingContext, drawMode.value, startX, startY, currentX, currentY, drawStyle.value);
             }
+
+            drawingContext.setLineDash([]);
+            drawingContext.globalAlpha = 1;
         }
         
         lastX = currentX;
@@ -3718,8 +3832,11 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                     startY,
                     endX: lastX,
                     endY: lastY,
-                    color: drawColor.value,
-                    thickness: drawThickness.value
+                    color: drawStyle.value.color,
+                    thickness: drawStyle.value.thickness,
+                    fill: drawStyle.value.fill,
+                    opacity: drawStyle.value.opacity,
+                    dash: drawStyle.value.dash
                 };
                 newStroke = [shape];
                 activePage.value.strokes.push(newStroke);
@@ -4065,8 +4182,11 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 id,
                 type: 'highlight-rect',
                 rects: rectsOrX, // Array of {x, y, width, height}
-                color: drawColor.value,
-                thickness: drawThickness.value
+                color: drawStyle.value.color,
+                thickness: drawStyle.value.thickness,
+                fill: true,
+                opacity: Math.min(drawStyle.value.opacity, 0.6),
+                dash: drawStyle.value.dash
             }];
         } else {
             // Single rectangle (backward compatibility)
@@ -4074,8 +4194,11 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 id,
                 type: 'highlight-rect',
                 rects: [{ x: rectsOrX, y, width, height }],
-                color: drawColor.value,
-                thickness: drawThickness.value
+                color: drawStyle.value.color,
+                thickness: drawStyle.value.thickness,
+                fill: true,
+                opacity: Math.min(drawStyle.value.opacity, 0.6),
+                dash: drawStyle.value.dash
             }];
         }
         
@@ -4292,8 +4415,12 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
         const first = stroke[0];
         const transform = toSvgRotationTransform(stroke);
-        const strokeColor = first.color || drawColor.value;
-        const strokeWidth = first.thickness || drawThickness.value || 2;
+        const strokeColor = first.color || drawStyle.value.color;
+        const strokeWidth = first.thickness || drawStyle.value.thickness || 2;
+        const strokeOpacity = normalizeOpacity(first.opacity);
+        const strokeDash = normalizeDash(first.dash);
+        const dashArray = strokeDash === 'dashed' ? '8 6' : (strokeDash === 'dotted' ? '2 6' : null);
+        const shouldFill = Boolean(first.fill);
 
         if (first.type === 'image' && first.imageData) {
             const image = createSvgElement('image', {
@@ -4313,7 +4440,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         if (first.type === 'highlight-rect') {
             const group = createSvgElement('g', {
                 fill: strokeColor,
-                'fill-opacity': 0.3
+                'fill-opacity': Math.min(strokeOpacity, 0.6)
             });
             const rects = first.rects || [{ x: first.x, y: first.y, width: first.width, height: first.height }];
             rects.forEach(rect => {
@@ -4338,11 +4465,13 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 x2: first.endX,
                 y2: first.endY,
                 stroke: strokeColor,
+                'stroke-opacity': strokeOpacity,
                 'stroke-width': strokeWidth,
                 'stroke-linecap': 'round',
                 'stroke-linejoin': 'round',
                 fill: 'none'
             });
+            if (dashArray) line.setAttribute('stroke-dasharray', dashArray);
             setStrokeMeta(line, strokeIndex);
             if (transform) line.setAttribute('transform', transform);
             svgLayer.appendChild(line);
@@ -4360,9 +4489,12 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                 width,
                 height,
                 stroke: strokeColor,
+                'stroke-opacity': strokeOpacity,
                 'stroke-width': strokeWidth,
-                fill: 'none'
+                fill: shouldFill ? strokeColor : 'none',
+                'fill-opacity': shouldFill ? strokeOpacity : 1
             });
+            if (dashArray) rect.setAttribute('stroke-dasharray', dashArray);
             setStrokeMeta(rect, strokeIndex);
             if (transform) rect.setAttribute('transform', transform);
             svgLayer.appendChild(rect);
@@ -4378,8 +4510,10 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                     rx: first.radiusX !== undefined ? first.radiusX : Math.abs(first.endX - first.startX),
                     ry: first.radiusY !== undefined ? first.radiusY : Math.abs(first.endY - first.startY),
                     stroke: strokeColor,
+                    'stroke-opacity': strokeOpacity,
                     'stroke-width': strokeWidth,
-                    fill: 'none'
+                    fill: shouldFill ? strokeColor : 'none',
+                    'fill-opacity': shouldFill ? strokeOpacity : 1
                 });
             } else {
                 const radius = Math.sqrt(Math.pow(first.endX - first.startX, 2) + Math.pow(first.endY - first.startY, 2));
@@ -4388,10 +4522,13 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
                     cy: first.startY,
                     r: radius,
                     stroke: strokeColor,
+                    'stroke-opacity': strokeOpacity,
                     'stroke-width': strokeWidth,
-                    fill: 'none'
+                    fill: shouldFill ? strokeColor : 'none',
+                    'fill-opacity': shouldFill ? strokeOpacity : 1
                 });
             }
+            if (dashArray) shape.setAttribute('stroke-dasharray', dashArray);
             setStrokeMeta(shape, strokeIndex);
             if (transform) shape.setAttribute('transform', transform);
             svgLayer.appendChild(shape);
@@ -4473,11 +4610,13 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         const path = createSvgElement('path', {
             d: pathData,
             stroke: strokeColor,
+            'stroke-opacity': strokeOpacity,
             'stroke-width': strokeWidth,
             'stroke-linecap': 'round',
             'stroke-linejoin': 'round',
             fill: 'none'
         });
+        if (dashArray) path.setAttribute('stroke-dasharray', dashArray);
         setStrokeMeta(path, strokeIndex);
         if (transform) path.setAttribute('transform', transform);
         svgLayer.appendChild(path);
@@ -4960,8 +5099,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         isDrawing,
         isEraser,
         drawMode,
-        drawColor,
-        drawThickness,
+        drawStyle,
         isTextInputMode,
         textPosition,
         textCanvasIndex,
@@ -5010,6 +5148,9 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         activeStrokeStyle,
         setStrokeColor,
         setStrokeThickness,
+        setStrokeFill,
+        setStrokeOpacity,
+        setStrokeDash,
         handleStrokeStyleButtonClick,
         clampStrokeMenuPosition,
         createHighlightRectangle,
