@@ -2833,7 +2833,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
             };
             showStrokeMenu.value = true;
             redrawAllStrokes();
-            drawSelectionBoundingBox();
+            // drawSelectionBoundingBox();
         } else {
             showStrokeMenu.value = false;
             selectedStroke.value = null;
