@@ -446,3 +446,12 @@ input[type="search"] {
         }
     }
 }
+
+.hoverable {
+    cursor: pointer;
+
+    &:hover,
+    &.active {
+        background-color: rgba(255, 255, 255, 0.1) !important;
+    }
+}

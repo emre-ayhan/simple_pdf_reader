@@ -145,10 +145,10 @@ const {
     drawImageCanvas,
     deleteSelectedStroke,
     handleStrokeMenu,
-    initialStrokeStyles,
+    strokeStyles,
     activeStrokeStyle,
-    setInitialStrokeColor,
-    setInitialStrokeThickness,
+    setStrokeColor,
+    setStrokeThickness,
     showStrokeStyleMenu,
     handleStrokeStyleButtonClick,
     clampStrokeMenuPosition,
@@ -706,27 +706,47 @@ defineExpose({
             <ul ref="toolbar" class="navbar-nav mx-auto gap-1 d-none d-lg-flex">
                 <!-- Drawing -->
                 <template v-if="isDrawing || isTextHighlightMode || (isTextInputMode && textEditorSimpleMode)">
-                    <li class="nav-item btn-group" v-for="({ color }, index) in initialStrokeStyles">
+                    <li class="nav-item btn-group" v-for="({ color }, index) in strokeStyles">
                         <ToolItem class="nav-link" icon="circle-fill" :action="handleStrokeStyleButtonClick" :value="index" :active="color === drawColor" :style="`color: ${color} !important`" />
                         <div class="dropdown-menu dropdown-menu-dark show rounded-3 mt-5 p-3" v-if="showStrokeStyleMenu && !index">
-                            <div class="row row-cols-5 g-2">
+                            <div class="row row-cols-5 g-0">
                                 <div class="form-label col-12">{{ $t('Color') }}</div>
                                 <template v-for="paletteColor in colorPalette">
-                                    <div class="col">
-                                        <button  type="button" class="btn" :class="{ 'border border-3 border-light': paletteColor === drawColor }" :style="{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: paletteColor }" @click="setInitialStrokeColor(paletteColor)"></button>
+                                    <div class="col hoverable py-1 rounded-3 text-center" :class="{ active: paletteColor === drawColor }">
+                                        <svg width="32" height="32" viewBox="0 0 32 32" @click="setStrokeColor(paletteColor)">
+                                            <circle cx="16" cy="16" r="14" :fill="paletteColor" role="button" />
+                                        </svg>
                                     </div>
                                 </template>
-                                <div class="col-12 mt-3">
-                                    <input type="color" class="form-control-color" id="color-picker" :value="drawColor" title="Select color" @input="setInitialStrokeColor($event.target.value)" />
+                                <div class="col-12 mt-2">
+                                    <svg width="100%" height="40" viewBox="0 0 100 40" preserveAspectRatio="none">
+                                        <defs>
+                                            <linearGradient id="waveGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                                <stop offset="0%" :style="`stop-color: ${drawColor}; stop-opacity: 0.3`" />
+                                                <stop offset="50%" :style="`stop-color: ${drawColor}; stop-opacity: 1`" />
+                                                <stop offset="100%" :style="`stop-color: ${drawColor}; stop-opacity: 0.3`" />
+                                            </linearGradient>
+                                        </defs>
+                                        <path
+                                            d="M 0,20 Q 12.5,5 25,20 T 50,20 T 75,20 T 100,20"
+                                            :stroke="drawColor"
+                                            stroke-width="2"
+                                            fill="none"
+                                            stroke-linecap="round"
+                                        />
+                                    </svg>
                                 </div>
-                                <div class="col-12"><hr class="my-2"></div>
+                                <div class="col-12"><hr></div>
                                 <div class="col-12">
                                     <label class="form-label">{{ $t('Thickness') }}</label>
-                                    <div class="d-flex align-items-center">
-                                        <input type="range" class="form-range" min="1" max="10" :value="activeStrokeStyle?.thickness" @input="setInitialStrokeThickness($event.target.value)" />
-                                        <input type="text" class="form-control-plaintext" min="1" max="10" :value="activeStrokeStyle?.thickness" readonly />
-                                    </div>
                                 </div>
+                                <template v-for="value in [1, 2, 4, 6, 8]">
+                                    <div class="col text-center py-1 rounded-3 hoverable" :class="{ active: activeStrokeStyle?.thickness == value }" role="button" @click="setStrokeThickness(value)">
+                                        <svg width="32" height="32" viewBox="0 0 32 32">
+                                            <circle cx="16" cy="16" :r="value * 1.75" :fill="drawColor" />
+                                        </svg>
+                                    </div>
+                                </template>
                             </div>
                         </div>
                     </li>

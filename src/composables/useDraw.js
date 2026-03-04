@@ -78,6 +78,10 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
     const isDrawing = ref(false);
     const isEraser = ref(false);
     const drawMode = ref('pen'); // 'pen', 'line', 'rectangle', 'circle', 'text', 'highlight'
+    const drawStyle = ref({
+        color: '#1d4ed8',
+        thickness: 2,
+    });
     const drawColor = ref('blue');
     const drawThickness = ref(2);
     const currentStrokeId = ref(null);
@@ -109,7 +113,7 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
     const showStrokeStyleMenu = ref(false);
 
-    const initialStrokeStyles = ref([{
+    const strokeStyles = ref([{
         color: '#1d4ed8',
         thickness: 2
     }, {
@@ -124,45 +128,45 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
     }]);
 
     const activeStrokeStyle = computed(() => {
-        return initialStrokeStyles.value.find(style => style.color === drawColor.value) || null;
+        return strokeStyles.value.find(style => style.color === drawColor.value) || null;
     });
 
-    storeGet('initialStrokeStyles').then(value => {
+    storeGet('strokeStyles').then(value => {
         if (Array.isArray(value) && value.length === 4) {
-            initialStrokeStyles.value = value;
+            strokeStyles.value = value;
         }
     })
 
     storeGet('initialStrokeIndex', 0).then(value => {
         initialStrokeIndex.value = value;
-        const style = initialStrokeStyles.value[value];
+        const style = strokeStyles.value[value];
         if (!style) return;
         drawColor.value = style.color;
         drawThickness.value = style.thickness;
     });
 
-    const setInitialStrokeColor = (color) => {
-        const index = initialStrokeStyles.value.findIndex(style => style.color === drawColor.value);
+    const setStrokeColor = (color) => {
+        const index = strokeStyles.value.findIndex(style => style.color === drawColor.value);
         
         if (index === -1) return;
-        initialStrokeStyles.value[index].color = color;
+        strokeStyles.value[index].color = color;
         drawColor.value = color;
         // Persist to store
-        storeSet('initialStrokeStyles', initialStrokeStyles.value);
+        storeSet('strokeStyles', strokeStyles.value);
     }
 
-    const setInitialStrokeThickness = (thickness) => {
-        const index = initialStrokeStyles.value.findIndex(style => style.color === drawColor.value);
+    const setStrokeThickness = (thickness) => {
+        const index = strokeStyles.value.findIndex(style => style.color === drawColor.value);
         if (index === -1) return;
-        initialStrokeStyles.value[index].thickness = thickness*1;
+        strokeStyles.value[index].thickness = thickness*1;
         drawThickness.value = thickness*1;
         // Persist to store
-        storeSet('initialStrokeStyles', initialStrokeStyles.value);
+        storeSet('strokeStyles', strokeStyles.value);
     }
 
     const handleStrokeStyleButtonClick = (index) => {
-        if (index < 0 || index >= initialStrokeStyles.value.length) return;
-        const style = initialStrokeStyles.value[index];
+        if (index < 0 || index >= strokeStyles.value.length) return;
+        const style = strokeStyles.value[index];
 
         if (style.color === drawColor.value) {
             showStrokeStyleMenu.value = !showStrokeStyleMenu.value;
@@ -2738,6 +2742,9 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
 
         if (textModesActive.value) return;
 
+        const dpr = window.devicePixelRatio || 1;
+        drawThickness.value = drawThickness.value * dpr;
+
         // Track active pointer type
         activePointerType.value = e.pointerType;
 
@@ -4999,10 +5006,10 @@ export function useDraw(pagesContainer, activePage, strokeChangeCallback) {
         deleteSelectedStroke,
         handleStrokeMenu,
         resizeCursor,
-        initialStrokeStyles,
+        strokeStyles,
         activeStrokeStyle,
-        setInitialStrokeColor,
-        setInitialStrokeThickness,
+        setStrokeColor,
+        setStrokeThickness,
         handleStrokeStyleButtonClick,
         clampStrokeMenuPosition,
         createHighlightRectangle,
