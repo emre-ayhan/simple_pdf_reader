@@ -315,7 +315,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         stopEvent(e);
     }
 
-    const handleSelectionRectangle = (e) => {
+    const handleCaptureSelectionRectangle = (e) => {
         const rect = e.target.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
@@ -426,11 +426,11 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
     // Stroke selection and dragging
     const selectedStrokes = ref([]); // For multi-selection
     const selectedStroke = ref(null); // { pageIndex, strokeIndex, stroke }
+    const strokeMenu = ref(null);
+    const strokeMenuPosition = ref({ x: 0, y: 0 });
     const isDragging = ref(false);
     const dragStartPos = ref(null);
-    const strokeMenu = ref(null);
     const showStrokeMenu = ref(false);
-    const strokeMenuPosition = ref({ x: 0, y: 0 });
     const isResizing = ref(false);
     const resizeHandle = ref(null); // 'nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'
     const resizeStartBounds = ref(null);
@@ -571,8 +571,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         selectedStrokes.value = selections;
         selectedStroke.value = selections[0] || null;
         showStrokeMenu.value = true;
-
-        redrawAllStrokes();
         drawSelectionBoundingBox();
     }
 
@@ -675,6 +673,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
             selectedStroke.value = last ? { ...last, originalStroke: JSON.parse(JSON.stringify(last.stroke)) } : null;
             showStrokeMenu.value = true;
             redrawAllStrokes();
+
             if (selectedStroke.value) {
                 drawSelectionBoundingBox();
             }
@@ -722,7 +721,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         };
 
         showStrokeMenu.value = true;
-
         redrawAllStrokes();
         drawSelectionBoundingBox();
     };
@@ -3616,7 +3614,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         
         // Handle selection rectangle
         if ((isCaptureSelectionMode.value || isSelectModeActive.value || isTextInputMode.value) && isSelecting.value) {
-            handleSelectionRectangle(e);
+            handleCaptureSelectionRectangle(e);
             return;
         }
         

@@ -953,16 +953,17 @@ defineExpose({
                 <div class="stroke-menu-content">
                     <div class="stroke-menu-section">
                         <div class="stroke-menu-colors dropdown-center">
-                            <button
-                                v-if="isSelectedStrokeType('text')"
-                                type="button"
-                                class="btn btn-link link-secondary btn-stroke-menu border-0 p-0"
-                                :title="$t('Edit')"
-                                @click.stop="editSelectedTextStroke()"
-                            >
-                                <i class="bi bi-pencil-square"></i>
-                            </button>
-                            <div v-if="isSelectedStrokeType('text')" class="vr bg-primary"></div>
+                            <template v-if="isSelectedStrokeType('text')">
+                                <button
+                                    type="button"
+                                    class="btn btn-link link-secondary btn-stroke-menu border-0 p-0"
+                                    :title="$t('Edit')"
+                                    @click.stop="editSelectedTextStroke()"
+                                >
+                                    <i class="bi bi-pencil-square"></i>
+                                </button>
+                                <div class="vr bg-primary"></div>
+                            </template>
                             <button type="button" class="btn btn-link link-secondary btn-stroke-menu border-0 p-0" :title="$t('Copy')" @click.stop="copySelectedStroke()">
                                 <i class="bi bi-copy"></i>
                             </button>
