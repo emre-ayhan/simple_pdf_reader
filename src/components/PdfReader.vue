@@ -147,11 +147,7 @@ const {
     handleStrokeMenu,
     strokeStyles,
     activeStrokeStyle,
-    setStrokeColor,
-    setStrokeThickness,
-    setStrokeFill,
-    setStrokeOpacity,
-    setStrokeDash,
+    updateStrokeStyle,
     showStrokeStyleMenu,
     handleStrokeStyleButtonClick,
     clampStrokeMenuPosition,
@@ -710,13 +706,13 @@ defineExpose({
                 <template v-if="isDrawing || isTextHighlightMode || (isTextInputMode && textEditorSimpleMode)">
                     <li class="nav-item btn-group" v-for="({ color }, index) in strokeStyles">
                         <ToolItem class="nav-link" icon="circle-fill" :action="handleStrokeStyleButtonClick" :value="index" :active="color === drawStyle.color" :style="`color: ${color} !important`" />
-                        <div class="dropdown-menu dropdown-menu-dark show rounded-3 mt-5 p-3" v-if="showStrokeStyleMenu && !index">
+                        <div class="dropdown-menu dropdown-menu-dark show rounded-3 mt-5 p-3" v-if="showStrokeStyleMenu && color === drawStyle.color">
                             <div class="row">
                                 <div class="col-6">
                                     <div class="row row-cols-5 g-0">
                                         <template v-for="paletteColor in colorPalette">
                                             <div class="col hoverable py-1 rounded-3 text-center" :class="{ active: paletteColor === drawStyle.color }">
-                                                <svg width="32" height="32" viewBox="0 0 32 32" @click="setStrokeColor(paletteColor)">
+                                                <svg width="32" height="32" viewBox="0 0 32 32" @click="updateStrokeStyle(index, 'color', paletteColor)">
                                                     <circle cx="16" cy="16" r="14" :fill="paletteColor" role="button" />
                                                 </svg>
                                             </div>
@@ -749,14 +745,14 @@ defineExpose({
                                         <div class="col-12 d-flex align-items-center gap-2">
                                             <label class="form-label" for="stroke-fill-toggle">{{ $t('Filled') }}</label>
                                             <div class="form-check form-check-inline form-switch">
-                                                <input class="form-check-input" type="checkbox" :checked="drawStyle.fill" @change="setStrokeFill($event.target.checked)" id="stroke-fill-toggle" />
+                                                <input class="form-check-input" type="checkbox" :checked="drawStyle.fill" @change="updateStrokeStyle(index, 'fill', $event.target.checked)" id="stroke-fill-toggle" />
                                             </div>
                                         </div>
                                         <div class="col-12">
                                             <label class="form-label mb-1">{{ $t('Style') }}</label>
                                             <template v-for="option in ['solid', 'dashed', 'dotted']">
                                                 <div class="form-check">
-                                                    <input class="form-check-input" type="radio" name="dashOptions" :id="`dash-${option}`" :value="option" :checked="drawStyle.dash === option" @change="setStrokeDash(option)" />
+                                                    <input class="form-check-input" type="radio" name="dashOptions" :id="`dash-${option}`" :value="option" :checked="drawStyle.dash === option" @change="updateStrokeStyle(index, 'dash', option)" />
                                                     <label class="form-check-label text-capitalize" :for="`dash-${option}`">
                                                         {{ $t(option) }}
                                                     </label>
@@ -765,13 +761,13 @@ defineExpose({
                                         </div>
                                         <div class="col-12 mt-2">
                                             <label class="form-label mb-1">{{ $t('Opacity') }}: {{ Math.round(drawStyle.opacity * 100) }}%</label>
-                                            <input type="range" min="0.1" max="1" step="0.05" class="form-range" :value="drawStyle.opacity" @input="setStrokeOpacity($event.target.value)" />
+                                            <input type="range" min="0.1" max="1" step="0.05" class="form-range" :value="drawStyle.opacity" @input="updateStrokeStyle(index, 'opacity', $event.target.value)" />
                                         </div>
                                         <div class="col-12 mt-2">
                                             <label class="form-label mb-1">{{ $t('Thickness') }}</label>
                                         </div>
                                         <template v-for="value in [1, 2, 4, 6, 8]">
-                                            <div class="col text-center py-1 px-0 rounded-3 hoverable" :class="{ active: activeStrokeStyle?.thickness == value }" role="button" @click="setStrokeThickness(value)">
+                                            <div class="col text-center py-1 px-0 rounded-3 hoverable" :class="{ active: activeStrokeStyle?.thickness == value }" role="button" @click="updateStrokeStyle(index, 'thickness', value)">
                                                 <svg width="32" height="32" viewBox="0 0 32 32">
                                                     <circle cx="16" cy="16" :r="value * 1.75" :fill="drawStyle.color" :opacity="drawStyle.opacity" />
                                                 </svg>

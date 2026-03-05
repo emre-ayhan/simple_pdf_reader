@@ -70,7 +70,7 @@ const retrieveClipboardData = async () => {
 
 export function useDraw(pagesContainer, activePage, addToHistory) {
     const { get: storeGet, set: storeSet } = useStore();
-    
+
     // Drawing variables
     const isSelectModeActive = ref(false);
     const isTextSelectionMode = ref(true);
@@ -116,6 +116,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         opacity: 1,
         dash: 'solid'
     });
+
     const currentStrokeId = ref(null);
     const currentStroke = ref([]); // Current stroke being drawn
     const isStrokeHovering = ref(false);
@@ -193,68 +194,15 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         return drawStyle.value.thickness * dpr;
     }
 
-    const setStrokeColor = (color) => {
-        const index = strokeStyles.value.findIndex(style => style.color === drawStyle.value.color);
-        
-        if (index === -1) return;
-        strokeStyles.value[index].color = color;
-        drawStyle.value = {
-            ...drawStyle.value,
-            color
-        };
-        // Persist to store
-        storeSet('strokeStyles', strokeStyles.value);
-    }
+    const updateStrokeStyle = (index, style, value) => {
+        if (index < 0 || index >= strokeStyles.value.length) return;
+        strokeStyles.value[index][style] = value;
 
-    const setStrokeThickness = (thickness) => {
-        const index = strokeStyles.value.findIndex(style => style.color === drawStyle.value.color);
-        const nextThickness = Math.max(1, Number(thickness) || 2);
-        if (index === -1) return;
-        
-        strokeStyles.value[index].thickness = nextThickness;
         drawStyle.value = {
             ...drawStyle.value,
-            thickness: nextThickness
+            [style]: value
         };
-        // Persist to store
-        storeSet('strokeStyles', strokeStyles.value);
-    }
 
-    const setStrokeFill = (fill) => {
-        const index = strokeStyles.value.findIndex(style => style.color === drawStyle.value.color);
-        const nextFill = Boolean(fill);
-        if (index === -1) return;
-        strokeStyles.value[index].fill = nextFill;
-        drawStyle.value = {
-            ...drawStyle.value,
-            fill: nextFill
-        };
-        // Persist to store
-        storeSet('strokeStyles', strokeStyles.value);
-    }
-
-    const setStrokeOpacity = (opacity) => {
-        const index = strokeStyles.value.findIndex(style => style.color === drawStyle.value.color);
-        const nextOpacity = normalizeOpacity(opacity);
-        if (index === -1) return;
-        strokeStyles.value[index].opacity = nextOpacity;
-        drawStyle.value = {
-            ...drawStyle.value,
-            opacity: nextOpacity
-        };
-        // Persist to store
-        storeSet('strokeStyles', strokeStyles.value);
-    }
-
-    const setStrokeDash = (dash) => {
-        const index = strokeStyles.value.findIndex(style => style.color === drawStyle.value.color);
-        const nextDash = normalizeDash(dash);
-        if (index === -1) return;
-        strokeStyles.value[index].dash = nextDash;
-        drawStyle.value = {
-            ...drawStyle.value,
-            dash: nextDash
-        };
         // Persist to store
         storeSet('strokeStyles', strokeStyles.value);
     }
@@ -576,8 +524,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
 
         selectedStrokes.value = selections;
         selectedStroke.value = selections[0] || null;
-        showStrokeMenu.value = true;
-        drawSelectionBoundingBox();
     }
 
     // Insert Copied Stroke
@@ -677,12 +623,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
             selectedStrokes.value = newSelections;
             const last = newSelections[newSelections.length - 1];
             selectedStroke.value = last ? { ...last, originalStroke: JSON.parse(JSON.stringify(last.stroke)) } : null;
-            showStrokeMenu.value = true;
             redrawAllStrokes();
-
-            if (selectedStroke.value) {
-                drawSelectionBoundingBox();
-            }
             return;
         }
 
@@ -726,25 +667,8 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
             originalStroke: JSON.parse(JSON.stringify(newStroke))
         };
 
-        showStrokeMenu.value = true;
         redrawAllStrokes();
-        drawSelectionBoundingBox();
     };
-
-
-    // Clamp when menu opens (now that refs are available)
-    watch(showStrokeMenu, (visible) => {
-        if (visible) {
-            clampStrokeMenuPosition();
-        }
-    });
-
-    // Clamp on position changes (e.g., programmatic updates)
-    watch(() => strokeMenuPosition.value, () => {
-        if (showStrokeMenu.value) {
-            clampStrokeMenuPosition();
-        }
-    }, { deep: true });
 
 
     let lastX = 0;
@@ -841,51 +765,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
                 ctx.fill();
             }
             ctx.stroke();
-        }
-    };
-
-    const drawWrappedText = (ctx, text, x, y, width, height, lineHeight) => {
-        if (!text) return;
-
-        const safeWidth = Math.max(20, width || 20);
-        const safeHeight = Math.max(lineHeight, height || lineHeight);
-        const overflowAllowance = Math.max(2, lineHeight * TEXT_RENDER_OVERFLOW_ALLOWANCE_FACTOR);
-        const maxY = y + safeHeight + overflowAllowance;
-        const paragraphs = String(text).split('\n');
-        let cursorY = y;
-
-        for (let p = 0; p < paragraphs.length; p++) {
-            const paragraph = paragraphs[p] || '';
-            const words = paragraph.split(/\s+/).filter(Boolean);
-
-            if (words.length === 0) {
-                if (cursorY + lineHeight > maxY) break;
-                cursorY += lineHeight;
-                continue;
-            }
-
-            let currentLine = '';
-
-            for (let i = 0; i < words.length; i++) {
-                const testLine = currentLine ? `${currentLine} ${words[i]}` : words[i];
-                const testWidth = ctx.measureText(testLine).width;
-
-                if (testWidth > safeWidth && currentLine) {
-                    if (cursorY + lineHeight > maxY) return;
-                    ctx.fillText(currentLine, x, cursorY);
-                    currentLine = words[i];
-                    cursorY += lineHeight;
-                    continue;
-                }
-
-                currentLine = testLine;
-            }
-
-            if (currentLine) {
-                if (cursorY + lineHeight > maxY) return;
-                ctx.fillText(currentLine, x, cursorY);
-                cursorY += lineHeight;
-            }
         }
     };
 
@@ -1193,217 +1072,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         } catch (err) {
             return [];
         }
-    };
-
-    const drawStyledText = (ctx, tokens, x, y, width, height, baseStyle) => {
-        if (!Array.isArray(tokens) || tokens.length === 0) return;
-
-        const safeWidth = Math.max(20, width || 20);
-        const safeHeight = Math.max(baseStyle.fontSize * 1.35, height || 20);
-        const overflowAllowance = Math.max(2, baseStyle.fontSize * TEXT_RENDER_OVERFLOW_ALLOWANCE_FACTOR);
-        const maxY = y + safeHeight + overflowAllowance;
-        const minFont = 8;
-        const indentStep = 32;
-
-        const normalizeAlign = (align) => {
-            const lower = String(align || 'left').toLowerCase();
-            if (lower === 'center' || lower === 'right' || lower === 'justify') return lower;
-            return 'left';
-        };
-
-        const toFontMetrics = (style) => {
-            const baseFontSize = Math.max(minFont, Number(style.fontSize) || baseStyle.fontSize || 16);
-            const isScript = style.script === 'super' || style.script === 'sub';
-            const fontSize = isScript ? Math.max(minFont, Math.round(baseFontSize * 0.75)) : baseFontSize;
-            const weight = style.bold ? 'bold ' : '';
-            const italic = style.italic ? 'italic ' : '';
-
-            let baselineOffset = 0;
-            if (style.script === 'super') baselineOffset = -fontSize * 0.35;
-            if (style.script === 'sub') baselineOffset = fontSize * 0.2;
-
-            return {
-                font: `${italic}${weight}${fontSize}px Arial`,
-                fontSize,
-                lineHeight: Math.max(fontSize * 1.35, 12),
-                baselineOffset
-            };
-        };
-
-        let cursorY = y;
-        let lineWidth = 0;
-        let lineHeight = Math.max(baseStyle.fontSize * 1.35, 12);
-        let lineAlign = 'left';
-        let lineIndentLevel = 0;
-        let hasLineStyle = false;
-        let lineChunks = [];
-
-        const resetLine = () => {
-            lineWidth = 0;
-            lineHeight = Math.max(baseStyle.fontSize * 1.35, 12);
-            lineAlign = 'left';
-            lineIndentLevel = 0;
-            hasLineStyle = false;
-            lineChunks = [];
-        };
-
-        const applyLineStyle = (style) => {
-            if (hasLineStyle) return;
-            lineAlign = normalizeAlign(style.align || 'left');
-            lineIndentLevel = Math.max(0, Number(style.indentLevel) || 0);
-            hasLineStyle = true;
-        };
-
-        const getIndentPixels = (level) => level * indentStep;
-
-        const flushLine = (forceBlank = false) => {
-            const hasContent = lineChunks.length > 0;
-            if (!hasContent && !forceBlank) {
-                resetLine();
-                return true;
-            }
-
-            if (cursorY + lineHeight > maxY) return false;
-
-            const indentPixels = getIndentPixels(lineIndentLevel);
-            const availableWidth = Math.max(8, safeWidth - indentPixels);
-            let drawX = x + indentPixels;
-            let justifyGapCount = 0;
-            let justifyExtraPerGap = 0;
-
-            if (lineAlign === 'center') {
-                drawX += Math.max(0, (availableWidth - lineWidth) / 2);
-            } else if (lineAlign === 'right') {
-                drawX += Math.max(0, availableWidth - lineWidth);
-            } else if (lineAlign === 'justify') {
-                justifyGapCount = lineChunks.reduce((count, chunk) => count + (/^\s+$/.test(chunk.text) ? 1 : 0), 0);
-                if (justifyGapCount > 0) {
-                    justifyExtraPerGap = Math.max(0, availableWidth - lineWidth) / justifyGapCount;
-                }
-            }
-
-            lineChunks.forEach((chunk) => {
-                const style = chunk.style;
-                const textColor = style.color || baseStyle.color;
-
-                if (style.backgroundColor && chunk.text.trim()) {
-                    ctx.fillStyle = style.backgroundColor;
-                    ctx.fillRect(drawX, cursorY, chunk.width, lineHeight);
-                }
-
-                ctx.font = chunk.font;
-                ctx.fillStyle = textColor;
-                ctx.textBaseline = 'top';
-                ctx.fillText(chunk.text, drawX, cursorY + chunk.baselineOffset);
-
-                if (style.underline && chunk.text.trim()) {
-                    ctx.beginPath();
-                    ctx.strokeStyle = textColor;
-                    ctx.lineWidth = Math.max(1, chunk.fontSize / 12);
-                    const underlineY = cursorY + chunk.baselineOffset + chunk.fontSize * 1.08;
-                    ctx.moveTo(drawX, underlineY);
-                    ctx.lineTo(drawX + chunk.width, underlineY);
-                    ctx.stroke();
-                }
-
-                if (style.strike && chunk.text.trim()) {
-                    ctx.beginPath();
-                    ctx.strokeStyle = textColor;
-                    ctx.lineWidth = Math.max(1, chunk.fontSize / 12);
-                    const strikeY = cursorY + chunk.baselineOffset + chunk.fontSize * 0.58;
-                    ctx.moveTo(drawX, strikeY);
-                    ctx.lineTo(drawX + chunk.width, strikeY);
-                    ctx.stroke();
-                }
-
-                drawX += chunk.width;
-                if (lineAlign === 'justify' && justifyExtraPerGap > 0 && /^\s+$/.test(chunk.text)) {
-                    drawX += justifyExtraPerGap;
-                }
-            });
-
-            cursorY += lineHeight;
-            resetLine();
-            return true;
-        };
-
-        for (const token of tokens) {
-            if (token.type === 'newline') {
-                if (!flushLine(true)) return;
-                continue;
-            }
-
-            const style = {
-                color: token.style?.color || baseStyle.color,
-                backgroundColor: token.style?.backgroundColor || null,
-                fontSize: token.style?.fontSize || baseStyle.fontSize,
-                bold: Boolean(token.style?.bold),
-                italic: Boolean(token.style?.italic),
-                underline: Boolean(token.style?.underline),
-                strike: Boolean(token.style?.strike),
-                script: token.style?.script || null,
-                align: token.style?.align || 'left',
-                indentLevel: Number(token.style?.indentLevel) || 0
-            };
-
-            const parts = String(token.text || '').split(/(\s+)/);
-            for (const part of parts) {
-                if (part === '') continue;
-                applyLineStyle(style);
-                if (/^\s+$/.test(part) && lineWidth === 0) continue;
-
-                const metrics = toFontMetrics(style);
-                ctx.font = metrics.font;
-                const chunkWidth = ctx.measureText(part).width;
-
-                const indentPixels = getIndentPixels(lineIndentLevel);
-                const availableWidth = width ? Math.max(8, width - indentPixels) : null;
-
-                if (availableWidth !== null && lineWidth + chunkWidth > availableWidth && lineWidth > 0) {
-                    if (!flushLine(false)) return;
-                    applyLineStyle(style);
-                }
-
-                lineHeight = Math.max(lineHeight, metrics.lineHeight);
-                lineChunks.push({
-                    text: part,
-                    width: chunkWidth,
-                    style,
-                    font: metrics.font,
-                    fontSize: metrics.fontSize,
-                    baselineOffset: metrics.baselineOffset
-                });
-                lineWidth += chunkWidth;
-            }
-        }
-
-        flushLine(false);
-    };
-
-    const drawTextStroke = (ctx, first, x, y, width, height) => {
-        const baseStyle = {
-            color: first.color || DEFAULT_TEXT_COLOR,
-            fontSize: Math.max(8, Number(first.fontSize) || 16),
-            bold: false,
-            italic: false,
-            underline: false,
-            strike: false,
-            backgroundColor: null
-        };
-
-        const content = getTextStrokeContent(first);
-        const tokens = htmlToStyledTokens(content.html, baseStyle);
-
-        if (tokens.length > 0) {
-            drawStyledText(ctx, tokens, x, y, width, height, baseStyle);
-            return;
-        }
-
-        ctx.font = `${baseStyle.fontSize}px Arial`;
-        ctx.fillStyle = baseStyle.color;
-        ctx.textBaseline = 'top';
-        const lineHeight = Math.max(baseStyle.fontSize * 1.25, 12);
-        drawWrappedText(ctx, content.text, x, y, width, height, lineHeight);
     };
 
     const buildPlainTextTokens = (text, style) => {
@@ -2211,7 +1879,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
             return found;
         }
 
-        showStrokeMenu.value = false;
         selectedStroke.value = null;
         redrawAllStrokes();
         return null;
@@ -2831,14 +2498,11 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
                 stroke,
                 originalStroke: JSON.parse(JSON.stringify(stroke))
             };
-            showStrokeMenu.value = true;
-            redrawAllStrokes();
-            // drawSelectionBoundingBox();
         } else {
-            showStrokeMenu.value = false;
             selectedStroke.value = null;
-            redrawAllStrokes();
         }
+
+        redrawAllStrokes();
     };
 
     const startDrawing = (e) => {
@@ -3011,9 +2675,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
 
                         // Redraw highlight on latest
                         redrawAllStrokes();
-                        drawSelectionBoundingBox();
-                        showStrokeMenu.value = true;
-
                         stopEvent(e);
                         return;
                     }
@@ -3044,8 +2705,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
                     
                     // Redraw with highlight (will show combined bbox if multi)
                     redrawAllStrokes();
-                    drawSelectionBoundingBox();
-
                     stopEvent(e);
                     return;
                 }
@@ -3182,8 +2841,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
                 first.rotationCenterY = center.y;
                 selectedStroke.value.stroke = stroke;
                 redrawAllStrokes();
-                drawSelectionBoundingBox();
-                showStrokeMenu.value = false;
                 stopEvent(e);
                 return;
             }
@@ -3205,7 +2862,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
                 const stroke = strokes[selectedStroke.value.strokeIndex];
                 
                 if (stroke && resizeStartBounds.value) {
-                    showStrokeMenu.value = false;
                     const first = stroke[0];
                     const startBounds = resizeStartBounds.value.padded;
                     const startRawBounds = resizeStartBounds.value.raw;
@@ -3290,8 +2946,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
                         selectedStroke.value.stroke = stroke;
 
                         redrawAllStrokes();
-                        drawSelectionBoundingBox();
-                        showStrokeMenu.value = false;
                         stopEvent(e);
                         return;
                     }
@@ -3512,8 +3166,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
                     
                     // Redraw to show the resize preview
                     redrawAllStrokes();
-                    drawSelectionBoundingBox();
-                    showStrokeMenu.value = false;
                 }
                 
                 stopEvent(e);
@@ -3583,8 +3235,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
 
                 // Redraw to show the drag preview (combined bbox if multi)
                 redrawAllStrokes();
-                drawSelectionBoundingBox();
-                
+
                 lastX = currentX;
                 lastY = currentY;
 
@@ -3608,7 +3259,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
                 // Start dragging if moved more than 5 pixels
                 if (distance > 5) {
                     isDragging.value = true;
-                    showStrokeMenu.value = false; // Hide menu when dragging starts
                     lastX = currentX;
                     lastY = currentY;
                 }
@@ -3765,8 +3415,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
                                 previousStroke: sel.originalStroke || JSON.parse(JSON.stringify(s))
                             });
                         });
-                        // Keep style menu visible for multi-selection after move
-                        showStrokeMenu.value = true;
                     } else {
                         const changeType = isRotating.value ? 'rotate' : (isResizing.value ? 'resize' : 'move');
                         addToHistory({
@@ -3777,7 +3425,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
                             stroke: JSON.parse(JSON.stringify(stroke)),
                             previousStroke: selectedStroke.value.originalStroke
                         });
-                        showStrokeMenu.value = true;
                     }
                 }
             }
@@ -3805,7 +3452,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
                         selectedStroke.value.stroke = stroke;
                         selectedStroke.value.originalStroke = JSON.parse(JSON.stringify(stroke));
                     }
-                    drawSelectionBoundingBox();
                 }
             }
 
@@ -4020,9 +3666,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         isResizing.value = false;
         resizeHandle.value = null;
         resizeStartBounds.value = null;
-        showStrokeMenu.value = false;
         handToolActive.value = false;
-        showStrokeMenu.value = false;
         showStrokeStyleMenu.value = false;
 
         // Also clear any native text selection that might be lingering, which can interfere with interactions
@@ -4074,7 +3718,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
 
         // Redraw and bbox reflect multi or single
         redrawAllStrokes();
-        drawSelectionBoundingBox();
     };
 
     const changeStrokeThickness = (newThickness) => {
@@ -4121,53 +3764,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         }
 
         redrawAllStrokes();
-        drawSelectionBoundingBox();
-    };
-
-    const changeStrokeText = (newText) => {
-        if (!selectedStroke.value) return;
-        const pageId = selectedStroke.value.pageId;
-        const strokes = activePage.value.strokes || [];
-        const html = convertPlainTextToHtml(newText || '');
-        const normalized = normalizeTextStrokeContent({ text: newText || '', html });
-
-        const isMulti = Array.isArray(selectedStrokes.value) && selectedStrokes.value.length > 1;
-        if (isMulti) {
-            selectedStrokes.value.forEach(sel => {
-                if (sel.pageId !== pageId) return;
-                const s = strokes[sel.strokeIndex];
-                if (!s || s[0].type !== 'text') return;
-                const originalStroke = JSON.parse(JSON.stringify(s));
-                s[0].text = newText;
-                s[0].content = normalized;
-                addToHistory({
-                    id: s[0].id,
-                    type: 'text-change',
-                    page: activePage.value,
-                    strokeIndex: sel.strokeIndex,
-                    stroke: JSON.parse(JSON.stringify(s)),
-                    previousStroke: originalStroke
-                });
-            });
-        } else {
-            const stroke = strokes[selectedStroke.value.strokeIndex];
-            if (stroke && stroke[0].type === 'text') {
-                const originalStroke = JSON.parse(JSON.stringify(stroke));
-                stroke[0].text = newText;
-                stroke[0].content = normalized;
-                addToHistory({
-                    id: stroke[0].id,
-                    type: 'text-change',
-                    page: activePage.value,
-                    strokeIndex: selectedStroke.value.strokeIndex,
-                    stroke: JSON.parse(JSON.stringify(stroke)),
-                    previousStroke: originalStroke
-                });
-            }
-        }
-
-        redrawAllStrokes();
-        drawSelectionBoundingBox();
     };
 
     const deleteSelectedStroke = () => {
@@ -4200,7 +3796,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
 
             selectedStrokes.value = [];
             selectedStroke.value = null;
-            showStrokeMenu.value = false;
             return;
         }
 
@@ -4218,7 +3813,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
             redrawAllStrokes();
         }
         selectedStroke.value = null;
-        showStrokeMenu.value = false;
     };
 
     const createHighlightRectangle = (rectsOrX, y, width, height) => {
@@ -4375,8 +3969,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
                 originalStroke: JSON.parse(JSON.stringify(found.stroke))
             };
             
-            // Show context menu
-            showStrokeMenu.value = true;
+            // Show context menu at pointer location
             strokeMenuPosition.value = {
                 x: clientX,
                 y: clientY
@@ -4386,7 +3979,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
             
             // Redraw with highlight
             redrawAllStrokes();
-            drawSelectionBoundingBox();
         }
         
         stopEvent(e);
@@ -4406,8 +3998,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
             Number(first.editorHeight)
                 || (Math.max(24, Number(first.height) || 24) + getAdvancedEditorChromeHeight())
         );
-
-        showStrokeMenu.value = false;
 
         openTextEditor({
             bounds: {
@@ -4679,11 +4269,12 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
     };
 
     const drawSelectionBoundingBox = () => {
-        const page = activePage.value;
+        const page = activePage?.value;
         const svgLayer = page?.annotationSvg || null;
         if (!svgLayer) return;
 
         const existingOverlay = svgLayer.querySelector('.annotation-selection-overlay');
+
         if (existingOverlay) existingOverlay.remove();
 
         if (!selectedStroke.value || selectedStroke.value.pageId !== page.id) return;
@@ -4822,7 +4413,18 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         svgLayer.appendChild(overlayGroup);
     };
 
-    const handleTextboxBlur = () => {};
+    watch(
+        () => !isDragging.value && !isResizing.value && !isRotating.value && isSelectModeActive.value && (selectedStroke.value || selectedStrokes.value.length > 0),
+        (isSelected) => {
+            showStrokeMenu.value = isSelected;
+            drawSelectionBoundingBox();
+
+            if (showStrokeMenu.value) {
+                clampStrokeMenuPosition();
+            }
+        },
+        { immediate: true }
+    )
 
     const eraseAtPoint = (x, y) => {
         const eraserRadius = 10;
@@ -4889,7 +4491,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
 
         if (selectedIndex >= 0 && strokes[selectedIndex]) {
             appendStrokeToSvg(svgLayer, strokes[selectedIndex], selectedIndex);
-            drawSelectionBoundingBox();
         }
     };
 
@@ -5153,39 +4754,29 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
 
     return {
         colorPalette,
-        currentStroke,
-        isTextHighlightMode,
-        isTextSelectionMode,
         isSelectModeActive,
+        isTextSelectionMode,
+        isTextHighlightMode,
         isDrawing,
         isEraser,
         drawMode,
         drawStyle,
         isTextInputMode,
-        textPosition,
-        textCanvasIndex,
-        fontSize,
-        textboxPosition,
+        textEditorHtml,
         textEditorPosition,
         textEditorSimpleMode,
-        textEditorHtml,
         isCaptureSelectionMode,
-        selectionStart,
-        selectionEnd,
         isPenHovering,
         isStrokeHovering,
-        isBoundingBoxHovering,
-        selectedStroke,
-        selectedStrokes,
         isDragging,
-        isResizing,
+        selectedStroke,
         strokeMenu,
         showStrokeMenu,
         strokeMenuPosition,
+        resizeCursor,
         handToolActive,
         isHandToolPanning,
         startDrawing,
-        draw,
         stopDrawing,
         onPointerMove,
         onPointerLeave,
@@ -5196,33 +4787,23 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         updateTextEditorSize,
         updateTextEditorPosition,
         resetToolState,
-        handleTextboxBlur,
         redrawAllStrokes,
         drawImageCanvas,
-        changeStrokeColor,
-        changeStrokeThickness,
-        changeStrokeText,
         deleteSelectedStroke,
         handleStrokeMenu,
-        resizeCursor,
         strokeStyles,
         activeStrokeStyle,
-        setStrokeColor,
-        setStrokeThickness,
-        setStrokeFill,
-        setStrokeOpacity,
-        setStrokeDash,
+        updateStrokeStyle,
+        showStrokeStyleMenu,
         handleStrokeStyleButtonClick,
         clampStrokeMenuPosition,
-        createHighlightRectangle,
         highlightTextSelection,
-        copiedStroke,
-        copiedStrokes,
         copySelectedStroke,
         insertCopiedStroke,
         retrieveClipboardData,
         isSelectedStrokeType,
+        copiedStrokes,
         selectStrokes,
-        showStrokeStyleMenu
+        retrieveClipboardData,
     };
 }

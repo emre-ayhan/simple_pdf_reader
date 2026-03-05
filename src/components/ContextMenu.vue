@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref, nextTick, onUnmounted } from 'vue';
+import { onMounted, ref, nextTick } from 'vue';
 
 const props = defineProps({
     parent: {
@@ -95,13 +95,6 @@ onMounted(() => {
     document.querySelector(props.parent).addEventListener('contextmenu', handleContextMenu);
     document.querySelector(props.parent).addEventListener('click', handleContextMenu);
 });
-
-onUnmounted(() => {
-    document.querySelector(props.parent).removeEventListener('pointermove', handleContextMenu);
-    document.querySelector(props.parent).removeEventListener('contextmenu', handleContextMenu);
-    document.querySelector(props.parent).removeEventListener('click', handleContextMenu);
-});
-
 </script>
 <template>
     <div ref="menuRef" class="dropdown-menu dropdown-menu-dark position-absolute rounded-3 d-print-none show" :style="style" v-if="show">
