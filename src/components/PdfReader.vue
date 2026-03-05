@@ -144,7 +144,6 @@ const {
     redrawAllStrokes,
     drawImageCanvas,
     deleteSelectedStroke,
-    handleStrokeMenu,
     strokeStyles,
     activeStrokeStyle,
     updateStrokeStyle,
@@ -893,7 +892,6 @@ defineExpose({
                                 @pointerup="stopDrawing"
                                 @pointerleave="onPointerLeave"
                                 @pointercancel="stopDrawing"
-                                @click="handleStrokeMenu"
                                 :style="{
                                     cursor: cursorStyle,
                                     pointerEvents: isTextSelectionMode ? 'none' : 'auto',

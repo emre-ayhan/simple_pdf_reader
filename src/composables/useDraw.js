@@ -304,7 +304,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         if (isCaptureSelectionMode.value) {
             captureSelection();
         } else if (isSelectModeActive.value) {
-            selectStrokeInSelectionBox();
+            selectStrokesInSelectionBox();
         } else if (isTextInputMode.value) {
             const page = activePage.value;
             const canvas = page?.drawingCanvas || null;
@@ -2447,7 +2447,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         }
     };
 
-    const selectStrokeInSelectionBox = () => {
+    const selectStrokesInSelectionBox = () => {
         if (!selectionStart.value || !selectionEnd.value) return;
 
         const page = activePage.value;
@@ -2679,7 +2679,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
                         return;
                     }
 
-                    // Non-ctrl click: if multi-selection is active and clicking a member, keep multi-selection
+                    // Non-shift click: if multi-selection is active and clicking a member, keep multi-selection
                     const isMemberOfSelection = Array.isArray(selectedStrokes.value)
                         && selectedStrokes.value.some(s => s.pageIndex === canvasIndex && s.strokeIndex === found.strokeIndex);
                     const multiActive = Array.isArray(selectedStrokes.value) && selectedStrokes.value.length > 1;
@@ -3375,7 +3375,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         if (isSelectModeActive.value && (isStrokeHovering.value || isDragging.value || isResizing.value || isRotating.value) && isMouseDown.value && selectedStroke.value) {
             // Only stop if it's the same pointer
             if (e && e.pointerId !== activePointerId.value) return;
-
             const canvas = activePage.value.drawingCanvas || null;
             
             if (canvas && e && e.pointerId !== undefined) {
@@ -3387,10 +3386,11 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
             }
             
             const stroke = activePage.value.strokes[selectedStroke.value.strokeIndex];
+            const didTransformStroke = isDragging.value || isResizing.value || isRotating.value;
             
-            // Save to history if resized, dragged, or rotated
-            if (isResizing.value || isDragging.value || isRotating.value) {
-                const canvas = activePage.value.drawingCanvas || null;
+            // Redraw without highlight after drag/resize
+            if (didTransformStroke) {
+                // Save to history if resized, dragged, or rotated
                 const pt = getCanvasPointFromEvent(canvas, e);
                 if (!pt) return;
                 const currentX = pt.x;
@@ -3427,13 +3427,9 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
                         });
                     }
                 }
-            }
-            
-            const didTransformStroke = isDragging.value || isResizing.value || isRotating.value;
 
-            // Redraw without highlight after drag/resize
-            if (didTransformStroke) {
                 redrawAllStrokes();
+
                 // Redraw highlight to show final position
                 if (selectedStroke.value) {
                     if (Array.isArray(selectedStrokes.value) && selectedStrokes.value.length > 1) {
@@ -3453,9 +3449,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
                         selectedStroke.value.originalStroke = JSON.parse(JSON.stringify(stroke));
                     }
                 }
-            }
 
-            if (didTransformStroke) {
                 suppressNextSelectionClick.value = true;
             }
 
@@ -3812,6 +3806,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
             });
             redrawAllStrokes();
         }
+    
         selectedStroke.value = null;
     };
 
@@ -3941,47 +3936,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
 
         // Clear the text selection
         window.getSelection()?.removeAllRanges();
-    };
-
-    const handleStrokeMenu = (e) => {
-        if (!isSelectModeActive.value) return;
-
-        if (suppressNextSelectionClick.value) {
-            suppressNextSelectionClick.value = false;
-            stopEvent(e);
-            return;
-        }
-
-        const canvasIndex = getCanvasIndexFromEvent(e);
-        if (canvasIndex === -1) return;
-        
-        const canvas = activePage.value.drawingCanvas || null;
-        if (!canvas) return;
-        const pt = getCanvasPointFromEvent(canvas, e);
-        if (!pt) return;
-        const { x, y, clientX, clientY } = pt;
-        
-        const found = findStrokeAtPoint(x, y);
-
-        if (found) {
-            selectedStroke.value = {
-                ...found,
-                originalStroke: JSON.parse(JSON.stringify(found.stroke))
-            };
-            
-            // Show context menu at pointer location
-            strokeMenuPosition.value = {
-                x: clientX,
-                y: clientY
-            };
-
-            currentCanvasIndex = canvasIndex;
-            
-            // Redraw with highlight
-            redrawAllStrokes();
-        }
-        
-        stopEvent(e);
     };
 
     const editSelectedTextStroke = () => {
@@ -4305,6 +4259,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
                 maxY = Math.max(maxY, b.maxY);
             });
             if (!isFinite(minX) || !isFinite(minY) || !isFinite(maxX) || !isFinite(maxY)) return;
+            
             minX -= padding;
             minY -= padding;
             maxX += padding;
@@ -4419,7 +4374,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
             showStrokeMenu.value = isSelected;
             drawSelectionBoundingBox();
 
-            if (showStrokeMenu.value) {
+            if (isSelected) {
                 clampStrokeMenuPosition();
             }
         },
@@ -4790,7 +4745,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         redrawAllStrokes,
         drawImageCanvas,
         deleteSelectedStroke,
-        handleStrokeMenu,
         strokeStyles,
         activeStrokeStyle,
         updateStrokeStyle,
