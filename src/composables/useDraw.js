@@ -4368,17 +4368,135 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         svgLayer.appendChild(overlayGroup);
     };
 
+    const clampStrokeMenuPosition = async () => {
+        // Ensure the menu has rendered before measuring
+        await nextTick();
+        const el = strokeMenu.value;
+        if (!el) return;
+        const rect = el.getBoundingClientRect();
+        const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+        const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+
+        // Account for CSS transform: translate(-50%, 10px)
+        const halfW = rect.width / 2;
+        const offsetY = 0; // matches SCSS transform Y
+        const margin = 8;   // keep a small margin from edges
+
+        // Prefer placing menu to the right of the stroke if it fits, else left
+        let preferredX = strokeMenuPosition.value.x;
+        let preferredY = strokeMenuPosition.value.y;
+
+        if (selectedStroke?.value) {
+            const canvas = activePage.value.drawingCanvas || null;
+            if (canvas) {
+                const cRect = canvas.getBoundingClientRect();
+                const scaleXToClient = cRect.width / canvas.width;
+                const scaleYToClient = cRect.height / canvas.height;
+
+                const stroke = selectedStroke.value.stroke;
+                let minX, minY, maxX, maxY;
+                const toClientPoint = (point) => ({
+                    x: cRect.left + point.x * scaleXToClient,
+                    y: cRect.top + point.y * scaleYToClient
+                });
+
+                const bbox = getStrokeBounds(stroke, SELECTION_PADDING);
+                if (bbox) {
+                    minX = bbox.minX;
+                    minY = bbox.minY;
+                    maxX = bbox.maxX;
+                    maxY = bbox.maxY;
+                }
+
+                if (minX !== undefined) {
+                    const clientMinX = cRect.left + minX * scaleXToClient;
+                    const clientMaxX = cRect.left + maxX * scaleXToClient;
+                    const clientMinY = cRect.top + minY * scaleYToClient;
+                    const clientMaxY = cRect.top + maxY * scaleYToClient;
+
+                    const offset = 10;
+                    const menuWidth = rect.width;
+                    const menuHeight = rect.height;
+
+                    const rotatedSelection = getRotatedSelectionGeometry(stroke, SELECTION_PADDING);
+                    let desiredLeft;
+                    let desiredTop;
+
+                    if (rotatedSelection?.corners?.length === 4) {
+                        const points = [...rotatedSelection.corners];
+                        if (rotatedSelection.handles?.e) points.push(rotatedSelection.handles.e);
+                        if (rotatedSelection.handles?.se) points.push(rotatedSelection.handles.se);
+                        const rotateHandle = getRotateHandlePosition({ rotatedSelection, offset: 24 });
+                        if (rotateHandle) points.push({ x: rotateHandle.x, y: rotateHandle.y });
+
+                        const clientPoints = points.map(toClientPoint);
+                        const rightAnchor = clientPoints.reduce((best, point) => (
+                            !best || (point.x + point.y * 0.2) > (best.x + best.y * 0.2) ? point : best
+                        ), null);
+                        const leftAnchor = clientPoints.reduce((best, point) => (
+                            !best || (point.x - point.y * 0.2) < (best.x - best.y * 0.2) ? point : best
+                        ), null);
+
+                        desiredLeft = (rightAnchor?.x ?? clientMaxX) + offset;
+                        desiredTop = (rightAnchor?.y ?? clientMaxY) - (menuHeight / 2);
+
+                        if (desiredLeft + menuWidth > viewportWidth - margin) {
+                            desiredLeft = (leftAnchor?.x ?? clientMinX) - offset - menuWidth;
+                        }
+
+                        if (desiredTop + menuHeight > viewportHeight - margin) {
+                            desiredTop = viewportHeight - margin - menuHeight;
+                        }
+                        if (desiredTop < margin) {
+                            desiredTop = margin;
+                        }
+                    } else {
+                        let desiredRight = clientMaxX + offset;
+                        desiredTop = clientMaxY + offset;
+                        desiredLeft = desiredRight - menuWidth;
+
+                        if (desiredRight > viewportWidth - margin) {
+                            desiredRight = clientMinX - offset;
+                            desiredLeft = desiredRight - menuWidth;
+                        }
+
+                        if (desiredTop + menuHeight > viewportHeight - margin) {
+                            desiredTop = clientMinY - offset - menuHeight;
+                        }
+                    }
+
+                    desiredLeft = Math.min(Math.max(margin, desiredLeft), viewportWidth - margin - menuWidth);
+                    desiredTop = Math.min(Math.max(margin, desiredTop), viewportHeight - margin - menuHeight);
+
+                    preferredX = desiredLeft + halfW;
+                    preferredY = desiredTop - offsetY;
+                }
+            }
+        }
+
+        const minX = margin + halfW;
+        const maxX = viewportWidth - margin - halfW;
+        const minY = margin - offsetY; // ensure top (with offset) >= margin
+        const maxY = viewportHeight - margin - rect.height - offsetY;
+
+        const clampedX = Math.min(Math.max(minX, preferredX), Math.max(minX, maxX));
+        const clampedY = Math.min(Math.max(minY, preferredY), Math.max(minY, maxY));
+
+        if (clampedX !== strokeMenuPosition.value.x || clampedY !== strokeMenuPosition.value.y) {
+            strokeMenuPosition.value = { x: clampedX, y: clampedY };
+        }
+    };
+
     watch(
-        () => !isDragging.value && !isResizing.value && !isRotating.value && isSelectModeActive.value && (selectedStroke.value || selectedStrokes.value.length > 0),
+        () => !isDragging.value && !isResizing.value && !isRotating.value && (selectedStroke.value || selectedStrokes.value.length > 0) && isSelectModeActive.value,
         (isSelected) => {
             showStrokeMenu.value = isSelected;
-            drawSelectionBoundingBox();
 
             if (isSelected) {
+                drawSelectionBoundingBox();
                 clampStrokeMenuPosition();
             }
         },
-        { immediate: true }
     )
 
     const eraseAtPoint = (x, y) => {
@@ -4446,6 +4564,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
 
         if (selectedIndex >= 0 && strokes[selectedIndex]) {
             appendStrokeToSvg(svgLayer, strokes[selectedIndex], selectedIndex);
+            drawSelectionBoundingBox();
         }
     };
 
@@ -4587,125 +4706,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
             img.src = src;
         }
     }
-
-    const clampStrokeMenuPosition = async () => {
-        // Ensure the menu has rendered before measuring
-        await nextTick();
-        const el = strokeMenu.value;
-        if (!el) return;
-        const rect = el.getBoundingClientRect();
-        const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
-        const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-
-        // Account for CSS transform: translate(-50%, 10px)
-        const halfW = rect.width / 2;
-        const offsetY = 0; // matches SCSS transform Y
-        const margin = 8;   // keep a small margin from edges
-
-        // Prefer placing menu to the right of the stroke if it fits, else left
-        let preferredX = strokeMenuPosition.value.x;
-        let preferredY = strokeMenuPosition.value.y;
-
-        if (selectedStroke?.value) {
-            const canvas = activePage.value.drawingCanvas || null;
-            if (canvas) {
-                const cRect = canvas.getBoundingClientRect();
-                const scaleXToClient = cRect.width / canvas.width;
-                const scaleYToClient = cRect.height / canvas.height;
-
-                const stroke = selectedStroke.value.stroke;
-                let minX, minY, maxX, maxY;
-                const toClientPoint = (point) => ({
-                    x: cRect.left + point.x * scaleXToClient,
-                    y: cRect.top + point.y * scaleYToClient
-                });
-
-                const bbox = getStrokeBounds(stroke, SELECTION_PADDING);
-                if (bbox) {
-                    minX = bbox.minX;
-                    minY = bbox.minY;
-                    maxX = bbox.maxX;
-                    maxY = bbox.maxY;
-                }
-
-                if (minX !== undefined) {
-                    const clientMinX = cRect.left + minX * scaleXToClient;
-                    const clientMaxX = cRect.left + maxX * scaleXToClient;
-                    const clientMinY = cRect.top + minY * scaleYToClient;
-                    const clientMaxY = cRect.top + maxY * scaleYToClient;
-
-                    const offset = 10;
-                    const menuWidth = rect.width;
-                    const menuHeight = rect.height;
-
-                    const rotatedSelection = getRotatedSelectionGeometry(stroke, SELECTION_PADDING);
-                    let desiredLeft;
-                    let desiredTop;
-
-                    if (rotatedSelection?.corners?.length === 4) {
-                        const points = [...rotatedSelection.corners];
-                        if (rotatedSelection.handles?.e) points.push(rotatedSelection.handles.e);
-                        if (rotatedSelection.handles?.se) points.push(rotatedSelection.handles.se);
-                        const rotateHandle = getRotateHandlePosition({ rotatedSelection, offset: 24 });
-                        if (rotateHandle) points.push({ x: rotateHandle.x, y: rotateHandle.y });
-
-                        const clientPoints = points.map(toClientPoint);
-                        const rightAnchor = clientPoints.reduce((best, point) => (
-                            !best || (point.x + point.y * 0.2) > (best.x + best.y * 0.2) ? point : best
-                        ), null);
-                        const leftAnchor = clientPoints.reduce((best, point) => (
-                            !best || (point.x - point.y * 0.2) < (best.x - best.y * 0.2) ? point : best
-                        ), null);
-
-                        desiredLeft = (rightAnchor?.x ?? clientMaxX) + offset;
-                        desiredTop = (rightAnchor?.y ?? clientMaxY) - (menuHeight / 2);
-
-                        if (desiredLeft + menuWidth > viewportWidth - margin) {
-                            desiredLeft = (leftAnchor?.x ?? clientMinX) - offset - menuWidth;
-                        }
-
-                        if (desiredTop + menuHeight > viewportHeight - margin) {
-                            desiredTop = viewportHeight - margin - menuHeight;
-                        }
-                        if (desiredTop < margin) {
-                            desiredTop = margin;
-                        }
-                    } else {
-                        let desiredRight = clientMaxX + offset;
-                        desiredTop = clientMaxY + offset;
-                        desiredLeft = desiredRight - menuWidth;
-
-                        if (desiredRight > viewportWidth - margin) {
-                            desiredRight = clientMinX - offset;
-                            desiredLeft = desiredRight - menuWidth;
-                        }
-
-                        if (desiredTop + menuHeight > viewportHeight - margin) {
-                            desiredTop = clientMinY - offset - menuHeight;
-                        }
-                    }
-
-                    desiredLeft = Math.min(Math.max(margin, desiredLeft), viewportWidth - margin - menuWidth);
-                    desiredTop = Math.min(Math.max(margin, desiredTop), viewportHeight - margin - menuHeight);
-
-                    preferredX = desiredLeft + halfW;
-                    preferredY = desiredTop - offsetY;
-                }
-            }
-        }
-
-        const minX = margin + halfW;
-        const maxX = viewportWidth - margin - halfW;
-        const minY = margin - offsetY; // ensure top (with offset) >= margin
-        const maxY = viewportHeight - margin - rect.height - offsetY;
-
-        const clampedX = Math.min(Math.max(minX, preferredX), Math.max(minX, maxX));
-        const clampedY = Math.min(Math.max(minY, preferredY), Math.max(minY, maxY));
-
-        if (clampedX !== strokeMenuPosition.value.x || clampedY !== strokeMenuPosition.value.y) {
-            strokeMenuPosition.value = { x: clampedX, y: clampedY };
-        }
-    };
 
     return {
         colorPalette,
