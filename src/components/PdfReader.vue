@@ -41,8 +41,8 @@ const loadFileCallback = () => {
     resetHistory();
 }
 
-const lazyLoadCallback = (index) => {
-    redrawAllStrokes(index);
+const lazyLoadCallback = (page) => {
+    redrawAllStrokes(page);
 }
 
 const fileSavedCallback = () => {
