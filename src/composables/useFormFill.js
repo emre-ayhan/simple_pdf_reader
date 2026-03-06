@@ -456,6 +456,12 @@ const processAnnotation = (annotation, viewport) => {
     return null;
 };
 
+const openExternalUrl = (url) => {
+    const normalized = String(url || '').trim();
+    if (!normalized) return;
+    window.open(normalized, '_blank', 'noopener,noreferrer');
+};
+
 /**
  * useFormFill – manages interactive PDF form fields extracted from PDF.js
  * annotations.  All values are reactive; call `flattenToPdfLib(form)` to
@@ -672,12 +678,6 @@ export function useFormFill(page, actionButtonHandler) {
         });
 
         return values;
-    };
-
-    const openExternalUrl = (url) => {
-        const normalized = String(url || '').trim();
-        if (!normalized) return;
-        window.open(normalized, '_blank', 'noopener,noreferrer');
     };
 
     const submitPdfForm = async (action) => {
