@@ -57,6 +57,951 @@ const normalizeStrokeStylePreset = (style = {}) => {
     };
 };
 
+// Module-scope helpers: pure utilities with no reactive/setup dependencies.
+const defaultAngleByHandle = {
+    n: Math.PI / 2,
+    s: Math.PI / 2,
+    e: 0,
+    w: 0,
+    nw: Math.PI / 4,
+    se: Math.PI / 4,
+    ne: (3 * Math.PI) / 4,
+    sw: (3 * Math.PI) / 4
+};
+
+const toCursorFromAngle = (angleRad) => {
+    if (!Number.isFinite(angleRad)) return null;
+    const deg = ((angleRad * 180 / Math.PI) % 180 + 180) % 180;
+    if (deg < 22.5 || deg >= 157.5) return 'ew-resize';
+    if (deg < 67.5) return 'nwse-resize';
+    if (deg < 112.5) return 'ns-resize';
+    if (deg < 157.5) return 'nesw-resize';
+    return 'ew-resize';
+};
+
+const toExactResizeCursor = (angleRad) => {
+    if (!Number.isFinite(angleRad)) return null;
+    const fallback = toCursorFromAngle(angleRad) || 'ew-resize';
+    const deg = angleRad * (180 / Math.PI);
+    const svg = encodeURIComponent(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+            <g transform="rotate(${deg} 12 12)">
+                <line x1="5" y1="12" x2="19" y2="12" stroke="#2a7fff" stroke-width="2" stroke-linecap="round"/>
+                <path d="M5 12 L9 9 M5 12 L9 15" stroke="#2a7fff" stroke-width="2" stroke-linecap="round" fill="none"/>
+                <path d="M19 12 L15 9 M19 12 L15 15" stroke="#2a7fff" stroke-width="2" stroke-linecap="round" fill="none"/>
+            </g>
+        </svg>`
+    );
+    return `url("data:image/svg+xml;utf8,${svg}") 12 12, ${fallback}`;
+};
+
+const isSecondaryPointerAction = (e) => {
+    if (!e) return false;
+    if (e.button === 2) return true;
+    if (typeof e.buttons === 'number' && (e.buttons & 2) === 2) return true;
+    return false;
+};
+
+const getEventClientXY = (e) => {
+    if (e?.clientX !== undefined && e?.clientY !== undefined) {
+        return { clientX: e.clientX, clientY: e.clientY };
+    }
+    const touch = e?.touches?.[0] || e?.changedTouches?.[0];
+    return {
+        clientX: touch?.clientX ?? 0,
+        clientY: touch?.clientY ?? 0
+    };
+};
+
+const getVisibleCenterOnCanvas = (canvas) => {
+    if (!canvas) return { cx: 0, cy: 0 };
+
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    const viewportW = window.innerWidth || document.documentElement.clientWidth;
+    const viewportH = window.innerHeight || document.documentElement.clientHeight;
+
+    const visibleLeft = Math.max(rect.left, 0);
+    const visibleRight = Math.min(rect.right, viewportW);
+    const visibleTop = Math.max(rect.top, 0);
+    const visibleBottom = Math.min(rect.bottom, viewportH);
+
+    const centerClientX = (visibleLeft + visibleRight) / 2;
+    const centerClientY = (visibleTop + visibleBottom) / 2;
+
+    return {
+        cx: (centerClientX - rect.left) * scaleX,
+        cy: (centerClientY - rect.top) * scaleY
+    };
+};
+
+const getBoundsFromPoints = (points = [], padding = 0) => {
+    if (!Array.isArray(points) || points.length === 0) return null;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    points.forEach(point => {
+        minX = Math.min(minX, point.x);
+        minY = Math.min(minY, point.y);
+        maxX = Math.max(maxX, point.x);
+        maxY = Math.max(maxY, point.y);
+    });
+    const pad = Math.max(0, Number(padding) || 0);
+    return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
+};
+
+const getShapeControlPoints = (first) => {
+    if (!first) return null;
+    if (first.type === 'line') {
+        return [{ x: first.startX, y: first.startY }, { x: first.endX, y: first.endY }];
+    }
+
+    if (first.type === 'rectangle') {
+        return [
+            { x: first.startX, y: first.startY },
+            { x: first.endX, y: first.startY },
+            { x: first.endX, y: first.endY },
+            { x: first.startX, y: first.endY }
+        ];
+    }
+
+    if (first.type === 'circle') {
+        let rx;
+        let ry;
+        if (first.radiusX !== undefined || first.radiusY !== undefined) {
+            rx = first.radiusX !== undefined ? first.radiusX : Math.abs(first.endX - first.startX);
+            ry = first.radiusY !== undefined ? first.radiusY : Math.abs(first.endY - first.startY);
+        } else {
+            const radius = Math.sqrt((first.endX - first.startX) ** 2 + (first.endY - first.startY) ** 2);
+            rx = radius;
+            ry = radius;
+        }
+        return [
+            { x: first.startX - rx, y: first.startY - ry },
+            { x: first.startX + rx, y: first.startY - ry },
+            { x: first.startX + rx, y: first.startY + ry },
+            { x: first.startX - rx, y: first.startY + ry }
+        ];
+    }
+
+    return null;
+};
+
+const getHighlightRectsBounds = (first, padding = 0) => {
+    if (!first) return null;
+    const rects = first.rects || [{ x: first.x, y: first.y, width: first.width, height: first.height }];
+    const points = [];
+    rects.forEach(rect => {
+        points.push({ x: rect.x, y: rect.y });
+        points.push({ x: rect.x + rect.width, y: rect.y + rect.height });
+    });
+    return getBoundsFromPoints(points, padding);
+};
+
+const pointInPolygon = (x, y, polygonPoints = []) => {
+    if (!Array.isArray(polygonPoints) || polygonPoints.length < 3) return false;
+    let inside = false;
+    for (let i = 0, j = polygonPoints.length - 1; i < polygonPoints.length; j = i++) {
+        const xi = polygonPoints[i].x, yi = polygonPoints[i].y;
+        const xj = polygonPoints[j].x, yj = polygonPoints[j].y;
+        const intersects = ((yi > y) !== (yj > y))
+            && (x < ((xj - xi) * (y - yi)) / ((yj - yi) || Number.EPSILON) + xi);
+        if (intersects) inside = !inside;
+    }
+    return inside;
+};
+
+const pointSegmentDistance = (x, y, x1, y1, x2, y2) => {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const lenSq = dx * dx + dy * dy;
+    if (lenSq === 0) {
+        return Math.hypot(x - x1, y - y1);
+    }
+    const t = Math.max(0, Math.min(1, ((x - x1) * dx + (y - y1) * dy) / lenSq));
+    const px = x1 + t * dx;
+    const py = y1 + t * dy;
+    return Math.hypot(x - px, y - py);
+};
+
+const mapValueBetweenBounds = (value, fromMin, fromMax, toMin, toMax) => {
+    const span = fromMax - fromMin;
+    if (Math.abs(span) < 0.0001) return (toMin + toMax) / 2;
+    const t = (value - fromMin) / span;
+    return toMin + t * (toMax - toMin);
+};
+
+const rotatePointAround = (point, center, angle) => {
+    const dx = point.x - center.x;
+    const dy = point.y - center.y;
+    const cosA = Math.cos(angle);
+    const sinA = Math.sin(angle);
+    return {
+        x: center.x + dx * cosA - dy * sinA,
+        y: center.y + dx * sinA + dy * cosA
+    };
+};
+
+const TEXT_RENDER_OVERFLOW_ALLOWANCE_FACTOR = 0.2;
+
+const stopEvent = (e) => {
+    if (!e) return;
+    if (typeof e.preventDefault === 'function') e.preventDefault();
+    if (typeof e.stopPropagation === 'function') e.stopPropagation();
+};
+
+const getCanvasPointFromEvent = (canvas, e) => {
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const { clientX, clientY } = getEventClientXY(e);
+    return {
+        rect,
+        scaleX,
+        scaleY,
+        clientX,
+        clientY,
+        x: (clientX - rect.left) * scaleX,
+        y: (clientY - rect.top) * scaleY
+    };
+};
+
+const getCanvasIndexFromEvent = (page, e) => {
+    if (!page || !e) return -1;
+    if (page.drawingCanvas === e.target) {
+        return page.index;
+    }
+    return -1;
+};
+
+const drawShape = (ctx, type, startX, startY, endX, endY, stroke = null) => {
+    const style = stroke && !Array.isArray(stroke) ? stroke : {};
+    const shouldFill = Boolean(style.fill) && (type === 'rectangle' || type === 'circle');
+    if (shouldFill) {
+        ctx.fillStyle = style.color || '#1d4ed8';
+    }
+
+    if (type === 'line') {
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+    } else if (type === 'rectangle') {
+        if (shouldFill) {
+            ctx.fillRect(startX, startY, endX - startX, endY - startY);
+        }
+        ctx.strokeRect(startX, startY, endX - startX, endY - startY);
+    } else if (type === 'circle') {
+        ctx.beginPath();
+        if (stroke && (stroke.radiusX !== undefined || stroke.radiusY !== undefined)) {
+            const rx = stroke.radiusX !== undefined ? stroke.radiusX : Math.abs(endX - startX);
+            const ry = stroke.radiusY !== undefined ? stroke.radiusY : Math.abs(endY - startY);
+            ctx.ellipse(startX, startY, rx, ry, 0, 0, 2 * Math.PI);
+        } else {
+            const radius = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2));
+            ctx.arc(startX, startY, radius, 0, 2 * Math.PI);
+        }
+        if (shouldFill) {
+            ctx.fill();
+        }
+        ctx.stroke();
+    }
+};
+
+const extractPlainTextFromHtml = (html) => {
+    const htmlValue = String(html || '');
+    if (!htmlValue.trim()) return '';
+
+    try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(`<div>${htmlValue}</div>`, 'text/html');
+        const root = doc.body.firstElementChild || doc.body;
+        if (!root) return '';
+
+        const blocks = new Set(['P', 'DIV', 'LI', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6']);
+        let text = '';
+
+        const visit = (node) => {
+            if (!node) return;
+            if (node.nodeType === Node.TEXT_NODE) {
+                text += node.nodeValue || '';
+                return;
+            }
+            if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+            const tag = node.tagName;
+            if (tag === 'BR') {
+                text += '\n';
+                return;
+            }
+
+            const children = Array.from(node.childNodes || []);
+            children.forEach(visit);
+
+            if (blocks.has(tag)) {
+                text += '\n';
+            }
+        };
+
+        Array.from(root.childNodes || []).forEach(visit);
+
+        return text
+            .replace(/\u00A0/g, ' ')
+            .replace(/\r/g, '')
+            .replace(/[ \t]+\n/g, '\n')
+            .replace(/\n[ \t]+/g, '\n')
+            .replace(/\n{3,}/g, '\n\n')
+            .trim();
+    } catch (err) {
+        return htmlValue
+            .replace(/<br\s*\/?>/gi, '\n')
+            .replace(/<[^>]+>/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+};
+
+const normalizeTextStrokeContent = (content) => {
+    if (!content) {
+        return { text: '', html: '' };
+    }
+
+    if (typeof content === 'string') {
+        const html = content;
+        return {
+            text: extractPlainTextFromHtml(html),
+            html
+        };
+    }
+
+    const html = typeof content.html === 'string' ? content.html : '';
+    const text = typeof content.text === 'string' ? content.text : extractPlainTextFromHtml(html);
+    return { text, html };
+};
+
+const convertPlainTextToHtml = (text) => {
+    const escaped = (text || '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;');
+    return `<p>${escaped.replaceAll('\n', '</p><p>')}</p>`;
+};
+
+const getTextStrokeContent = (strokeOrFirst) => {
+    const first = Array.isArray(strokeOrFirst) ? strokeOrFirst[0] : strokeOrFirst;
+    if (!first) return { text: '', html: '' };
+
+    if (first.content !== undefined && first.content !== null) {
+        return normalizeTextStrokeContent(first.content);
+    }
+
+    const fallbackText = typeof first.text === 'string' ? first.text : '';
+    return {
+        text: fallbackText,
+        html: fallbackText ? convertPlainTextToHtml(fallbackText) : ''
+    };
+};
+
+const getStoredTextEditorMode = (first) => {
+    if (!first) return 'advanced';
+    if (first.editorMode === 'simple' || first.editorMode === 'advanced') {
+        return first.editorMode;
+    }
+    return 'advanced';
+};
+
+const setStoredTextEditorMode = (first, isSimple) => {
+    if (!first) return;
+    first.editorMode = isSimple ? 'simple' : 'advanced';
+};
+
+const parseInlineStyle = (styleText = '') => {
+    const style = {};
+    const parts = String(styleText)
+        .split(';')
+        .map(part => part.trim())
+        .filter(Boolean);
+
+    parts.forEach(part => {
+        const [rawKey, ...rawValueParts] = part.split(':');
+        if (!rawKey || rawValueParts.length === 0) return;
+        const key = rawKey.trim().toLowerCase();
+        const value = rawValueParts.join(':').trim();
+
+        if (key === 'color' && value) {
+            style.color = value;
+            return;
+        }
+
+        if ((key === 'background' || key === 'background-color') && value && value !== 'transparent') {
+            style.backgroundColor = value;
+            return;
+        }
+
+        if (key === 'font-size') {
+            const parsed = parseFloat(value);
+            if (Number.isFinite(parsed) && parsed > 0) {
+                style.fontSize = parsed;
+            }
+        }
+
+        if (key === 'text-align' && value) {
+            style.align = String(value).toLowerCase();
+            return;
+        }
+
+        if (key === 'text-decoration' && value) {
+            const lowered = String(value).toLowerCase();
+            if (lowered.includes('underline')) style.underline = true;
+            if (lowered.includes('line-through')) style.strike = true;
+            return;
+        }
+
+        if (key === 'vertical-align' && value) {
+            const lowered = String(value).toLowerCase();
+            if (lowered.includes('super')) style.script = 'super';
+            if (lowered.includes('sub')) style.script = 'sub';
+        }
+    });
+
+    return style;
+};
+
+const htmlToStyledTokens = (html, baseStyle) => {
+    const htmlValue = String(html || '').trim();
+    if (!htmlValue) return [];
+
+    const pushNewline = (tokens, { allowConsecutive = false } = {}) => {
+        if (!allowConsecutive && (tokens.length === 0 || tokens[tokens.length - 1].type === 'newline')) return;
+        tokens.push({ type: 'newline' });
+    };
+
+    const applyElementStyle = (style, node) => {
+        const nextStyle = { ...style };
+        const tag = node.tagName;
+        const classList = String(node.getAttribute('class') || '')
+            .split(/\s+/)
+            .filter(Boolean);
+
+        if (tag === 'STRONG' || tag === 'B') nextStyle.bold = true;
+        if (tag === 'EM' || tag === 'I') nextStyle.italic = true;
+        if (tag === 'U') nextStyle.underline = true;
+        if (tag === 'S' || tag === 'STRIKE') nextStyle.strike = true;
+        if (tag === 'SUP') nextStyle.script = 'super';
+        if (tag === 'SUB') nextStyle.script = 'sub';
+
+        if (tag === 'A') {
+            nextStyle.link = true;
+            nextStyle.underline = true;
+            if (!nextStyle.color) {
+                nextStyle.color = '#1a0dab';
+            }
+        }
+
+        const headingScaleByTag = {
+            H1: 2,
+            H2: 1.5,
+            H3: 1.25,
+            H4: 1.1,
+            H5: 1,
+            H6: 0.9
+        };
+        const headingScale = headingScaleByTag[tag];
+        if (headingScale) {
+            nextStyle.fontSize = Math.max(nextStyle.fontSize, Math.round(baseStyle.fontSize * headingScale));
+        }
+
+        classList.forEach((className) => {
+            const alignMatch = className.match(/^ql-align-(left|center|right|justify)$/);
+            if (alignMatch) {
+                nextStyle.align = alignMatch[1];
+            }
+
+            const indentMatch = className.match(/^ql-indent-(\d+)$/);
+            if (indentMatch) {
+                nextStyle.indentLevel = Number(indentMatch[1]) || 0;
+            }
+
+            const sizeMatch = className.match(/^ql-size-(small|large|huge)$/);
+            if (sizeMatch) {
+                if (sizeMatch[1] === 'small') nextStyle.fontSize = Math.max(8, Math.round(baseStyle.fontSize * 0.8));
+                if (sizeMatch[1] === 'large') nextStyle.fontSize = Math.max(nextStyle.fontSize, Math.round(baseStyle.fontSize * 1.25));
+                if (sizeMatch[1] === 'huge') nextStyle.fontSize = Math.max(nextStyle.fontSize, Math.round(baseStyle.fontSize * 1.5));
+            }
+        });
+
+        const inlineStyle = parseInlineStyle(node.getAttribute('style') || '');
+        if (inlineStyle.color) nextStyle.color = inlineStyle.color;
+        if (inlineStyle.backgroundColor) nextStyle.backgroundColor = inlineStyle.backgroundColor;
+        if (inlineStyle.fontSize) nextStyle.fontSize = inlineStyle.fontSize;
+        if (inlineStyle.align) nextStyle.align = inlineStyle.align;
+        if (inlineStyle.underline) nextStyle.underline = true;
+        if (inlineStyle.strike) nextStyle.strike = true;
+        if (inlineStyle.script) nextStyle.script = inlineStyle.script;
+
+        if (!nextStyle.align) nextStyle.align = 'left';
+        if (!Number.isFinite(nextStyle.indentLevel)) nextStyle.indentLevel = 0;
+
+        return nextStyle;
+    };
+
+    try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(`<div>${htmlValue}</div>`, 'text/html');
+        const root = doc.body.firstElementChild || doc.body;
+        if (!root) return [];
+
+        const tokens = [];
+        const blockTags = new Set(['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6']);
+
+        const walk = (node, style, listState = null) => {
+            if (!node) return;
+
+            if (node.nodeType === Node.TEXT_NODE) {
+                const raw = node.nodeValue || '';
+                const normalized = raw.replace(/\u00A0/g, ' ').replace(/[\t\r\n]+/g, ' ');
+                if (!normalized) return;
+                tokens.push({ type: 'text', text: normalized, style: { ...style } });
+                return;
+            }
+
+            if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+            const tag = node.tagName;
+            if (tag === 'BR') {
+                pushNewline(tokens, { allowConsecutive: true });
+                return;
+            }
+
+            if (tag === 'UL' || tag === 'OL') {
+                const listStyle = applyElementStyle(style, node);
+                pushNewline(tokens);
+                let index = 1;
+                Array.from(node.children || []).forEach((child) => {
+                    if (child.tagName !== 'LI') return;
+                    walk(child, listStyle, {
+                        ordered: tag === 'OL',
+                        index
+                    });
+                    index += 1;
+                });
+                pushNewline(tokens);
+                return;
+            }
+
+            const nextStyle = applyElementStyle(style, node);
+            const isBlock = blockTags.has(tag);
+
+            if (isBlock || tag === 'LI') {
+                pushNewline(tokens);
+            }
+
+            if (tag === 'LI') {
+                const marker = listState?.ordered ? `${listState.index}. ` : '• ';
+                tokens.push({ type: 'text', text: marker, style: { ...nextStyle } });
+            }
+
+            Array.from(node.childNodes || []).forEach((child) => walk(child, nextStyle, listState));
+
+            if (isBlock || tag === 'LI') {
+                pushNewline(tokens);
+            }
+        };
+
+        Array.from(root.childNodes || []).forEach(node => walk(node, { ...baseStyle }));
+
+        while (tokens.length > 0 && tokens[0].type === 'newline') tokens.shift();
+        while (tokens.length > 0 && tokens[tokens.length - 1].type === 'newline') tokens.pop();
+
+        return tokens;
+    } catch (err) {
+        return [];
+    }
+};
+
+const buildPlainTextTokens = (text, style) => {
+    const lines = String(text || '').split('\n');
+    const tokens = [];
+
+    lines.forEach((line, index) => {
+        if (line) {
+            tokens.push({ type: 'text', text: line, style: { ...style } });
+        }
+        if (index < lines.length - 1) {
+            tokens.push({ type: 'newline' });
+        }
+    });
+
+    return tokens;
+};
+
+const measureTextTokens = (ctx, tokens, baseStyle, maxWidth = null) => {
+    if (!ctx || !Array.isArray(tokens) || tokens.length === 0) {
+        return {
+            width: 24,
+            height: 24
+        };
+    }
+
+    const minFont = 8;
+    const indentStep = 32;
+    const wrapWidth = Number.isFinite(maxWidth) ? Math.max(24, maxWidth) : null;
+
+    const toFont = (style) => {
+        const baseFontSize = Math.max(minFont, Number(style.fontSize) || baseStyle.fontSize || 16);
+        const isScript = style.script === 'super' || style.script === 'sub';
+        const fontSize = isScript ? Math.max(minFont, Math.round(baseFontSize * 0.75)) : baseFontSize;
+        const weight = style.bold ? 'bold ' : '';
+        const italic = style.italic ? 'italic ' : '';
+        return {
+            font: `${italic}${weight}${fontSize}px Arial`,
+            fontSize,
+            lineHeight: Math.max(fontSize * 1.35, 12)
+        };
+    };
+
+    let cursorX = 0;
+    let totalY = 0;
+    let lineHeight = Math.max(baseStyle.fontSize * 1.35, 12);
+    let maxLineWidth = 0;
+    let lineIndentLevel = 0;
+    let hasLineStyle = false;
+
+    const getIndentPixels = (level) => Math.max(0, Number(level) || 0) * indentStep;
+
+    const commitNewLine = () => {
+        maxLineWidth = Math.max(maxLineWidth, getIndentPixels(lineIndentLevel) + cursorX);
+        totalY += lineHeight;
+        cursorX = 0;
+        lineHeight = Math.max(baseStyle.fontSize * 1.35, 12);
+        lineIndentLevel = 0;
+        hasLineStyle = false;
+    };
+
+    for (const token of tokens) {
+        if (token.type === 'newline') {
+            commitNewLine();
+            continue;
+        }
+
+        const style = {
+            fontSize: token.style?.fontSize || baseStyle.fontSize,
+            bold: Boolean(token.style?.bold),
+            italic: Boolean(token.style?.italic),
+            script: token.style?.script || null,
+            indentLevel: Number(token.style?.indentLevel) || 0
+        };
+
+        const parts = String(token.text || '').split(/(\s+)/);
+        for (const part of parts) {
+            if (part === '') continue;
+            if (/^\s+$/.test(part) && cursorX === 0) continue;
+
+            if (!hasLineStyle) {
+                lineIndentLevel = Math.max(0, style.indentLevel || 0);
+                hasLineStyle = true;
+            }
+
+            const { font, lineHeight: chunkLineHeight } = toFont(style);
+            ctx.font = font;
+            const chunkWidth = ctx.measureText(part).width;
+
+            const indentPixels = getIndentPixels(lineIndentLevel);
+            const availableWidth = wrapWidth ? Math.max(8, wrapWidth - indentPixels) : null;
+
+            if (availableWidth && cursorX + chunkWidth > availableWidth && cursorX > 0) {
+                commitNewLine();
+                lineIndentLevel = Math.max(0, style.indentLevel || 0);
+                hasLineStyle = true;
+            }
+
+            lineHeight = Math.max(lineHeight, chunkLineHeight);
+            cursorX += chunkWidth;
+        }
+    }
+
+    maxLineWidth = Math.max(maxLineWidth, getIndentPixels(lineIndentLevel) + cursorX);
+    const measuredHeight = totalY + lineHeight;
+    const bottomPadding = Math.max(2, lineHeight * TEXT_RENDER_OVERFLOW_ALLOWANCE_FACTOR);
+
+    return {
+        width: Math.max(24, wrapWidth ? Math.min(maxLineWidth, wrapWidth) : maxLineWidth),
+        height: Math.max(24, measuredHeight + bottomPadding)
+    };
+};
+
+const getTextEditorMinSize = () => {
+    try {
+        const rootStyles = getComputedStyle(document.documentElement);
+        const minWidth = parseFloat(rootStyles.getPropertyValue('--text-editor-min-width'));
+        const minHeight = parseFloat(rootStyles.getPropertyValue('--text-editor-min-height'));
+
+        return {
+            width: Number.isFinite(minWidth) && minWidth > 0 ? minWidth : 420,
+            height: Number.isFinite(minHeight) && minHeight > 0 ? minHeight : 256
+        };
+    } catch (err) {
+        return { width: 420, height: 256 };
+    }
+};
+
+const getAdvancedTextContentBounds = (editorBounds, toolbarHeight = 72, footerHeight = 48) => {
+    const safeBounds = editorBounds || { x: 0, y: 0, width: 24, height: 24 };
+    const totalChrome = toolbarHeight + footerHeight;
+    const chromeHeight = Math.min(
+        totalChrome,
+        Math.max(0, Number(safeBounds.height || 0) - 24)
+    );
+    const appliedToolbar = Math.min(toolbarHeight, chromeHeight);
+
+    return {
+        x: safeBounds.x,
+        y: safeBounds.y + appliedToolbar,
+        width: Math.max(24, Number(safeBounds.width) || 24),
+        height: Math.max(24, Number(safeBounds.height || 24) - chromeHeight)
+    };
+};
+
+const clampEditorViewportRect = ({ left, top, width, height }) => {
+    const viewportWidth = Math.max(0, window.innerWidth || 0);
+    const viewportHeight = Math.max(0, window.innerHeight || 0);
+
+    const safeWidth = Math.max(24, Math.min(Number(width) || 0, viewportWidth || Number(width) || 24));
+    const safeHeight = Math.max(24, Math.min(Number(height) || 0, viewportHeight || Number(height) || 24));
+
+    const maxLeft = Math.max(0, viewportWidth - safeWidth);
+    const maxTop = Math.max(0, viewportHeight - safeHeight);
+
+    const safeLeft = Math.min(Math.max(0, Number(left) || 0), maxLeft);
+    const safeTop = Math.min(Math.max(0, Number(top) || 0), maxTop);
+
+    return {
+        left: safeLeft,
+        top: safeTop,
+        width: safeWidth,
+        height: safeHeight
+    };
+};
+
+const getRotateHandlePosition = ({ rotatedSelection = null, bounds = null, offset = 24 } = {}) => {
+    const safeOffset = Math.max(8, Number(offset) || 24);
+
+    if (rotatedSelection?.handles?.n && rotatedSelection?.center) {
+        const anchor = rotatedSelection.handles.n;
+        const center = rotatedSelection.center;
+        let vx = anchor.x - center.x;
+        let vy = anchor.y - center.y;
+        const len = Math.hypot(vx, vy);
+        if (len < 0.0001) {
+            vx = 0;
+            vy = -1;
+        } else {
+            vx /= len;
+            vy /= len;
+        }
+        return {
+            x: anchor.x + vx * safeOffset,
+            y: anchor.y + vy * safeOffset,
+            anchorX: anchor.x,
+            anchorY: anchor.y
+        };
+    }
+
+    if (!bounds) return null;
+
+    const anchorX = (bounds.minX + bounds.maxX) / 2;
+    const anchorY = bounds.minY;
+    return {
+        x: anchorX,
+        y: anchorY - safeOffset,
+        anchorX,
+        anchorY
+    };
+};
+
+const isPointInsideOrNearRotatedSelection = (x, y, geometry, edgeThreshold = 6) => {
+    if (!geometry?.corners || geometry.corners.length !== 4) return false;
+    if (pointInPolygon(x, y, geometry.corners)) return true;
+
+    const corners = geometry.corners;
+    for (let i = 0; i < corners.length; i++) {
+        const a = corners[i];
+        const b = corners[(i + 1) % corners.length];
+        if (pointSegmentDistance(x, y, a.x, a.y, b.x, b.y) <= edgeThreshold) {
+            return true;
+        }
+    }
+    return false;
+};
+
+const transformStrokeFromOriginalBounds = (liveStroke, originalStroke, fromBounds, toBounds) => {
+    if (!liveStroke?.length || !originalStroke?.length || !fromBounds || !toBounds) return;
+
+    const first = liveStroke[0];
+    const origFirst = originalStroke[0];
+
+    const mapPoint = (point) => ({
+        x: mapValueBetweenBounds(point.x, fromBounds.minX, fromBounds.maxX, toBounds.minX, toBounds.maxX),
+        y: mapValueBetweenBounds(point.y, fromBounds.minY, fromBounds.maxY, toBounds.minY, toBounds.maxY)
+    });
+
+    if (origFirst.type === 'image' || origFirst.type === 'text') {
+        const topLeft = mapPoint({ x: origFirst.x, y: origFirst.y });
+        const bottomRight = mapPoint({ x: origFirst.x + origFirst.width, y: origFirst.y + origFirst.height });
+        first.x = Math.min(topLeft.x, bottomRight.x);
+        first.y = Math.min(topLeft.y, bottomRight.y);
+        first.width = Math.max(1, Math.abs(bottomRight.x - topLeft.x));
+        first.height = Math.max(1, Math.abs(bottomRight.y - topLeft.y));
+        if (origFirst.type === 'text') {
+            const scaleX = Math.abs((toBounds.maxX - toBounds.minX) / Math.max(1, fromBounds.maxX - fromBounds.minX));
+            const scaleY = Math.abs((toBounds.maxY - toBounds.minY) / Math.max(1, fromBounds.maxY - fromBounds.minY));
+            const fontScale = Math.max(0.25, Math.sqrt(scaleX * scaleY));
+            const baseFontSize = Math.max(8, Number(origFirst.baseFontSize) || Number(origFirst.fontSize) || 16);
+            first.baseFontSize = baseFontSize;
+            first.fontSize = Math.max(8, Math.round((Number(origFirst.fontSize) || 16) * fontScale));
+            first.editorWidth = first.width;
+            first.editorHeight = first.height;
+        }
+        return;
+    }
+
+    if (origFirst.type === 'highlight-rect') {
+        const origRects = origFirst.rects || [{ x: origFirst.x, y: origFirst.y, width: origFirst.width, height: origFirst.height }];
+        first.rects = origRects.map(rect => {
+            const p1 = mapPoint({ x: rect.x, y: rect.y });
+            const p2 = mapPoint({ x: rect.x + rect.width, y: rect.y + rect.height });
+            return {
+                x: Math.min(p1.x, p2.x),
+                y: Math.min(p1.y, p2.y),
+                width: Math.max(1, Math.abs(p2.x - p1.x)),
+                height: Math.max(1, Math.abs(p2.y - p1.y))
+            };
+        });
+        if (first.rects[0]) {
+            first.x = first.rects[0].x;
+            first.y = first.rects[0].y;
+            first.width = first.rects[0].width;
+            first.height = first.rects[0].height;
+        }
+        return;
+    }
+
+    if (origFirst.type === 'line' || origFirst.type === 'rectangle') {
+        const start = mapPoint({ x: origFirst.startX, y: origFirst.startY });
+        const end = mapPoint({ x: origFirst.endX, y: origFirst.endY });
+        first.startX = start.x;
+        first.startY = start.y;
+        first.endX = end.x;
+        first.endY = end.y;
+        first.x = first.startX;
+        first.y = first.startY;
+        return;
+    }
+
+    if (origFirst.type === 'circle') {
+        const center = mapPoint({ x: origFirst.startX, y: origFirst.startY });
+        first.startX = center.x;
+        first.startY = center.y;
+
+        const end = mapPoint({ x: origFirst.endX, y: origFirst.endY });
+        first.endX = end.x;
+        first.endY = end.y;
+
+        if (origFirst.radiusX !== undefined || origFirst.radiusY !== undefined) {
+            const scaleX = Math.abs((toBounds.maxX - toBounds.minX) / Math.max(1, fromBounds.maxX - fromBounds.minX));
+            const scaleY = Math.abs((toBounds.maxY - toBounds.minY) / Math.max(1, fromBounds.maxY - fromBounds.minY));
+            const rx = origFirst.radiusX !== undefined ? origFirst.radiusX : Math.abs(origFirst.endX - origFirst.startX);
+            const ry = origFirst.radiusY !== undefined ? origFirst.radiusY : Math.abs(origFirst.endY - origFirst.startY);
+            first.radiusX = Math.max(1, rx * scaleX);
+            first.radiusY = Math.max(1, ry * scaleY);
+        }
+
+        first.x = first.startX;
+        first.y = first.startY;
+        return;
+    }
+
+    for (let i = 0; i < liveStroke.length; i++) {
+        const origPoint = originalStroke[i];
+        if (!origPoint) continue;
+        const point = mapPoint({ x: origPoint.x, y: origPoint.y });
+        liveStroke[i].x = point.x;
+        liveStroke[i].y = point.y;
+    }
+};
+
+const translateStrokeBy = (stroke, dx, dy) => {
+    if (!Array.isArray(stroke) || stroke.length === 0) return;
+    const first = stroke[0] || {};
+
+    if (first.type === 'image' || first.type === 'text') {
+        first.x += dx;
+        first.y += dy;
+    } else if (first.type === 'highlight-rect') {
+        const rects = first.rects || [{ x: first.x, y: first.y, width: first.width, height: first.height }];
+        rects.forEach(rect => {
+            rect.x += dx;
+            rect.y += dy;
+        });
+        first.rects = rects;
+        if (rects[0]) {
+            first.x = rects[0].x;
+            first.y = rects[0].y;
+            first.width = rects[0].width;
+            first.height = rects[0].height;
+        }
+    } else if (first.type === 'line' || first.type === 'rectangle') {
+        first.startX += dx;
+        first.startY += dy;
+        first.endX += dx;
+        first.endY += dy;
+        first.x = first.startX;
+        first.y = first.startY;
+    } else if (first.type === 'circle') {
+        first.startX += dx;
+        first.startY += dy;
+        first.endX += dx;
+        first.endY += dy;
+        first.x = first.startX;
+        first.y = first.startY;
+    } else {
+        stroke.forEach(point => {
+            point.x += dx;
+            point.y += dy;
+        });
+    }
+
+    if (Number.isFinite(first.rotationCenterX) && Number.isFinite(first.rotationCenterY)) {
+        first.rotationCenterX += dx;
+        first.rotationCenterY += dy;
+    }
+};
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+const createSvgElement = (tag, attrs = {}) => {
+    const el = document.createElementNS(SVG_NS, tag);
+
+    Object.entries(attrs).forEach(([key, value]) => {
+        if (value === null || value === undefined) return;
+        el.setAttribute(key, String(value));
+    });
+    return el;
+};
+
+const getStrokePenPath = (stroke) => {
+    if (!Array.isArray(stroke) || stroke.length === 0) return '';
+    return stroke
+        .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
+        .join(' ');
+};
+
+const setStrokeMeta = (el, strokeIndex) => {
+    if (!el || strokeIndex === undefined || strokeIndex === null) return;
+    el.setAttribute('data-stroke-index', String(strokeIndex));
+};
+
 export function useDraw(pagesContainer, activePage, addToHistory) {
     const { get: storeGet, set: storeSet } = useStore();
 
@@ -183,7 +1128,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
 
     // Text mode variables
     const DEFAULT_TEXT_COLOR = '#000000';
-    const TEXT_RENDER_OVERFLOW_ALLOWANCE_FACTOR = 0.2;
     const TEXT_EDITOR_DRAG_THRESHOLD = 6;
     const ADVANCED_EDITOR_EXTRA_HEIGHT = 120;
     const SIMPLE_TEXT_STROKE_MIN_WIDTH = 260;
@@ -222,7 +1166,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         const rect = e.target.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
-        selectionStart.value = { x, y, canvasIndex: getCanvasIndexFromEvent(e) };
+        selectionStart.value = { x, y, canvasIndex: getCanvasIndexFromEvent(activePage.value, e) };
         selectionEnd.value = { x, y };
         isSelecting.value = true;
         stopEvent(e);
@@ -365,43 +1309,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
             return `url("data:image/svg+xml;utf8,${svg}") 8 8, auto`;
         }
 
-        const toCursorFromAngle = (angleRad) => {
-            if (!Number.isFinite(angleRad)) return null;
-            const deg = ((angleRad * 180 / Math.PI) % 180 + 180) % 180;
-            if (deg < 22.5 || deg >= 157.5) return 'ew-resize';
-            if (deg < 67.5) return 'nwse-resize';
-            if (deg < 112.5) return 'ns-resize';
-            if (deg < 157.5) return 'nesw-resize';
-            return 'ew-resize';
-        };
-
-        const toExactResizeCursor = (angleRad) => {
-            if (!Number.isFinite(angleRad)) return null;
-            const fallback = toCursorFromAngle(angleRad) || 'ew-resize';
-            const deg = angleRad * (180 / Math.PI);
-            const svg = encodeURIComponent(
-                `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
-                    <g transform="rotate(${deg} 12 12)">
-                        <line x1="5" y1="12" x2="19" y2="12" stroke="#2a7fff" stroke-width="2" stroke-linecap="round"/>
-                        <path d="M5 12 L9 9 M5 12 L9 15" stroke="#2a7fff" stroke-width="2" stroke-linecap="round" fill="none"/>
-                        <path d="M19 12 L15 9 M19 12 L15 15" stroke="#2a7fff" stroke-width="2" stroke-linecap="round" fill="none"/>
-                    </g>
-                </svg>`
-            );
-            return `url("data:image/svg+xml;utf8,${svg}") 12 12, ${fallback}`;
-        };
-
-        const defaultAngleByHandle = {
-            n: Math.PI / 2,
-            s: Math.PI / 2,
-            e: 0,
-            w: 0,
-            nw: Math.PI / 4,
-            se: Math.PI / 4,
-            ne: (3 * Math.PI) / 4,
-            sw: (3 * Math.PI) / 4
-        };
-
         const selected = selectedStroke.value?.stroke;
         const geometry = selected ? getRotatedSelectionGeometry(selected, SELECTION_PADDING) : null;
         const handles = geometry?.handles;
@@ -491,56 +1398,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
 
         const page = activePage.value;
 
-        // Determine the visible center in canvas coordinates for placement
-        const getVisibleCenterOnCanvas = () => {
-            const canvas = page.drawingCanvas;
-            if (!canvas) return { cx: 0, cy: 0 };
-            const rect = canvas.getBoundingClientRect();
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
-
-            const viewportW = window.innerWidth || document.documentElement.clientWidth;
-            const viewportH = window.innerHeight || document.documentElement.clientHeight;
-
-            const visibleLeft = Math.max(rect.left, 0);
-            const visibleRight = Math.min(rect.right, viewportW);
-            const visibleTop = Math.max(rect.top, 0);
-            const visibleBottom = Math.min(rect.bottom, viewportH);
-
-            const centerClientX = (visibleLeft + visibleRight) / 2;
-            const centerClientY = (visibleTop + visibleBottom) / 2;
-
-            const cx = (centerClientX - rect.left) * scaleX;
-            const cy = (centerClientY - rect.top) * scaleY;
-            return { cx, cy };
-        };
-
-        // Translate stroke by dx, dy according to its type
-        const translateStroke = (stroke, dx, dy) => {
-            const first = stroke[0];
-            if (first.type === 'image') {
-                first.x += dx;
-                first.y += dy;
-            } else if (first.type === 'highlight-rect') {
-                const rects = first.rects || [{ x: first.x, y: first.y, width: first.width, height: first.height }];
-                rects.forEach(rect => { rect.x += dx; rect.y += dy; });
-                if (first.x !== undefined) { first.x += dx; first.y += dy; }
-            } else if (first.type === 'text') {
-                first.x += dx;
-                first.y += dy;
-            } else if (first.type === 'line' || first.type === 'rectangle' || first.type === 'circle') {
-                first.startX += dx;
-                first.startY += dy;
-                first.endX += dx;
-                first.endY += dy;
-                first.x = first.startX;
-                first.y = first.startY;
-            } else {
-                for (let point of stroke) { point.x += dx; point.y += dy; }
-            }
-        };
-
-        const { cx: visibleCX, cy: visibleCY } = getVisibleCenterOnCanvas();
+        const { cx: visibleCX, cy: visibleCY } = getVisibleCenterOnCanvas(page.drawingCanvas);
 
         // Determine if we copied a group or a single stroke
         const group = copiedStroke.value.strokes;
@@ -571,7 +1429,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
                 if (newStroke[0]) newStroke[0].id = newId;
                 if (newStroke.length > 1) newStroke.forEach(p => { p.id = newId; });
 
-                translateStroke(newStroke, baseDX, baseDY);
+                translateStrokeBy(newStroke, baseDX, baseDY);
 
                 page.strokes.push(newStroke);
                 addToHistory({ id: newId, type: 'add', page: page, stroke: newStroke });
@@ -602,10 +1460,10 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
             const cY = (b.minY + b.maxY) / 2;
             const dx = (visibleCX - cX) + offset;
             const dy = (visibleCY - cY) + offset;
-            translateStroke(newStroke, dx, dy);
+            translateStrokeBy(newStroke, dx, dy);
         } else {
             // Fallback: just apply offset
-            translateStroke(newStroke, offset, offset);
+            translateStrokeBy(newStroke, offset, offset);
         }
 
         page.strokes.push(newStroke);
@@ -642,507 +1500,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
     const activePointerType = ref(null);
     const isPenHovering = ref(false);
 
-    const stopEvent = (e) => {
-        if (!e) return;
-        if (typeof e.preventDefault === 'function') e.preventDefault();
-        if (typeof e.stopPropagation === 'function') e.stopPropagation();
-    };
-
-    const isSecondaryPointerAction = (e) => {
-        if (!e) return false;
-        if (e.button === 2) return true;
-        if (typeof e.buttons === 'number' && (e.buttons & 2) === 2) return true;
-        return false;
-    };
-
-    const getEventClientXY = (e) => {
-        if (e?.clientX !== undefined && e?.clientY !== undefined) {
-            return { clientX: e.clientX, clientY: e.clientY };
-        }
-        const touch = e?.touches?.[0] || e?.changedTouches?.[0];
-        return {
-            clientX: touch?.clientX ?? 0,
-            clientY: touch?.clientY ?? 0
-        };
-    };
-
-    const getCanvasPointFromEvent = (canvas, e) => {
-        if (!canvas) return null;
-        const rect = canvas.getBoundingClientRect();
-        const scaleX = canvas.width / rect.width;
-        const scaleY = canvas.height / rect.height;
-        const { clientX, clientY } = getEventClientXY(e);
-        return {
-            rect,
-            scaleX,
-            scaleY,
-            clientX,
-            clientY,
-            x: (clientX - rect.left) * scaleX,
-            y: (clientY - rect.top) * scaleY
-        };
-    };
-
-    const getCanvasIndexFromEvent = (e) => {
-        if (activePage.value.drawingCanvas === e.target) {
-            return activePage.value.index;
-        }
-
-        return -1;
-    };
-
-    const drawShape = (ctx, type, startX, startY, endX, endY, stroke = null) => {
-        const style = stroke && !Array.isArray(stroke) ? stroke : {};
-        const shouldFill = Boolean(style.fill) && (type === 'rectangle' || type === 'circle');
-        if (shouldFill) {
-            ctx.fillStyle = style.color || '#1d4ed8';
-        }
-
-        if (type === 'line') {
-            ctx.beginPath();
-            ctx.moveTo(startX, startY);
-            ctx.lineTo(endX, endY);
-            ctx.stroke();
-        } else if (type === 'rectangle') {
-            if (shouldFill) {
-                ctx.fillRect(startX, startY, endX - startX, endY - startY);
-            }
-            ctx.strokeRect(startX, startY, endX - startX, endY - startY);
-        } else if (type === 'circle') {
-            ctx.beginPath();
-            if (stroke && (stroke.radiusX !== undefined || stroke.radiusY !== undefined)) {
-                // Draw as ellipse
-                const rx = stroke.radiusX !== undefined ? stroke.radiusX : Math.abs(endX - startX);
-                const ry = stroke.radiusY !== undefined ? stroke.radiusY : Math.abs(endY - startY);
-                ctx.ellipse(startX, startY, rx, ry, 0, 0, 2 * Math.PI);
-            } else {
-                // Draw as perfect circle
-                const radius = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2));
-                ctx.arc(startX, startY, radius, 0, 2 * Math.PI);
-            }
-            if (shouldFill) {
-                ctx.fill();
-            }
-            ctx.stroke();
-        }
-    };
-
-    const extractPlainTextFromHtml = (html) => {
-        const htmlValue = String(html || '');
-        if (!htmlValue.trim()) return '';
-
-        try {
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(`<div>${htmlValue}</div>`, 'text/html');
-            const root = doc.body.firstElementChild || doc.body;
-            if (!root) return '';
-
-            const blocks = new Set(['P', 'DIV', 'LI', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6']);
-            let text = '';
-
-            const visit = (node) => {
-                if (!node) return;
-
-                if (node.nodeType === Node.TEXT_NODE) {
-                    text += node.nodeValue || '';
-                    return;
-                }
-
-                if (node.nodeType !== Node.ELEMENT_NODE) return;
-
-                const tag = node.tagName;
-                if (tag === 'BR') {
-                    text += '\n';
-                    return;
-                }
-
-                const children = Array.from(node.childNodes || []);
-                children.forEach(visit);
-
-                if (blocks.has(tag)) {
-                    text += '\n';
-                }
-            };
-
-            Array.from(root.childNodes || []).forEach(visit);
-
-            return text
-                .replace(/\u00A0/g, ' ')
-                .replace(/\r/g, '')
-                .replace(/[ \t]+\n/g, '\n')
-                .replace(/\n[ \t]+/g, '\n')
-                .replace(/\n{3,}/g, '\n\n')
-                .trim();
-        } catch (err) {
-            return htmlValue
-                .replace(/<br\s*\/?>/gi, '\n')
-                .replace(/<[^>]+>/g, '')
-                .replace(/\s+/g, ' ')
-                .trim();
-        }
-    };
-
-    const normalizeTextStrokeContent = (content) => {
-        if (!content) {
-            return { text: '', html: '' };
-        }
-
-
-        if (typeof content === 'string') {
-            const html = content;
-            return {
-                text: extractPlainTextFromHtml(html),
-                html
-            };
-        }
-
-        const html = typeof content.html === 'string' ? content.html : '';
-        const text = typeof content.text === 'string' ? content.text : extractPlainTextFromHtml(html);
-        return { text, html };
-    };
-
-    const getTextStrokeContent = (strokeOrFirst) => {
-        const first = Array.isArray(strokeOrFirst) ? strokeOrFirst[0] : strokeOrFirst;
-        if (!first) return { text: '', html: '' };
-
-        if (first.content !== undefined && first.content !== null) {
-            return normalizeTextStrokeContent(first.content);
-        }
-
-        const fallbackText = typeof first.text === 'string' ? first.text : '';
-        return {
-            text: fallbackText,
-            html: fallbackText ? convertPlainTextToHtml(fallbackText) : ''
-        };
-    };
-
-    const getStoredTextEditorMode = (first) => {
-        if (!first) return 'advanced';
-        if (first.editorMode === 'simple' || first.editorMode === 'advanced') {
-            return first.editorMode;
-        }
-        return 'advanced';
-    };
-
-    const setStoredTextEditorMode = (first, isSimple) => {
-        if (!first) return;
-        first.editorMode = isSimple ? 'simple' : 'advanced';
-    };
-
-    const parseInlineStyle = (styleText = '') => {
-        const style = {};
-        const parts = String(styleText)
-            .split(';')
-            .map(part => part.trim())
-            .filter(Boolean);
-
-        parts.forEach(part => {
-            const [rawKey, ...rawValueParts] = part.split(':');
-            if (!rawKey || rawValueParts.length === 0) return;
-            const key = rawKey.trim().toLowerCase();
-            const value = rawValueParts.join(':').trim();
-
-            if (key === 'color' && value) {
-                style.color = value;
-                return;
-            }
-
-            if ((key === 'background' || key === 'background-color') && value && value !== 'transparent') {
-                style.backgroundColor = value;
-                return;
-            }
-
-            if (key === 'font-size') {
-                const parsed = parseFloat(value);
-                if (Number.isFinite(parsed) && parsed > 0) {
-                    style.fontSize = parsed;
-                }
-            }
-
-            if (key === 'text-align' && value) {
-                style.align = String(value).toLowerCase();
-                return;
-            }
-
-            if (key === 'text-decoration' && value) {
-                const lowered = String(value).toLowerCase();
-                if (lowered.includes('underline')) style.underline = true;
-                if (lowered.includes('line-through')) style.strike = true;
-                return;
-            }
-
-            if (key === 'vertical-align' && value) {
-                const lowered = String(value).toLowerCase();
-                if (lowered.includes('super')) style.script = 'super';
-                if (lowered.includes('sub')) style.script = 'sub';
-            }
-        });
-
-        return style;
-    };
-
-    const htmlToStyledTokens = (html, baseStyle) => {
-        const htmlValue = String(html || '').trim();
-        if (!htmlValue) return [];
-
-        const pushNewline = (tokens, { allowConsecutive = false } = {}) => {
-            if (!allowConsecutive && (tokens.length === 0 || tokens[tokens.length - 1].type === 'newline')) return;
-            tokens.push({ type: 'newline' });
-        };
-
-        const applyElementStyle = (style, node) => {
-            const nextStyle = { ...style };
-            const tag = node.tagName;
-            const classList = String(node.getAttribute('class') || '')
-                .split(/\s+/)
-                .filter(Boolean);
-
-            if (tag === 'STRONG' || tag === 'B') nextStyle.bold = true;
-            if (tag === 'EM' || tag === 'I') nextStyle.italic = true;
-            if (tag === 'U') nextStyle.underline = true;
-            if (tag === 'S' || tag === 'STRIKE') nextStyle.strike = true;
-            if (tag === 'SUP') nextStyle.script = 'super';
-            if (tag === 'SUB') nextStyle.script = 'sub';
-
-            if (tag === 'A') {
-                nextStyle.link = true;
-                nextStyle.underline = true;
-                if (!nextStyle.color) {
-                    nextStyle.color = '#1a0dab';
-                }
-            }
-
-            const headingScaleByTag = {
-                H1: 2,
-                H2: 1.5,
-                H3: 1.25,
-                H4: 1.1,
-                H5: 1,
-                H6: 0.9
-            };
-            const headingScale = headingScaleByTag[tag];
-            if (headingScale) {
-                nextStyle.fontSize = Math.max(nextStyle.fontSize, Math.round(baseStyle.fontSize * headingScale));
-            }
-
-            classList.forEach((className) => {
-                const alignMatch = className.match(/^ql-align-(left|center|right|justify)$/);
-                if (alignMatch) {
-                    nextStyle.align = alignMatch[1];
-                }
-
-                const indentMatch = className.match(/^ql-indent-(\d+)$/);
-                if (indentMatch) {
-                    nextStyle.indentLevel = Number(indentMatch[1]) || 0;
-                }
-
-                const sizeMatch = className.match(/^ql-size-(small|large|huge)$/);
-                if (sizeMatch) {
-                    if (sizeMatch[1] === 'small') nextStyle.fontSize = Math.max(8, Math.round(baseStyle.fontSize * 0.8));
-                    if (sizeMatch[1] === 'large') nextStyle.fontSize = Math.max(nextStyle.fontSize, Math.round(baseStyle.fontSize * 1.25));
-                    if (sizeMatch[1] === 'huge') nextStyle.fontSize = Math.max(nextStyle.fontSize, Math.round(baseStyle.fontSize * 1.5));
-                }
-            });
-
-            const inlineStyle = parseInlineStyle(node.getAttribute('style') || '');
-            if (inlineStyle.color) nextStyle.color = inlineStyle.color;
-            if (inlineStyle.backgroundColor) nextStyle.backgroundColor = inlineStyle.backgroundColor;
-            if (inlineStyle.fontSize) nextStyle.fontSize = inlineStyle.fontSize;
-            if (inlineStyle.align) nextStyle.align = inlineStyle.align;
-            if (inlineStyle.underline) nextStyle.underline = true;
-            if (inlineStyle.strike) nextStyle.strike = true;
-            if (inlineStyle.script) nextStyle.script = inlineStyle.script;
-
-            if (!nextStyle.align) nextStyle.align = 'left';
-            if (!Number.isFinite(nextStyle.indentLevel)) nextStyle.indentLevel = 0;
-
-            return nextStyle;
-        };
-
-        try {
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(`<div>${htmlValue}</div>`, 'text/html');
-            const root = doc.body.firstElementChild || doc.body;
-            if (!root) return [];
-
-            const tokens = [];
-            const blockTags = new Set(['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6']);
-
-            const walk = (node, style, listState = null) => {
-                if (!node) return;
-
-                if (node.nodeType === Node.TEXT_NODE) {
-                    const raw = node.nodeValue || '';
-                    const normalized = raw.replace(/\u00A0/g, ' ').replace(/[\t\r\n]+/g, ' ');
-                    if (!normalized) return;
-                    tokens.push({ type: 'text', text: normalized, style: { ...style } });
-                    return;
-                }
-
-                if (node.nodeType !== Node.ELEMENT_NODE) return;
-
-                const tag = node.tagName;
-                if (tag === 'BR') {
-                    pushNewline(tokens, { allowConsecutive: true });
-                    return;
-                }
-
-                if (tag === 'UL' || tag === 'OL') {
-                    const listStyle = applyElementStyle(style, node);
-                    pushNewline(tokens);
-                    let index = 1;
-                    Array.from(node.children || []).forEach((child) => {
-                        if (child.tagName !== 'LI') return;
-                        walk(child, listStyle, {
-                            ordered: tag === 'OL',
-                            index
-                        });
-                        index += 1;
-                    });
-                    pushNewline(tokens);
-                    return;
-                }
-
-                const nextStyle = applyElementStyle(style, node);
-                const isBlock = blockTags.has(tag);
-
-                if (isBlock || tag === 'LI') {
-                    pushNewline(tokens);
-                }
-
-                if (tag === 'LI') {
-                    const marker = listState?.ordered ? `${listState.index}. ` : '• ';
-                    tokens.push({ type: 'text', text: marker, style: { ...nextStyle } });
-                }
-
-                Array.from(node.childNodes || []).forEach((child) => walk(child, nextStyle, listState));
-
-                if (isBlock || tag === 'LI') {
-                    pushNewline(tokens);
-                }
-            };
-
-            Array.from(root.childNodes || []).forEach(node => walk(node, { ...baseStyle }));
-
-            while (tokens.length > 0 && tokens[0].type === 'newline') tokens.shift();
-            while (tokens.length > 0 && tokens[tokens.length - 1].type === 'newline') tokens.pop();
-
-            return tokens;
-        } catch (err) {
-            return [];
-        }
-    };
-
-    const buildPlainTextTokens = (text, style) => {
-        const lines = String(text || '').split('\n');
-        const tokens = [];
-
-        lines.forEach((line, index) => {
-            if (line) {
-                tokens.push({ type: 'text', text: line, style: { ...style } });
-            }
-            if (index < lines.length - 1) {
-                tokens.push({ type: 'newline' });
-            }
-        });
-
-        return tokens;
-    };
-
-    const measureTextTokens = (ctx, tokens, baseStyle, maxWidth = null) => {
-        if (!ctx || !Array.isArray(tokens) || tokens.length === 0) {
-            return {
-                width: 24,
-                height: 24
-            };
-        }
-
-        const minFont = 8;
-        const indentStep = 32;
-        const wrapWidth = Number.isFinite(maxWidth) ? Math.max(24, maxWidth) : null;
-
-        const toFont = (style) => {
-            const baseFontSize = Math.max(minFont, Number(style.fontSize) || baseStyle.fontSize || 16);
-            const isScript = style.script === 'super' || style.script === 'sub';
-            const fontSize = isScript ? Math.max(minFont, Math.round(baseFontSize * 0.75)) : baseFontSize;
-            const weight = style.bold ? 'bold ' : '';
-            const italic = style.italic ? 'italic ' : '';
-            return {
-                font: `${italic}${weight}${fontSize}px Arial`,
-                fontSize,
-                lineHeight: Math.max(fontSize * 1.35, 12)
-            };
-        };
-
-        let cursorX = 0;
-        let totalY = 0;
-        let lineHeight = Math.max(baseStyle.fontSize * 1.35, 12);
-        let maxLineWidth = 0;
-        let lineIndentLevel = 0;
-        let hasLineStyle = false;
-
-        const getIndentPixels = (level) => Math.max(0, Number(level) || 0) * indentStep;
-
-        const commitNewLine = () => {
-            maxLineWidth = Math.max(maxLineWidth, getIndentPixels(lineIndentLevel) + cursorX);
-            totalY += lineHeight;
-            cursorX = 0;
-            lineHeight = Math.max(baseStyle.fontSize * 1.35, 12);
-            lineIndentLevel = 0;
-            hasLineStyle = false;
-        };
-
-        for (const token of tokens) {
-            if (token.type === 'newline') {
-                commitNewLine();
-                continue;
-            }
-
-            const style = {
-                fontSize: token.style?.fontSize || baseStyle.fontSize,
-                bold: Boolean(token.style?.bold),
-                italic: Boolean(token.style?.italic),
-                script: token.style?.script || null,
-                indentLevel: Number(token.style?.indentLevel) || 0
-            };
-
-            const parts = String(token.text || '').split(/(\s+)/);
-            for (const part of parts) {
-                if (part === '') continue;
-                if (/^\s+$/.test(part) && cursorX === 0) continue;
-
-                if (!hasLineStyle) {
-                    lineIndentLevel = Math.max(0, style.indentLevel || 0);
-                    hasLineStyle = true;
-                }
-
-                const { font, lineHeight: chunkLineHeight } = toFont(style);
-                ctx.font = font;
-                const chunkWidth = ctx.measureText(part).width;
-
-                const indentPixels = getIndentPixels(lineIndentLevel);
-                const availableWidth = wrapWidth ? Math.max(8, wrapWidth - indentPixels) : null;
-
-                if (availableWidth && cursorX + chunkWidth > availableWidth && cursorX > 0) {
-                    commitNewLine();
-                    lineIndentLevel = Math.max(0, style.indentLevel || 0);
-                    hasLineStyle = true;
-                }
-
-                lineHeight = Math.max(lineHeight, chunkLineHeight);
-                cursorX += chunkWidth;
-            }
-        }
-
-        maxLineWidth = Math.max(maxLineWidth, getIndentPixels(lineIndentLevel) + cursorX);
-        const measuredHeight = totalY + lineHeight;
-        const bottomPadding = Math.max(2, lineHeight * TEXT_RENDER_OVERFLOW_ALLOWANCE_FACTOR);
-
-        return {
-            width: Math.max(24, wrapWidth ? Math.min(maxLineWidth, wrapWidth) : maxLineWidth),
-            height: Math.max(24, measuredHeight + bottomPadding)
-        };
-    };
 
     const getFittedTextStrokeBounds = ({ content, color, fontSize, bounds }) => {
         const minSize = getTextEditorMinSize();
@@ -1183,13 +1540,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         };
     };
 
-    const convertPlainTextToHtml = (text) => {
-        const escaped = (text || '')
-            .replaceAll('&', '&amp;')
-            .replaceAll('<', '&lt;')
-            .replaceAll('>', '&gt;');
-        return `<p>${escaped.replaceAll('\n', '</p><p>')}</p>`;
-    };
 
     const getTextBoxSize = (stroke) => {
         const first = stroke?.[0];
@@ -1259,20 +1609,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         };
     };
 
-    const getTextEditorMinSize = () => {
-        try {
-            const rootStyles = getComputedStyle(document.documentElement);
-            const minWidth = parseFloat(rootStyles.getPropertyValue('--text-editor-min-width'));
-            const minHeight = parseFloat(rootStyles.getPropertyValue('--text-editor-min-height'));
-
-            return {
-                width: Number.isFinite(minWidth) && minWidth > 0 ? minWidth : 420,
-                height: Number.isFinite(minHeight) && minHeight > 0 ? minHeight : 256
-            };
-        } catch (err) {
-            return { width: 420, height: 256 };
-        }
-    };
 
     const getPreferredTextEditorSize = () => {
         const minSize = getTextEditorMinSize();
@@ -1308,24 +1644,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         return Math.max(0, getAdvancedEditorChromeHeight() - getAdvancedEditorToolbarHeight());
     };
 
-    const getAdvancedTextContentBounds = (editorBounds) => {
-        const safeBounds = editorBounds || { x: 0, y: 0, width: 24, height: 24 };
-        const toolbarHeight = getAdvancedEditorToolbarHeight();
-        const footerHeight = getAdvancedEditorFooterHeight();
-        const totalChrome = toolbarHeight + footerHeight;
-        const chromeHeight = Math.min(
-            totalChrome,
-            Math.max(0, Number(safeBounds.height || 0) - 24)
-        );
-        const appliedToolbar = Math.min(toolbarHeight, chromeHeight);
-
-        return {
-            x: safeBounds.x,
-            y: safeBounds.y + appliedToolbar,
-            width: Math.max(24, Number(safeBounds.width) || 24),
-            height: Math.max(24, Number(safeBounds.height || 24) - chromeHeight)
-        };
-    };
 
     const rememberTextEditorSize = (width, height) => {
         const minSize = getTextEditorMinSize();
@@ -1346,27 +1664,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         textPosition.value = null;
         textCanvasIndex.value = -1;
         textboxPosition.value = null;
-    };
-
-    const clampEditorViewportRect = ({ left, top, width, height }) => {
-        const viewportWidth = Math.max(0, window.innerWidth || 0);
-        const viewportHeight = Math.max(0, window.innerHeight || 0);
-
-        const safeWidth = Math.max(24, Math.min(Number(width) || 0, viewportWidth || Number(width) || 24));
-        const safeHeight = Math.max(24, Math.min(Number(height) || 0, viewportHeight || Number(height) || 24));
-
-        const maxLeft = Math.max(0, viewportWidth - safeWidth);
-        const maxTop = Math.max(0, viewportHeight - safeHeight);
-
-        const safeLeft = Math.min(Math.max(0, Number(left) || 0), maxLeft);
-        const safeTop = Math.min(Math.max(0, Number(top) || 0), maxTop);
-
-        return {
-            left: safeLeft,
-            top: safeTop,
-            width: safeWidth,
-            height: safeHeight
-        };
     };
 
     const setTextEditorPosition = (bounds) => {
@@ -1476,7 +1773,11 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         if (targetBounds) {
             textStrokeTargetBounds.value = targetBounds;
         } else if (!textEditorSimpleMode.value) {
-            textStrokeTargetBounds.value = getAdvancedTextContentBounds(normalizedBounds);
+            textStrokeTargetBounds.value = getAdvancedTextContentBounds(
+                normalizedBounds,
+                getAdvancedEditorToolbarHeight(),
+                getAdvancedEditorFooterHeight()
+            );
         } else {
             textStrokeTargetBounds.value = null;
         }
@@ -1546,7 +1847,11 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
                         fontSize: stroke[0].fontSize,
                         bounds: editorBounds
                     })
-                    : getAdvancedTextContentBounds(editorBounds);
+                    : getAdvancedTextContentBounds(
+                        editorBounds,
+                        getAdvancedEditorToolbarHeight(),
+                        getAdvancedEditorFooterHeight()
+                    );
 
                 if (!textEditorSimpleMode.value && textStrokeTargetBounds.value) {
                     fittedBounds.width = textStrokeTargetBounds.value.width;
@@ -1593,7 +1898,11 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
                     fontSize: initialFontSize,
                     bounds: editorBounds
                 })
-                : getAdvancedTextContentBounds(editorBounds);
+                : getAdvancedTextContentBounds(
+                    editorBounds,
+                    getAdvancedEditorToolbarHeight(),
+                    getAdvancedEditorFooterHeight()
+                );
 
             if (!textEditorSimpleMode.value && textStrokeTargetBounds.value) {
                 fittedBounds.width = textStrokeTargetBounds.value.width;
@@ -1843,72 +2152,11 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         return null;
     };
 
-    const isAnyStrokeAtPoint = (x, y, canvasIndex) => {
+    const isAnyStrokeAtPoint = (x, y) => {
         return !!pickStrokeAtPoint(x, y);
     };
 
     const SELECTION_PADDING = 10;
-
-    const getBoundsFromPoints = (points = [], padding = 0) => {
-        if (!Array.isArray(points) || points.length === 0) return null;
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        points.forEach(point => {
-            minX = Math.min(minX, point.x);
-            minY = Math.min(minY, point.y);
-            maxX = Math.max(maxX, point.x);
-            maxY = Math.max(maxY, point.y);
-        });
-        const pad = Math.max(0, Number(padding) || 0);
-        return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
-    };
-
-    const getShapeControlPoints = (first) => {
-        if (!first) return null;
-        if (first.type === 'line') {
-            return [{ x: first.startX, y: first.startY }, { x: first.endX, y: first.endY }];
-        }
-
-        if (first.type === 'rectangle') {
-            return [
-                { x: first.startX, y: first.startY },
-                { x: first.endX, y: first.startY },
-                { x: first.endX, y: first.endY },
-                { x: first.startX, y: first.endY }
-            ];
-        }
-
-        if (first.type === 'circle') {
-            let rx;
-            let ry;
-            if (first.radiusX !== undefined || first.radiusY !== undefined) {
-                rx = first.radiusX !== undefined ? first.radiusX : Math.abs(first.endX - first.startX);
-                ry = first.radiusY !== undefined ? first.radiusY : Math.abs(first.endY - first.startY);
-            } else {
-                const radius = Math.sqrt((first.endX - first.startX) ** 2 + (first.endY - first.startY) ** 2);
-                rx = radius;
-                ry = radius;
-            }
-            return [
-                { x: first.startX - rx, y: first.startY - ry },
-                { x: first.startX + rx, y: first.startY - ry },
-                { x: first.startX + rx, y: first.startY + ry },
-                { x: first.startX - rx, y: first.startY + ry }
-            ];
-        }
-
-        return null;
-    };
-
-    const getHighlightRectsBounds = (first, padding = 0) => {
-        if (!first) return null;
-        const rects = first.rects || [{ x: first.x, y: first.y, width: first.width, height: first.height }];
-        const points = [];
-        rects.forEach(rect => {
-            points.push({ x: rect.x, y: rect.y });
-            points.push({ x: rect.x + rect.width, y: rect.y + rect.height });
-        });
-        return getBoundsFromPoints(points, padding);
-    };
 
     const getStrokeBounds = (stroke, padding = 5) => {
         if (!stroke || stroke.length === 0) return null;
@@ -2111,83 +2359,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         };
     };
 
-    const getRotateHandlePosition = ({ rotatedSelection = null, bounds = null, offset = 24 } = {}) => {
-        const safeOffset = Math.max(8, Number(offset) || 24);
-
-        if (rotatedSelection?.handles?.n && rotatedSelection?.center) {
-            const anchor = rotatedSelection.handles.n;
-            const center = rotatedSelection.center;
-            let vx = anchor.x - center.x;
-            let vy = anchor.y - center.y;
-            const len = Math.hypot(vx, vy);
-            if (len < 0.0001) {
-                vx = 0;
-                vy = -1;
-            } else {
-                vx /= len;
-                vy /= len;
-            }
-            return {
-                x: anchor.x + vx * safeOffset,
-                y: anchor.y + vy * safeOffset,
-                anchorX: anchor.x,
-                anchorY: anchor.y
-            };
-        }
-
-        if (!bounds) return null;
-
-        const anchorX = (bounds.minX + bounds.maxX) / 2;
-        const anchorY = bounds.minY;
-        return {
-            x: anchorX,
-            y: anchorY - safeOffset,
-            anchorX,
-            anchorY
-        };
-    };
-
-    const pointInPolygon = (x, y, polygonPoints = []) => {
-        if (!Array.isArray(polygonPoints) || polygonPoints.length < 3) return false;
-        let inside = false;
-        for (let i = 0, j = polygonPoints.length - 1; i < polygonPoints.length; j = i++) {
-            const xi = polygonPoints[i].x, yi = polygonPoints[i].y;
-            const xj = polygonPoints[j].x, yj = polygonPoints[j].y;
-            const intersects = ((yi > y) !== (yj > y))
-                && (x < ((xj - xi) * (y - yi)) / ((yj - yi) || Number.EPSILON) + xi);
-            if (intersects) inside = !inside;
-        }
-        return inside;
-    };
-
-    const pointSegmentDistance = (x, y, x1, y1, x2, y2) => {
-        const dx = x2 - x1;
-        const dy = y2 - y1;
-        const lenSq = dx * dx + dy * dy;
-        if (lenSq === 0) {
-            return Math.hypot(x - x1, y - y1);
-        }
-        const t = Math.max(0, Math.min(1, ((x - x1) * dx + (y - y1) * dy) / lenSq));
-        const px = x1 + t * dx;
-        const py = y1 + t * dy;
-        return Math.hypot(x - px, y - py);
-    };
-
-    const isPointInsideOrNearRotatedSelection = (x, y, geometry, edgeThreshold = 6) => {
-        if (!geometry?.corners || geometry.corners.length !== 4) return false;
-        if (pointInPolygon(x, y, geometry.corners)) return true;
-
-        const c = geometry.corners;
-        for (let i = 0; i < c.length; i++) {
-            const a = c[i];
-            const b = c[(i + 1) % c.length];
-            if (pointSegmentDistance(x, y, a.x, a.y, b.x, b.y) <= edgeThreshold) {
-                return true;
-            }
-        }
-        return false;
-    };
-
     const getResizeHandle = (x, y, bounds, stroke, padding = 8) => {
         const first = stroke?.[0] || null;
         if (first?.type === 'highlight-rect') return null;
@@ -2243,167 +2414,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         }
 
         return null;
-    };
-
-    const mapValueBetweenBounds = (value, fromMin, fromMax, toMin, toMax) => {
-        const span = fromMax - fromMin;
-        if (Math.abs(span) < 0.0001) return (toMin + toMax) / 2;
-        const t = (value - fromMin) / span;
-        return toMin + t * (toMax - toMin);
-    };
-
-    const transformStrokeFromOriginalBounds = (liveStroke, originalStroke, fromBounds, toBounds) => {
-        if (!liveStroke?.length || !originalStroke?.length || !fromBounds || !toBounds) return;
-
-        const first = liveStroke[0];
-        const origFirst = originalStroke[0];
-
-        const mapPoint = (point) => ({
-            x: mapValueBetweenBounds(point.x, fromBounds.minX, fromBounds.maxX, toBounds.minX, toBounds.maxX),
-            y: mapValueBetweenBounds(point.y, fromBounds.minY, fromBounds.maxY, toBounds.minY, toBounds.maxY)
-        });
-
-        if (origFirst.type === 'image' || origFirst.type === 'text') {
-            const topLeft = mapPoint({ x: origFirst.x, y: origFirst.y });
-            const bottomRight = mapPoint({ x: origFirst.x + origFirst.width, y: origFirst.y + origFirst.height });
-            first.x = Math.min(topLeft.x, bottomRight.x);
-            first.y = Math.min(topLeft.y, bottomRight.y);
-            first.width = Math.max(1, Math.abs(bottomRight.x - topLeft.x));
-            first.height = Math.max(1, Math.abs(bottomRight.y - topLeft.y));
-            if (origFirst.type === 'text') {
-                const scaleX = Math.abs((toBounds.maxX - toBounds.minX) / Math.max(1, fromBounds.maxX - fromBounds.minX));
-                const scaleY = Math.abs((toBounds.maxY - toBounds.minY) / Math.max(1, fromBounds.maxY - fromBounds.minY));
-                const fontScale = Math.max(0.25, Math.sqrt(scaleX * scaleY));
-                const baseFontSize = Math.max(8, Number(origFirst.baseFontSize) || Number(origFirst.fontSize) || 16);
-                first.baseFontSize = baseFontSize;
-                first.fontSize = Math.max(8, Math.round((Number(origFirst.fontSize) || 16) * fontScale));
-                first.editorWidth = first.width;
-                first.editorHeight = first.height;
-            }
-            return;
-        }
-
-        if (origFirst.type === 'highlight-rect') {
-            const origRects = origFirst.rects || [{ x: origFirst.x, y: origFirst.y, width: origFirst.width, height: origFirst.height }];
-            first.rects = origRects.map(rect => {
-                const p1 = mapPoint({ x: rect.x, y: rect.y });
-                const p2 = mapPoint({ x: rect.x + rect.width, y: rect.y + rect.height });
-                return {
-                    x: Math.min(p1.x, p2.x),
-                    y: Math.min(p1.y, p2.y),
-                    width: Math.max(1, Math.abs(p2.x - p1.x)),
-                    height: Math.max(1, Math.abs(p2.y - p1.y))
-                };
-            });
-            if (first.rects[0]) {
-                first.x = first.rects[0].x;
-                first.y = first.rects[0].y;
-                first.width = first.rects[0].width;
-                first.height = first.rects[0].height;
-            }
-            return;
-        }
-
-        if (origFirst.type === 'line' || origFirst.type === 'rectangle') {
-            const start = mapPoint({ x: origFirst.startX, y: origFirst.startY });
-            const end = mapPoint({ x: origFirst.endX, y: origFirst.endY });
-            first.startX = start.x;
-            first.startY = start.y;
-            first.endX = end.x;
-            first.endY = end.y;
-            first.x = first.startX;
-            first.y = first.startY;
-            return;
-        }
-
-        if (origFirst.type === 'circle') {
-            const center = mapPoint({ x: origFirst.startX, y: origFirst.startY });
-            first.startX = center.x;
-            first.startY = center.y;
-
-            const end = mapPoint({ x: origFirst.endX, y: origFirst.endY });
-            first.endX = end.x;
-            first.endY = end.y;
-
-            if (origFirst.radiusX !== undefined || origFirst.radiusY !== undefined) {
-                const scaleX = Math.abs((toBounds.maxX - toBounds.minX) / Math.max(1, fromBounds.maxX - fromBounds.minX));
-                const scaleY = Math.abs((toBounds.maxY - toBounds.minY) / Math.max(1, fromBounds.maxY - fromBounds.minY));
-                const rx = origFirst.radiusX !== undefined ? origFirst.radiusX : Math.abs(origFirst.endX - origFirst.startX);
-                const ry = origFirst.radiusY !== undefined ? origFirst.radiusY : Math.abs(origFirst.endY - origFirst.startY);
-                first.radiusX = Math.max(1, rx * scaleX);
-                first.radiusY = Math.max(1, ry * scaleY);
-            }
-
-            first.x = first.startX;
-            first.y = first.startY;
-            return;
-        }
-
-        for (let i = 0; i < liveStroke.length; i++) {
-            const origPoint = originalStroke[i];
-            if (!origPoint) continue;
-            const point = mapPoint({ x: origPoint.x, y: origPoint.y });
-            liveStroke[i].x = point.x;
-            liveStroke[i].y = point.y;
-        }
-    };
-
-    const rotatePointAround = (point, center, angle) => {
-        const dx = point.x - center.x;
-        const dy = point.y - center.y;
-        const cosA = Math.cos(angle);
-        const sinA = Math.sin(angle);
-        return {
-            x: center.x + dx * cosA - dy * sinA,
-            y: center.y + dx * sinA + dy * cosA
-        };
-    };
-
-    const translateStrokeBy = (stroke, dx, dy) => {
-        if (!Array.isArray(stroke) || stroke.length === 0) return;
-        const first = stroke[0] || {};
-
-        if (first.type === 'image' || first.type === 'text') {
-            first.x += dx;
-            first.y += dy;
-        } else if (first.type === 'highlight-rect') {
-            const rects = first.rects || [{ x: first.x, y: first.y, width: first.width, height: first.height }];
-            rects.forEach(rect => {
-                rect.x += dx;
-                rect.y += dy;
-            });
-            first.rects = rects;
-            if (rects[0]) {
-                first.x = rects[0].x;
-                first.y = rects[0].y;
-                first.width = rects[0].width;
-                first.height = rects[0].height;
-            }
-        } else if (first.type === 'line' || first.type === 'rectangle') {
-            first.startX += dx;
-            first.startY += dy;
-            first.endX += dx;
-            first.endY += dy;
-            first.x = first.startX;
-            first.y = first.startY;
-        } else if (first.type === 'circle') {
-            first.startX += dx;
-            first.startY += dy;
-            first.endX += dx;
-            first.endY += dy;
-            first.x = first.startX;
-            first.y = first.startY;
-        } else {
-            stroke.forEach(point => {
-                point.x += dx;
-                point.y += dy;
-            });
-        }
-
-        if (Number.isFinite(first.rotationCenterX) && Number.isFinite(first.rotationCenterY)) {
-            first.rotationCenterX += dx;
-            first.rotationCenterY += dy;
-        }
     };
 
     const selectStrokesInSelectionBox = () => {
@@ -2690,7 +2700,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         if (isTextInputMode.value) {
             if (isSecondaryPointerAction(e)) return;
 
-            const canvasIndex = getCanvasIndexFromEvent(e);
+            const canvasIndex = getCanvasIndexFromEvent(activePage.value, e);
             if (canvasIndex === -1) return;
             const canvas = activePage.value.drawingCanvas || null;
             handleSelectionStart(e);
@@ -2712,7 +2722,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         stopEvent(e);
         
         // Determine which canvas this event is for
-        currentCanvasIndex = getCanvasIndexFromEvent(e);
+        currentCanvasIndex = getCanvasIndexFromEvent(activePage.value, e);
         if (currentCanvasIndex === -1) return;
 
         const canvas = activePage.value.drawingCanvas || null;
@@ -3147,40 +3157,11 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
                 
                 const strokes = activePage.value.strokes || [];
 
-                const moveStrokeBy = (s) => {
-                    const first = s[0];
-                    if (first.type === 'image') {
-                        first.x += dx;
-                        first.y += dy;
-                    } else if (first.type === 'highlight-rect') {
-                        const rects = first.rects || [{ x: first.x, y: first.y, width: first.width, height: first.height }];
-                        rects.forEach(rect => { rect.x += dx; rect.y += dy; });
-                        if (first.x !== undefined) { first.x += dx; first.y += dy; }
-                    } else if (first.type === 'text') {
-                        first.x += dx;
-                        first.y += dy;
-                    } else if (first.type === 'line' || first.type === 'rectangle' || first.type === 'circle') {
-                        first.startX += dx;
-                        first.startY += dy;
-                        first.endX += dx;
-                        first.endY += dy;
-                        first.x = first.startX;
-                        first.y = first.startY;
-                    } else {
-                        for (let point of s) { point.x += dx; point.y += dy; }
-                    }
-
-                    if (Number.isFinite(first.rotationCenterX) && Number.isFinite(first.rotationCenterY)) {
-                        first.rotationCenterX += dx;
-                        first.rotationCenterY += dy;
-                    }
-                };
-
                 if (Array.isArray(selectedStrokes.value) && selectedStrokes.value.length > 1) {
                     selectedStrokes.value.forEach(sel => {
                         if (sel.pageIndex !== currentCanvasIndex) return;
                         const s = strokes[sel.strokeIndex];
-                        if (s) moveStrokeBy(s);
+                        if (s) translateStrokeBy(s, dx, dy);
                     });
                     // Keep selectedStrokes linked to live stroke references so bbox updates during drag
                     selectedStrokes.value.forEach(sel => {
@@ -3189,7 +3170,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
                     });
                 } else {
                     const s = strokes[selectedStroke.value.strokeIndex];
-                    if (s) moveStrokeBy(s);
+                    if (s) translateStrokeBy(s, dx, dy);
                 }
 
                 // Redraw to show the drag preview (combined bbox if multi)
@@ -3932,18 +3913,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
     };
 
     const BOUNDING_BOX_HANDLE_COLOR = '#2a7fff';
-    const SVG_NS = 'http://www.w3.org/2000/svg';
-
-    const createSvgElement = (tag, attrs = {}) => {
-        const el = document.createElementNS(SVG_NS, tag);
-
-        Object.entries(attrs).forEach(([key, value]) => {
-            if (value === null || value === undefined) return;
-            el.setAttribute(key, String(value));
-        });
-        return el;
-    };
-
     const toSvgRotationTransform = (stroke) => {
         if (!stroke || !stroke.length) return null;
         const first = stroke[0];
@@ -3955,18 +3924,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         const cy = center.y;
         const deg = angle * (180 / Math.PI);
         return `rotate(${deg} ${cx} ${cy})`;
-    };
-
-    const getStrokePenPath = (stroke) => {
-        if (!Array.isArray(stroke) || stroke.length === 0) return '';
-        return stroke
-            .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
-            .join(' ');
-    };
-
-    const setStrokeMeta = (el, strokeIndex) => {
-        if (!el || strokeIndex === undefined || strokeIndex === null) return;
-        el.setAttribute('data-stroke-index', String(strokeIndex));
     };
 
     const appendStrokeToSvg = (svgLayer, stroke, strokeIndex = null) => {
