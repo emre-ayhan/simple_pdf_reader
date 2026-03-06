@@ -5,11 +5,8 @@ import PdfReader from './components/PdfReader.vue';
 import PageModal from './components/PageModal.vue';
 import UpdateState from './components/UpdateState.vue';
 import DragOverlay from './components/DragOverlay.vue';
-import { enableTouchDrawing, moveToolbarBottom, availableLocales, currentLocale } from './composables/useAppPreferences';
+import { enableTouchDrawing, moveToolbarBottom, availableLocales, currentLocale, retrieveClipboardData } from './composables/useAppSettings';
 import { useDrop } from './composables/useDrop';
-import { useDraw } from './composables/useDraw';
-
-const { retrieveClipboardData } = useDraw();
 
 const reader = ref(null);
 

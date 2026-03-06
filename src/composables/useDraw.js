@@ -1,7 +1,7 @@
 import { ref, nextTick, computed, watch } from 'vue';
 import { uuid } from './useUuid.js';
 import { useStore } from './useStore.js';
-import { enableTouchDrawing } from './useAppPreferences.js';
+import { enableTouchDrawing } from './useAppSettings.js';
 
 const copiedStroke = ref(null);
 const copiedStrokes = ref([]); // For multi-selection copy
@@ -27,46 +27,35 @@ const colorPalette = [
     '#a855f7', '#d946ef', '#92400e', '#78350f', '#a16207',
 ];
 
-const retrieveClipboardData = async () => {
-    try {
-        const clipboardItems = await navigator.clipboard.read();
-        for (const item of clipboardItems) {
-            const imageType = item.types.find(type => type.startsWith('image/'));
-            if (imageType) {
-                const blob = await item.getType(imageType);
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    const dataUrl = e.target.result;
-                    const img = new Image();
-                    img.onload = () => {
-                        const stroke = {
-                            inserted: 0,
-                            stroke: [{
-                                type: 'image',
-                                x: 0,
-                                y: 0,
-                                width: img.width,
-                                height: img.height,
-                                imageData: dataUrl
-                            }]
-                        };
+const normalizeDash = (dash) => {
+    const allowed = ['solid', 'dashed', 'dotted'];
+    return allowed.includes(dash) ? dash : 'solid';
+};
 
-                        const isCoppied = copiedStrokes.value.findIndex(s => s.stroke[0]?.imageData === dataUrl);
+const normalizeOpacity = (opacity) => {
+    const parsed = Number(opacity);
+    if (!Number.isFinite(parsed)) return 1;
+    return Math.max(0.05, Math.min(1, parsed));
+};
 
-                        if (isCoppied !== -1) return;
+const normalizeDrawStyle = (style = {}) => ({
+    color: typeof style.color === 'string' ? style.color : '#1d4ed8',
+    thickness: Math.max(1, Number(style.thickness) || 2),
+    fill: Boolean(style.fill),
+    opacity: normalizeOpacity(style.opacity),
+    dash: normalizeDash(style.dash)
+});
 
-                        copyAsStroke(stroke);
-                    };
-                    img.src = dataUrl;
-                };
-                reader.readAsDataURL(blob);
-                return;
-            }
-        }
-    } catch (err) {
-        console.error('Failed to get from clipboard:', err);
-    }
-}
+const normalizeStrokeStylePreset = (style = {}) => {
+    const normalized = normalizeDrawStyle(style);
+    return {
+        color: normalized.color,
+        thickness: normalized.thickness,
+        fill: normalized.fill,
+        opacity: normalized.opacity,
+        dash: normalized.dash
+    };
+};
 
 export function useDraw(pagesContainer, activePage, addToHistory) {
     const { get: storeGet, set: storeSet } = useStore();
@@ -78,36 +67,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
     const isDrawing = ref(false);
     const isEraser = ref(false);
     const drawMode = ref('pen'); // 'pen', 'line', 'rectangle', 'circle', 'text', 'highlight'
-
-    const normalizeDash = (dash) => {
-        const allowed = ['solid', 'dashed', 'dotted'];
-        return allowed.includes(dash) ? dash : 'solid';
-    };
-
-    const normalizeOpacity = (opacity) => {
-        const parsed = Number(opacity);
-        if (!Number.isFinite(parsed)) return 1;
-        return Math.max(0.05, Math.min(1, parsed));
-    };
-
-    const normalizeDrawStyle = (style = {}) => ({
-        color: typeof style.color === 'string' ? style.color : '#1d4ed8',
-        thickness: Math.max(1, Number(style.thickness) || 2),
-        fill: Boolean(style.fill),
-        opacity: normalizeOpacity(style.opacity),
-        dash: normalizeDash(style.dash)
-    });
-
-    const normalizeStrokeStylePreset = (style = {}) => {
-        const normalized = normalizeDrawStyle(style);
-        return {
-            color: normalized.color,
-            thickness: normalized.thickness,
-            fill: normalized.fill,
-            opacity: normalized.opacity,
-            dash: normalized.dash
-        };
-    };
 
     const drawStyle = ref({
         color: '#1d4ed8',
@@ -4754,10 +4713,8 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         highlightTextSelection,
         copySelectedStroke,
         insertCopiedStroke,
-        retrieveClipboardData,
         isSelectedStrokeType,
         copiedStrokes,
         selectStrokes,
-        retrieveClipboardData,
     };
 }

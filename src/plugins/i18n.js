@@ -1,5 +1,5 @@
 import { ref, watch } from "vue"
-import { currentLocale } from "../composables/useAppPreferences";
+import { currentLocale } from "../composables/useAppSettings";
 
 // Import all language files using Vite's glob import
 const langModules = import.meta.glob('../Lang/*.json')

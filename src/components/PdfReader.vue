@@ -6,7 +6,7 @@ import { useDraw } from "../composables/useDraw";
 import { useHistory } from "../composables/useHistory";
 import { fileDataCache } from "../composables/useTabs";
 import { useWindowEvents } from "../composables/useWindowEvents";
-import { enableTouchDrawing, toolbarPosition } from "../composables/useAppPreferences";
+import { enableTouchDrawing, toolbarPosition } from "../composables/useAppSettings";
 import PrintModal from "./PrintModal.vue";
 import PageSearch from "./PageSearch.vue";
 import ThumbnailSidebar from "./ThumbnailSidebar.vue";
@@ -153,7 +153,6 @@ const {
     highlightTextSelection,
     copySelectedStroke,
     insertCopiedStroke,
-    retrieveClipboardData,
     isSelectedStrokeType,
     copiedStrokes,
     selectStrokes,
@@ -979,7 +978,7 @@ defineExpose({
 
             <PageNumber :page-num="pageNum" :total="activePages.length"/>
             
-            <context-menu :parent="`#pdf-reader-${fileId}`" @show="retrieveClipboardData">
+            <context-menu :parent="`#pdf-reader-${fileId}`">
                 <ToolItem class="dropdown-item" show-label label="Stroke Selection" shortcut="P" icon="cursor-fill" :active="isSelectModeActive" :action="toggleStrokeSelectionMode" />
                 <ToolItem class="dropdown-item" show-label label="Text Selection" shortcut="S" icon="cursor-text" :active="isTextSelectionMode && !isTextHighlightMode" :disabled="textActionsDisabled" :action="toggleTextSelection" />
                 <ToolItem class="dropdown-item" show-label label="Hand Tool" icon="hand-index-thumb-fill" :active="handToolActive" :action="toggleHandTool" />

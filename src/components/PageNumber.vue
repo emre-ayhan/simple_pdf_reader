@@ -1,6 +1,6 @@
 <script setup>
 import { ref, watch } from 'vue';
-import { toolbarPosition } from '../composables/useAppPreferences';
+import { toolbarPosition } from '../composables/useAppSettings';
 
 const props = defineProps({
     pageNum: [Number, String],
