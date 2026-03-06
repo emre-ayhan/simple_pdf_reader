@@ -41,10 +41,6 @@ const loadFileCallback = () => {
     resetHistory();
 }
 
-const renderImageFileCallback = (image) => {
-    drawImageCanvas(image);
-}
-
 const lazyLoadCallback = (index) => {
     redrawAllStrokes(index);
 }
@@ -96,9 +92,7 @@ const {
     // Form Fill
     resetForm,
     handlePdfButtonAction,
-    submitPdfForm,
-    collectPdfFormValues,
-} = useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallback, fileSavedCallback);
+} = useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback);
 
 // Drawing Management
 const strokeChangeCallback = (action) => {

@@ -14,7 +14,46 @@ GlobalWorkerOptions.workerSrc = new URL(
 
 const { set: storeSet, get: storeGet } = useStore();
 
-export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallback, fileSavedCallback) {
+const getPages = (length) => {
+    return Array.from({ length }, (_, index) => ({
+        id: uuid(),
+        index,
+        rendered: false,
+        canvas: null,
+        textLayer: null,
+        annotationSvg: null,
+        drawingCanvas: null,
+        drawingContext: null,
+        strokes: [],
+        annotations: [],
+        calculationRules: [],
+        comments: [],
+        form: {
+            original: {}, // fieldName → original value at extraction time
+        },
+        deleted: false
+    }));
+};
+
+const formatBytes = (bytes, decimals = 2) => {
+    if (!+bytes) return '0 Bytes';
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+};
+
+const formatPdfDate = (dateStr) => {
+    if (!dateStr) return '-';
+    // Simple cleanup for PDF date string D:YYYYMMDDHHmmss...
+    if (dateStr.startsWith('D:')) {
+        return dateStr.substring(2).replace(/'/g, '');
+    }
+    return dateStr;
+};
+
+export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
     const fileId = uuid();
 
     var pdfDoc = null;
@@ -237,8 +276,6 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         setPageAnnotations,
         flattenToPdfLib,
         handlePdfButtonAction,
-        submitPdfForm,
-        collectPdfFormValues,
     } = useFormFill(activePage, (action) => {
         if (action.type === 'goto') {
             scrollToPage(action.pageIndex ?? 0);
@@ -267,26 +304,6 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             return;
         }
     });
-
-    const getPages = (length) => {
-        return Array.from({ length }, (_, index) => ({
-            id: uuid(),
-            index,
-            rendered: false,
-            canvas: null,
-            textLayer: null,
-            annotationSvg: null,
-            drawingCanvas: null,
-            drawingContext: null,
-            strokes: [],
-            annotations: [],
-            calculationRules: [],
-            form: {
-                original: {}, // fieldName → original value at extraction time
-            },
-            deleted: false
-        }));
-    }
 
     const setPages = (length) => {
         pageCount.value = length;
@@ -530,19 +547,6 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         await renderAllPages();
     }
 
-    const loadPdfFile = (file) => {
-        if (file) {
-            internalFileSize.value = file.size;
-            filename.value = file.name;
-            filepath.value = file.path || null;
-            const url = URL.createObjectURL(file);
-            getDocument(url).promise.then(getDocumentCallback).catch(async error => {
-                console.error('Error loading PDF:', error);
-                await showModal('Error loading PDF: ' + error.message);
-            });
-        }
-    };
-
     const loadFile = async (event) => {
         const file = event?.target?.files?.[0] || event;
         
@@ -552,7 +556,16 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         };
 
         if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-            loadPdfFile(file);
+            if (file) {
+                internalFileSize.value = file.size;
+                filename.value = file.name;
+                filepath.value = file.path || null;
+                const url = URL.createObjectURL(file);
+                getDocument(url).promise.then(getDocumentCallback).catch(async error => {
+                    console.error('Error loading PDF:', error);
+                    await showModal('Error loading PDF: ' + error.message);
+                });
+            }
         } else {
             await showModal('Unsupported file type. Please select a PDF file.');
         }
@@ -1267,24 +1280,6 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         
         try {
             const { info } = await pdfDoc.getMetadata();
-            
-            const formatBytes = (bytes, decimals = 2) => {
-                if (!+bytes) return '0 Bytes';
-                const k = 1024;
-                const dm = decimals < 0 ? 0 : decimals;
-                const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
-                const i = Math.floor(Math.log(bytes) / Math.log(k));
-                return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
-            };
-
-            const formatPdfDate = (dateStr) => {
-                if (!dateStr) return '-';
-                // Simple cleanup for PDF date string D:YYYYMMDDHHmmss...
-                if (dateStr.startsWith('D:')) {
-                    return dateStr.substring(2).replace(/'/g, '');
-                }
-                return dateStr;
-            };
 
             const size = originalPdfData.value ? originalPdfData.value.byteLength : internalFileSize.value;
             const fileSize = size ? formatBytes(size) : 'Unknown';
@@ -1353,9 +1348,9 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
         showDocumentProperties,
         rotatePage,
         openPreferences,
+
+        // Form Fill
         resetForm,
         handlePdfButtonAction,
-        submitPdfForm,
-        collectPdfFormValues,
     }
 }
