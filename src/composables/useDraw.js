@@ -79,6 +79,8 @@ const toCursorFromAngle = (angleRad) => {
     return 'ew-resize';
 };
 
+const BOUNDING_BOX_HANDLE_COLOR = '#2a7fff';
+
 const toExactResizeCursor = (angleRad) => {
     if (!Number.isFinite(angleRad)) return null;
     const fallback = toCursorFromAngle(angleRad) || 'ew-resize';
@@ -86,9 +88,9 @@ const toExactResizeCursor = (angleRad) => {
     const svg = encodeURIComponent(
         `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
             <g transform="rotate(${deg} 12 12)">
-                <line x1="5" y1="12" x2="19" y2="12" stroke="#2a7fff" stroke-width="2" stroke-linecap="round"/>
-                <path d="M5 12 L9 9 M5 12 L9 15" stroke="#2a7fff" stroke-width="2" stroke-linecap="round" fill="none"/>
-                <path d="M19 12 L15 9 M19 12 L15 15" stroke="#2a7fff" stroke-width="2" stroke-linecap="round" fill="none"/>
+                <line x1="5" y1="12" x2="19" y2="12" stroke="${BOUNDING_BOX_HANDLE_COLOR}" stroke-width="2" stroke-linecap="round"/>
+                <path d="M5 12 L9 9 M5 12 L9 15" stroke="${BOUNDING_BOX_HANDLE_COLOR}" stroke-width="2" stroke-linecap="round" fill="none"/>
+                <path d="M19 12 L15 9 M19 12 L15 15" stroke="${BOUNDING_BOX_HANDLE_COLOR}" stroke-width="2" stroke-linecap="round" fill="none"/>
             </g>
         </svg>`
     );
@@ -3912,7 +3914,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         redrawAllStrokes();
     };
 
-    const BOUNDING_BOX_HANDLE_COLOR = '#2a7fff';
     const toSvgRotationTransform = (stroke) => {
         if (!stroke || !stroke.length) return null;
         const first = stroke[0];
@@ -4289,6 +4290,8 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         await nextTick();
         const el = strokeMenu.value;
         if (!el) return;
+
+        
         const rect = el.getBoundingClientRect();
         const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
         const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
@@ -4481,6 +4484,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         if (selectedIndex >= 0 && strokes[selectedIndex]) {
             appendStrokeToSvg(svgLayer, strokes[selectedIndex], selectedIndex);
             drawSelectionBoundingBox();
+            clampStrokeMenuPosition();
         }
     };
 
