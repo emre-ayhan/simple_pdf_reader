@@ -1191,7 +1191,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             const strokeId = uuid();
             // Assign a stable id to the image stroke for history ops
             imageStroke[0].id = strokeId;
-            const pageNumber = pageIndex.value + 1;
+
             if (!page.strokes) {
                 page.strokes = [];
             }
@@ -1200,7 +1200,7 @@ export function useFile(loadFileCallback, renderImageFileCallback, lazyLoadCallb
             
             redrawAllStrokesCallback(canvasIndex);
             // Use unified history action shape
-            addToHistoryCallback({ type: 'add', id: strokeId, page: pageNumber, stroke: imageStroke });
+            addToHistoryCallback({ type: 'add', id: strokeId, page: page, stroke: imageStroke });
         };
 
         img.src = imageData;
