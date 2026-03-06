@@ -1,7 +1,6 @@
 import { ref, nextTick, computed, watch } from 'vue';
-import { uuid } from './useUuid.js';
 import { useStore } from './useStore.js';
-import { enableTouchDrawing } from './useAppSettings.js';
+import { enableTouchDrawing, uuid } from './useAppSettings.js';
 
 const copiedStroke = ref(null);
 const copiedStrokes = ref([]); // For multi-selection copy
@@ -4247,8 +4246,9 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
                     { x: maxX, y: (minY + maxY) / 2, handle: 'e' }
                 ];
             const rotationAvailable = first.type !== 'highlight-rect';
+            const angleDeg = rotatedSelection?.angle ? (rotatedSelection.angle * 180) / Math.PI : 0;
             handles.forEach(h => {
-                overlayGroup.appendChild(createSvgElement('rect', {
+                const attrs = {
                     x: h.x - handleSize / 2,
                     y: h.y - handleSize / 2,
                     width: handleSize,
@@ -4256,7 +4256,11 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
                     fill: '#ffffff',
                     stroke: BOUNDING_BOX_HANDLE_COLOR,
                     'stroke-width': 2
-                }));
+                };
+                if (angleDeg) {
+                    attrs.transform = `rotate(${angleDeg} ${h.x} ${h.y})`;
+                }
+                overlayGroup.appendChild(createSvgElement('rect', attrs));
             });
 
             if (rotationAvailable) {

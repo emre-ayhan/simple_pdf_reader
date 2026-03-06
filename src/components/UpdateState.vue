@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue';
-import { Electron } from '../composables/useElectron';
+import { Electron } from '../composables/useAppSettings';
 
 const updateState = ref({
     statusText: '',

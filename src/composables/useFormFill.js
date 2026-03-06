@@ -1,4 +1,4 @@
-import { ref, reactive, computed, watch } from 'vue';
+import { ref, watch } from 'vue';
 
 // PDF.js button field flag bitmasks
 const BTN_FLAG_RADIO        = 1 << 15; // 32768

@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, onUnmounted } from 'vue'
 import { Modal } from 'bootstrap';
-import { modal, message, mustConfirm, confirm, modalSize, modalTab } from '../composables/useModal';
+import { modal, message, mustConfirm, confirm, modalSize, modalTab } from '../composables/usePageModal';
 
 const hideModalHandler = () => {
     modalTab.value = null;

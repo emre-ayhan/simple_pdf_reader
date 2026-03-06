@@ -1,5 +1,5 @@
 <script setup>
-import { Electron } from '../composables/useElectron';
+import { Electron } from '../composables/useAppSettings';
 </script>
 
 <template>

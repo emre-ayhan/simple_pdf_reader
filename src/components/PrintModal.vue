@@ -1,7 +1,7 @@
 <script setup>
 import { Modal } from 'bootstrap';
 import { ref, computed, nextTick, onMounted } from 'vue';
-import { Electron } from '../composables/useElectron';
+import { Electron } from '../composables/useAppSettings';
 
 const props = defineProps({
     pageCount: {

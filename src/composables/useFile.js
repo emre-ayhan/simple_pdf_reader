@@ -1,10 +1,9 @@
 import { ref, nextTick, computed, watch, toRaw } from "vue";
 import { GlobalWorkerOptions, getDocument } from "pdfjs-dist";
 import { PDFDocument, rgb, degrees as pdfDegrees } from "pdf-lib";
-import { Electron } from "./useElectron";
+import { uuid, Electron } from "./useAppSettings";
 import { useStore } from "./useStore";
-import { uuid } from "./useUuid";
-import { showModal } from "./useModal";
+import { showModal } from "./usePageModal";
 import { fileDataCache, openNewTab, setCurrentTab } from "./useTabs";
 import { useFormFill } from "./useFormFill";
 

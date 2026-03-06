@@ -1,7 +1,11 @@
-import { ref, watch } from "vue";
+import { ref, watch, computed } from "vue";
 import { useStore } from "./useStore";
 
+const Electron = computed(() => window.electronAPI);
+
 const store = useStore();
+
+// Preferences
 const enableTouchDrawing = ref(false);
 const moveToolbarBottom = ref(false);
 const toolbarPosition = ref('top');
@@ -38,10 +42,16 @@ watch(moveToolbarBottom, (value) => {
     storePreferences();
 })
 
-
+// Helpers
 const changeLocale = (locale) => {
     currentLocale.value = locale;
     storePreferences();
+}
+
+const uuid  = () => {
+    return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+        (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+    );
 }
 
 const retrieveClipboardData = async () => {
@@ -86,11 +96,13 @@ const retrieveClipboardData = async () => {
 }
 
 export {
+    Electron,
     toolbarPosition,
     enableTouchDrawing,
     moveToolbarBottom,
     currentLocale,
     availableLocales,
     changeLocale,
+    uuid,
     retrieveClipboardData,
 }

@@ -1,12 +1,11 @@
 <script setup>
 import { ref, computed, nextTick, onMounted, onUnmounted, onBeforeUnmount, watch } from "vue";
-import { Electron } from "../composables/useElectron";
+import { Electron, enableTouchDrawing, toolbarPosition } from "../composables/useAppSettings";
 import { useFile } from "../composables/useFile";
 import { useDraw } from "../composables/useDraw";
 import { useHistory } from "../composables/useHistory";
 import { fileDataCache } from "../composables/useTabs";
 import { useWindowEvents } from "../composables/useWindowEvents";
-import { enableTouchDrawing, toolbarPosition } from "../composables/useAppSettings";
 import PrintModal from "./PrintModal.vue";
 import PageSearch from "./PageSearch.vue";
 import ThumbnailSidebar from "./ThumbnailSidebar.vue";

@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue';
-import { showModal } from '../composables/useModal';
-import { Electron } from './useElectron';
+import { showModal } from './usePageModal';
+import { Electron } from './useAppSettings';
 import { useHistory } from './useHistory';
 
 const getEmptyStateTab = () => ({
