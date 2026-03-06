@@ -31,12 +31,6 @@ export function useHistory(fileId, redrawAllStrokes) {
     const historyStep = ref(-1);
     const savedHistoryStep = ref(-1);
 
-    // For temporary actions like live previews
-    const temporaryState = ref(false);
-    const temporaryHistory = ref([]);
-    const temporaryHistoryStep = ref(-1);
-    const temporarySavedHistoryStep = ref(-1);
-
     const startSession = () => {
         if (!sessions.value[fileId]) {
             sessions.value[fileId] = {
@@ -56,26 +50,6 @@ export function useHistory(fileId, redrawAllStrokes) {
         }
     };
 
-    const addToTemporaryHistory = (action) => {
-        const normalizeAction = (act) => {
-            const cloned = { ...act };
-            if (act.stroke) cloned.stroke = JSON.parse(JSON.stringify(act.stroke));
-            if (act.previousStroke) cloned.previousStroke = JSON.parse(JSON.stringify(act.previousStroke));
-            if (Array.isArray(act.strokes)) {
-                cloned.strokes = act.strokes.map(item => ({ index: item.index, data: JSON.parse(JSON.stringify(item.data)) }));
-            }
-            return cloned;
-        };
-        if (temporaryHistoryStep.value < temporaryHistory.value.length - 1) {
-            if (temporarySavedHistoryStep.value > temporaryHistoryStep.value) {
-                temporarySavedHistoryStep.value = -2;
-            }
-            temporaryHistory.value = temporaryHistory.value.slice(0, temporaryHistoryStep.value + 1);
-        }
-        temporaryHistory.value.push(markRaw(normalizeAction(action)));
-        temporaryHistoryStep.value++;
-    };
-
     const addToHistory = (action) => {
         const normalizeAction = (act) => {
             const cloned = { ...act };
@@ -86,10 +60,7 @@ export function useHistory(fileId, redrawAllStrokes) {
             }
             return cloned;
         };
-        if (temporaryState.value) {
-            addToTemporaryHistory(action);
-            return;
-        }
+
         if (historyStep.value < history.value.length - 1) {
             if (savedHistoryStep.value > historyStep.value) {
                 savedHistoryStep.value = -2;
@@ -100,20 +71,16 @@ export function useHistory(fileId, redrawAllStrokes) {
         historyStep.value++;
     };
 
-    const canUndo = computed(() => {
-        if (temporaryState.value) return temporaryHistoryStep.value >= 0;
-        return historyStep.value >= 0;
-    });
+    const canUndo = computed(() => historyStep.value >= 0);
 
     const canRedo = computed(() => {
-        if (temporaryState.value) return temporaryHistoryStep.value < temporaryHistory.value.length - 1;
         return historyStep.value < history.value.length - 1;
     });
 
     const undo = () => {
         if (!canUndo.value) return;
 
-        const action = temporaryState.value ? temporaryHistory.value[temporaryHistoryStep.value] : history.value[historyStep.value];
+        const action = history.value[historyStep.value];
         const page = action.page;
 
         if (action.type === 'add') {
@@ -182,21 +149,14 @@ export function useHistory(fileId, redrawAllStrokes) {
             action.page.deleted = false;
         }
 
-        if (temporaryState.value) { temporaryHistoryStep.value--; return; }
         historyStep.value--;
     };
 
     const redo = () => {
         if (!canRedo.value) return;
 
-        let action;
-        if (temporaryState.value) {
-            temporaryHistoryStep.value++;
-            action = temporaryHistory.value[temporaryHistoryStep.value];
-        } else {
-            historyStep.value++;
-            action = history.value[historyStep.value];
-        }
+        historyStep.value++;
+        const action = history.value[historyStep.value];
 
         const page = action.page;
 
@@ -251,14 +211,6 @@ export function useHistory(fileId, redrawAllStrokes) {
     };
 
     const resetHistory = () => {
-        if (temporaryState.value) {
-            temporaryHistory.value = [];
-            temporaryHistoryStep.value = -1;
-            temporarySavedHistoryStep.value = -1;
-            temporaryState.value = false;
-            return;
-        }
-
         history.value = [];
         historyStep.value = -1;
         savedHistoryStep.value = -1;
@@ -277,7 +229,6 @@ export function useHistory(fileId, redrawAllStrokes) {
         history,
         historyStep,
         savedHistoryStep,
-        temporaryState,
         addToHistory,
         undo,
         redo,
