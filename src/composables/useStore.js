@@ -6,7 +6,7 @@ import { Electron } from "./useAppSettings";
  */
 const get = async (key, defaultValue = null) => {
     try {
-        if (Electron.value.store) {
+        if (Electron.value?.store) {
             const value = await Electron.value.store.get(key);
             return value !== undefined ? value : defaultValue;
         } else {
@@ -25,7 +25,7 @@ const get = async (key, defaultValue = null) => {
  */
 const set = async (key, value) => {
     try {
-        if (Electron.value.store) {
+        if (Electron.value?.store) {
             await Electron.value.store.set(key, value);
         } else {
             localStorage.setItem(key, JSON.stringify(value));
@@ -42,7 +42,7 @@ const set = async (key, value) => {
  */
 const remove = async (key) => {
     try {
-        if (Electron.value.store) {
+        if (Electron.value?.store) {
             await Electron.value.store.delete(key);
         } else {
             localStorage.removeItem(key);
@@ -59,7 +59,7 @@ const remove = async (key) => {
  */
 const getAll = async () => {
     try {
-        if (Electron.value.store) {
+        if (Electron.value?.store) {
             return await Electron.value.store.getAll();
         } else {
             const data = {};
@@ -85,7 +85,7 @@ const getAll = async () => {
  */
 const clear = async () => {
     try {
-        if (Electron.value.store) {
+        if (Electron.value?.store) {
             await Electron.value.store.clear();
         } else {
             localStorage.clear();
