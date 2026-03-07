@@ -4412,11 +4412,13 @@ export function usePageActions(pagesContainer, activePage, addToHistory) {
         }
     };
 
-    // Handle text selection on mouse up when in text selection mode (and not in highlight mode)
+    // Text Selection Variables and Handlers
     const selectedText = ref('');
+    const showCommentInput = ref(false);
+    const commentInputPosition = ref({ x: 0, y: 0 });
 
     const handleTextSelectionMouseUp = () => {
-        nextTick(() => {
+        setTimeout(() => {
             if (!isTextSelectionMode.value && !isTextHighlightMode.value) {
                 return;
             }
@@ -4426,7 +4428,9 @@ export function usePageActions(pagesContainer, activePage, addToHistory) {
                 return;
             }
             
+            selectedText.value = '';
             const selection = window.getSelection();
+
             if (selection && selection.toString().trim().length > 0 && selection.rangeCount > 0) {
                 const range = selection.getRangeAt(0);
                 const rects = range.getClientRects();
@@ -4436,11 +4440,10 @@ export function usePageActions(pagesContainer, activePage, addToHistory) {
                     x: lastRect.right,
                     y: lastRect.bottom + 5
                 };
-                showPopMenu.value = true;
-            } else {
-                showPopMenu.value = false;
             }
-        });
+
+            showPopMenu.value = !!selectedText.value;
+        }, 10);
     };
 
     watch(

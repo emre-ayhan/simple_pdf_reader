@@ -612,7 +612,6 @@ useWindowEvents(fileId, {
 let unsubscribeFileOpen = null;
 
 onMounted(() => {
-    document.addEventListener('mouseup', handleTextSelectionMouseUp);
     const cache = fileDataCache.value;
     fileDataCache.value = null;
 
@@ -632,6 +631,8 @@ onMounted(() => {
             processFileOpenResult(fileData);
         });
     }
+
+    document.addEventListener('mouseup', handleTextSelectionMouseUp);
 });
 
 onBeforeUnmount(() => {
