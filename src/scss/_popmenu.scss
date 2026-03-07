@@ -1,0 +1,36 @@
+.pop-menu {
+    position: absolute;
+    z-index: 1000;
+    pointer-events: all;
+    transform: translate(-50%, 10px);
+    
+    .pop-menu-body {
+        background: $dark-bg-accent;
+        box-shadow: $box-shadow-lg;
+        border: 1px solid $border-color;
+        border-radius: $border-radius-lg;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+    }
+
+    .btn-pop-menu {
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 0;
+        font-size: 18px;
+        text-align: center;
+        border-radius: $border-radius-lg;
+        color: $secondary !important;
+        text-decoration: none !important;
+
+        &:hover {
+            background-color: rgba(255, 255, 255, 0.1) !important;
+            color: $light !important;
+        }
+    }
+}

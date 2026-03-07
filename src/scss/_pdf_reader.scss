@@ -263,72 +263,6 @@
     }
 }
 
-.stroke-menu {
-    position: absolute;
-    z-index: 1000;
-    pointer-events: all;
-    transform: translate(-50%, 10px);
-    
-    .stroke-menu-content {
-        background: $dark-bg-gradient;
-        box-shadow: $box-shadow-lg;
-        border: 1px solid $border-color;
-        border-radius: $border-radius-lg;
-        padding: 8px;
-        max-width: 256px;
-
-        .form-control {
-            background-color: transparent !important;
-            color: $text-light !important;
-            
-            &:focus {
-                border-color: $primary !important;
-                box-shadow: none !important;
-                outline: none !important;
-            };
-        }
-    }
-    
-    .stroke-menu-colors {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-        flex-wrap: wrap;
-    }
-
-    .stroke-menu-section:not(:last-child) {
-        margin-bottom: 8px;
-    }
-
-    .color-menu {
-        min-width: unset !important;
-    }
-
-    .btn-color {
-        width: 20px;
-        height: 20px;
-        border: 2px solid rgba(255, 255, 255, 0.3);
-        border-radius: 50%;
-        cursor: pointer;
-        transition: all 0.2s;
-        padding: 0;
-        
-        &:hover {
-            transform: scale(1.15);
-            border-color: rgba(255, 255, 255, 0.8);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-        }
-    }
-
-    .btn-stroke-menu {
-        width: 20px;
-        height: 20px;
-        line-height: 0;
-        font-size: 20px;
-    }
-}
-
 select.form-control-plaintext {
     min-width: 56px !important;
     font-size: 14px !important;
@@ -346,7 +280,7 @@ select.form-control-plaintext {
 @media print {
     /* Hide UI chrome inside the reader */
     .navbar,
-    .stroke-menu,
+    .pop-menu,
     .text-editor-box,
     .drag-overlay {
         display: none !important;

@@ -1007,7 +1007,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
     const { get: storeGet, set: storeSet } = useStore();
 
     // Drawing variables
-    const isSelectModeActive = ref(false);
+    const isStrokeSelectModeActive = ref(false);
     const isTextSelectionMode = ref(true);
     const isTextHighlightMode = ref(false);
     const isDrawing = ref(false);
@@ -1207,7 +1207,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
     const handleSelectionEnd = (e) => {
         if (isCaptureSelectionMode.value) {
             captureSelection();
-        } else if (isSelectModeActive.value) {
+        } else if (isStrokeSelectModeActive.value) {
             selectStrokesInSelectionBox();
         } else if (isTextInputMode.value) {
             const page = activePage.value;
@@ -1284,11 +1284,11 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
     // Stroke selection and dragging
     const selectedStrokes = ref([]); // For multi-selection
     const selectedStroke = ref(null); // { pageIndex, strokeIndex, stroke }
-    const strokeMenu = ref(null);
-    const strokeMenuPosition = ref({ x: 0, y: 0 });
+    const popMenu = ref(null);
+    const popMenuPosition = ref({ x: 0, y: 0 });
     const isDragging = ref(false);
     const dragStartPos = ref(null);
-    const showStrokeMenu = ref(false);
+    const showPopMenu = ref(false);
     const isResizing = ref(false);
     const resizeHandle = ref(null); // 'nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'
     const resizeStartBounds = ref(null);
@@ -1375,7 +1375,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
     };
 
     const selectStrokes = (strokes) => {
-        if (!isSelectModeActive.value) return;
+        if (!isStrokeSelectModeActive.value) return;
         if (!Array.isArray(strokes) || strokes.length === 0) return;
         const page = activePage.value;
 
@@ -2515,7 +2515,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         currentStrokeId.value = uuid();
 
         // Handle select mode
-        if (isSelectModeActive.value) {
+        if (isStrokeSelectModeActive.value) {
             textEditorPosition.value = null;
 
             const page = activePage.value;
@@ -2789,7 +2789,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
 
         if (textModesActive.value) return;
 
-        if (isSelectModeActive.value && (isStrokeHovering.value || selectedStroke.value)) {
+        if (isStrokeSelectModeActive.value && (isStrokeHovering.value || selectedStroke.value)) {
             // Handle rotation
             if (isRotating.value && selectedStroke.value && resizeHandle.value === 'rotate') {
                 if (e.pointerId !== activePointerId.value) return;
@@ -3210,7 +3210,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
 
         
         // Handle selection rectangle
-        if ((isCaptureSelectionMode.value || isSelectModeActive.value || isTextInputMode.value) && isSelecting.value) {
+        if ((isCaptureSelectionMode.value || isStrokeSelectModeActive.value || isTextInputMode.value) && isSelecting.value) {
             handleCaptureSelectionRectangle(e);
             return;
         }
@@ -3313,7 +3313,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
 
         if (textModesActive.value) return;
         
-        if (isSelectModeActive.value && (isStrokeHovering.value || isDragging.value || isResizing.value || isRotating.value) && isMouseDown.value && selectedStroke.value) {
+        if (isStrokeSelectModeActive.value && (isStrokeHovering.value || isDragging.value || isResizing.value || isRotating.value) && isMouseDown.value && selectedStroke.value) {
             // Only stop if it's the same pointer
             if (e && e.pointerId !== activePointerId.value) return;
             const canvas = activePage.value.drawingCanvas || null;
@@ -3409,7 +3409,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         };
 
         // Handle selection complete
-        if ((isCaptureSelectionMode.value || isSelectModeActive.value || isTextInputMode.value) && isSelecting.value && selectionStart.value && selectionEnd.value) {
+        if ((isCaptureSelectionMode.value || isStrokeSelectModeActive.value || isTextInputMode.value) && isSelecting.value && selectionStart.value && selectionEnd.value) {
             handleSelectionEnd(e);
 
             const canvas = activePage.value.drawingCanvas || null;
@@ -3506,7 +3506,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
             isPenHovering.value = true;
         }
 
-        if (isSelectModeActive.value) {
+        if (isStrokeSelectModeActive.value) {
             let newStrokeHovering = false;
             let newBBoxHovering = false;
             let newResizeHandle = null;
@@ -3588,7 +3588,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
     const resetToolState = () => {
         closeTextEditor();
         isCaptureSelectionMode.value = false;
-        isSelectModeActive.value = false;
+        isStrokeSelectModeActive.value = false;
         isTextSelectionMode.value = false;
         isTextHighlightMode.value = false;
         isTextInputMode.value = false;
@@ -4290,10 +4290,10 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         svgLayer.appendChild(overlayGroup);
     };
 
-    const clampStrokeMenuPosition = async () => {
+    const clampPopMenuPosition = async () => {
         // Ensure the menu has rendered before measuring
         await nextTick();
-        const el = strokeMenu.value;
+        const el = popMenu.value;
         if (!el) return;
 
         
@@ -4307,8 +4307,8 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         const margin = 8;   // keep a small margin from edges
 
         // Prefer placing menu to the right of the stroke if it fits, else left
-        let preferredX = strokeMenuPosition.value.x;
-        let preferredY = strokeMenuPosition.value.y;
+        let preferredX = popMenuPosition.value.x;
+        let preferredY = popMenuPosition.value.y;
 
         if (selectedStroke?.value) {
             const canvas = activePage.value.drawingCanvas || null;
@@ -4406,8 +4406,8 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         const clampedX = Math.min(Math.max(minX, preferredX), Math.max(minX, maxX));
         const clampedY = Math.min(Math.max(minY, preferredY), Math.max(minY, maxY));
 
-        if (clampedX !== strokeMenuPosition.value.x || clampedY !== strokeMenuPosition.value.y) {
-            strokeMenuPosition.value = { x: clampedX, y: clampedY };
+        if (clampedX !== popMenuPosition.value.x || clampedY !== popMenuPosition.value.y) {
+            popMenuPosition.value = { x: clampedX, y: clampedY };
         }
     };
 
@@ -4417,7 +4417,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
     const handleTextSelectionMouseUp = () => {
         nextTick(() => {
             if (!isTextSelectionMode.value && !isTextHighlightMode.value) {
-                showStrokeMenu.value = false;
+                showPopMenu.value = false;
                 return;
             }
 
@@ -4432,25 +4432,25 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
                 const rects = range.getClientRects();
                 const lastRect = rects.length > 0 ? rects[rects.length - 1] : range.getBoundingClientRect();
                 selectedText.value = selection.toString().trim();
-                strokeMenuPosition.value = {
+                popMenuPosition.value = {
                     x: lastRect.right,
                     y: lastRect.bottom + 5
                 };
-                showStrokeMenu.value = true;
+                showPopMenu.value = true;
             } else {
-                showStrokeMenu.value = false;
+                showPopMenu.value = false;
             }
         });
     };
 
     watch(
-        () => !isDragging.value && !isResizing.value && !isRotating.value && (selectedStroke.value || selectedStrokes.value.length > 0) && isSelectModeActive.value,
+        () => !isDragging.value && !isResizing.value && !isRotating.value && (selectedStroke.value || selectedStrokes.value.length > 0) && isStrokeSelectModeActive.value,
         (isSelected) => {
-            showStrokeMenu.value = isSelected;
+            showPopMenu.value = isSelected;
+            drawSelectionBoundingBox();
 
             if (isSelected) {
-                drawSelectionBoundingBox();
-                clampStrokeMenuPosition();
+                clampPopMenuPosition();
             }
         },
     )
@@ -4521,7 +4521,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         if (selectedIndex >= 0 && strokes[selectedIndex]) {
             appendStrokeToSvg(svgLayer, strokes[selectedIndex], selectedIndex);
             drawSelectionBoundingBox();
-            clampStrokeMenuPosition();
+            clampPopMenuPosition();
         }
     };
 
@@ -4614,7 +4614,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
 
             // Redraw to clear the selection rectangle
             redrawAllStrokes();
-            isSelectModeActive.value = true;
+            isStrokeSelectModeActive.value = true;
         } catch (error) {
             console.error('Error capturing selection:', error);
         }
@@ -4666,7 +4666,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
 
     return {
         colorPalette,
-        isSelectModeActive,
+        isStrokeSelectModeActive,
         isTextSelectionMode,
         isTextHighlightMode,
         isDrawing,
@@ -4682,9 +4682,9 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         isStrokeHovering,
         isDragging,
         selectedStroke,
-        strokeMenu,
-        showStrokeMenu,
-        strokeMenuPosition,
+        popMenu,
+        showPopMenu,
+        popMenuPosition,
         resizeCursor,
         handToolActive,
         isHandToolPanning,
@@ -4708,7 +4708,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         selectedText,
         handleTextSelectionMouseUp,
         handleStrokeStyleButtonClick,
-        clampStrokeMenuPosition,
+        clampPopMenuPosition,
         highlightTextSelection,
         copySelectedStroke,
         insertCopiedStroke,

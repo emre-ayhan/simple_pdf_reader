@@ -23,7 +23,7 @@ const cursorStyle = computed(() => {
     if (resizeCursor.value) return resizeCursor.value;
     if (handToolActive.value) return isHandToolPanning.value ? 'grabbing' : 'grab';
     if (selectedStroke.value && (isStrokeHovering.value || isDragging.value)) return 'move';
-    if (isSelectModeActive.value && isStrokeHovering.value) return 'pointer';
+    if (isStrokeSelectModeActive.value && isStrokeHovering.value) return 'pointer';
     if (isCaptureSelectionMode.value) return 'crosshair';
     if (isTextInputMode.value) return 'text';
     if (isDrawing.value ) {
@@ -101,7 +101,7 @@ const strokeChangeCallback = (action) => {
 
 const {
     colorPalette,
-    isSelectModeActive,
+    isStrokeSelectModeActive,
     isTextSelectionMode,
     isTextHighlightMode,
     isDrawing,
@@ -117,9 +117,9 @@ const {
     isStrokeHovering,
     isDragging,
     selectedStroke,
-    strokeMenu,
-    showStrokeMenu,
-    strokeMenuPosition,
+    popMenu,
+    showPopMenu,
+    popMenuPosition,
     resizeCursor,
     handToolActive,
     isHandToolPanning,
@@ -143,7 +143,7 @@ const {
     handleStrokeStyleButtonClick,
     selectedText,
     handleTextSelectionMouseUp,
-    clampStrokeMenuPosition,
+    clampPopMenuPosition,
     highlightTextSelection,
     copySelectedStroke,
     insertCopiedStroke,
@@ -178,7 +178,7 @@ const handleImageImport = createImageImportHandler(redrawAllStrokes, addToHistor
 const textActionsDisabled = computed(() => Object.values(pages.value).map(page => page.textContent?.items.length || 0).reduce((a, b) => a + b, 0) === 0);
 
 const touchAction = computed(() => {
-    if (isViewLocked.value || isPenHovering.value || isSelectModeActive.value || isCaptureSelectionMode.value || (enableTouchDrawing.value && hasActiveTool.value)) {
+    if (isViewLocked.value || isPenHovering.value || isStrokeSelectModeActive.value || isCaptureSelectionMode.value || (enableTouchDrawing.value && hasActiveTool.value)) {
         return 'none';
     }
     return 'pan-y pan-x';
@@ -298,7 +298,7 @@ const selectText = () => {
 const toggleStrokeSelectionMode = () => {
     if (!isFileLoaded.value) return;
     resetToolState();
-    isSelectModeActive.value = true;
+    isStrokeSelectModeActive.value = true;
 };
 
 const captureSelection = () => {
@@ -401,8 +401,8 @@ useWindowEvents(fileId, {
         action() {
             if (!isFileLoaded.value) return;
 
-            if (showStrokeMenu.value) { 
-                clampStrokeMenuPosition();
+            if (showPopMenu.value) { 
+                clampPopMenuPosition();
             };
 
             clearTimeout(resizeTimeout);
@@ -422,7 +422,7 @@ useWindowEvents(fileId, {
         a: {
             ctrl: true,
             action: (event) => {
-                if (isSelectModeActive.value) {
+                if (isStrokeSelectModeActive.value) {
                     event.preventDefault();
                     selectStrokes(activePage.value.strokes);
                 }
@@ -585,7 +585,7 @@ useWindowEvents(fileId, {
                 event.preventDefault();
                 if (isDrawing.value || isTextInputMode.value) {
                     resetToolState();
-                    isSelectModeActive.value = true;
+                    isStrokeSelectModeActive.value = true;
                     return;
                 }
                 
@@ -780,7 +780,7 @@ defineExpose({
                 <!-- Selection -->
                 <li class="nav-item vr"></li>
                 <li class="nav-item">
-                    <ToolItem class="nav-link" label="Drawing Selection" shortcut="P" icon="cursor-fill" :active="isSelectModeActive" :action="toggleStrokeSelectionMode" />
+                    <ToolItem class="nav-link" label="Drawing Selection" shortcut="P" icon="cursor-fill" :active="isStrokeSelectModeActive" :action="toggleStrokeSelectionMode" />
                 </li>
                 <li class="nav-item">
                     <ToolItem class="nav-link" label="Text Selection" shortcut="S" icon="cursor-text" :active="isTextSelectionMode" :disabled="textActionsDisabled" :action="toggleTextSelection" />
@@ -913,41 +913,23 @@ defineExpose({
             </bs-toast>
 
             <!-- Stroke Menu -->
-            <div v-if="showStrokeMenu && (selectedStroke || selectedText)" 
-                ref="strokeMenu"
-                class="stroke-menu"
+            <div v-if="showPopMenu && (selectedStroke || selectedText)" 
+                ref="popMenu"
+                class="pop-menu"
                 :style="{ 
-                    left: strokeMenuPosition.x + 'px', 
-                    top: strokeMenuPosition.y + 'px'
+                    left: popMenuPosition.x + 'px', 
+                    top: popMenuPosition.y + 'px'
                 }"
             >
-                <div class="stroke-menu-content">
-                    <div class="stroke-menu-section">
-                        <div class="stroke-menu-colors dropdown-center">
-                            <template v-if="isSelectedStrokeType('text')">
-                                <button
-                                    type="button"
-                                    class="btn btn-link link-secondary btn-stroke-menu border-0 p-0"
-                                    :title="$t('Edit')"
-                                    @click.stop="editSelectedTextStroke()"
-                                >
-                                    <i class="bi bi-pencil-square"></i>
-                                </button>
-                                <div class="vr bg-primary"></div>
-                            </template>
-                            <button type="button" class="btn btn-link link-secondary btn-stroke-menu border-0 p-0" :title="$t('Copy')" @click.stop="copySelection">
-                                <i class="bi bi-copy"></i>
-                            </button>
-                            <template v-if="selectedStroke">
-                                <button type="button" class="btn btn-link link-secondary btn-stroke-menu border-0 p-0" :title="$t('Delete')" @click.stop="deleteSelectedStroke()">
-                                    <i class="bi bi-trash-fill"></i>
-                                </button>
-                            </template>
-                            <template v-else-if="selectedText">
-                                <ToolItem class="btn btn-link link-secondary btn-stroke-menu border-0 p-0" label="Highlight Text" shortcut="H" icon="highlighter" :action="highlightTextSelection" />
-                            </template>
-                        </div>
-                    </div>
+                <div class="pop-menu-body">
+                    <template v-if="selectedStroke">
+                        <ToolItem class="btn-pop-menu" label="Edit" icon="pencil-square" :action="editSelectedTextStroke"  v-if="isSelectedStrokeType('text')" />
+                        <ToolItem class="btn-pop-menu" label="Delete" icon="trash3" :action="deleteSelectedStroke" />
+                    </template>
+                    <template v-else-if="selectedText">
+                        <ToolItem class="btn-pop-menu" label="Highlight Text" shortcut="H" icon="highlighter" :action="highlightTextSelection" />
+                    </template>
+                    <ToolItem class="btn-pop-menu" label="Copy" shortcut="Ctrl+D" icon="files" :action="copySelection" />
                 </div>
             </div>
 
@@ -962,7 +944,7 @@ defineExpose({
             <PageNumber :page-num="pageNum" :total="activePages.length"/>
             
             <context-menu :parent="`#pdf-reader-${fileId}`">
-                <ToolItem class="dropdown-item" show-label label="Stroke Selection" shortcut="P" icon="cursor-fill" :active="isSelectModeActive" :action="toggleStrokeSelectionMode" />
+                <ToolItem class="dropdown-item" show-label label="Stroke Selection" shortcut="P" icon="cursor-fill" :active="isStrokeSelectModeActive" :action="toggleStrokeSelectionMode" />
                 <ToolItem class="dropdown-item" show-label label="Text Selection" shortcut="S" icon="cursor-text" :active="isTextSelectionMode && !isTextHighlightMode" :disabled="textActionsDisabled" :action="toggleTextSelection" />
                 <ToolItem class="dropdown-item" show-label label="Hand Tool" icon="hand-index-thumb-fill" :active="handToolActive" :action="toggleHandTool" />
                 <li><hr class="dropdown-divider"></li>
