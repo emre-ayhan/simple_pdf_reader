@@ -2,7 +2,7 @@
 import { ref, computed, nextTick, onMounted, onUnmounted, onBeforeUnmount, watch } from "vue";
 import { Electron, enableTouchDrawing, toolbarPosition } from "../composables/useAppSettings";
 import { useFile } from "../composables/useFile";
-import { useDraw } from "../composables/useDraw";
+import { usePageActions } from "../composables/usePageActions";
 import { useHistory } from "../composables/useHistory";
 import { fileDataCache } from "../composables/useTabs";
 import { useWindowEvents } from "../composables/useWindowEvents";
@@ -127,7 +127,7 @@ const {
     stopDrawing,
     onPointerMove,
     onPointerLeave,
-    editSelectedTextStroke,
+    editTextStroke,
     commitTextEditor,
     closeTextEditor,
     syncTextEditorPosition,
@@ -150,7 +150,7 @@ const {
     isSelectedStrokeType,
     copiedStrokes,
     selectStrokes,
-} = useDraw(pagesContainer, activePage, strokeChangeCallback);
+} = usePageActions(pagesContainer, activePage, strokeChangeCallback);
 
 // History management
 const { 
@@ -913,17 +913,10 @@ defineExpose({
             </bs-toast>
 
             <!-- Stroke Menu -->
-            <div v-if="showPopMenu && (selectedStroke || selectedText)" 
-                ref="popMenu"
-                class="pop-menu"
-                :style="{ 
-                    left: popMenuPosition.x + 'px', 
-                    top: popMenuPosition.y + 'px'
-                }"
-            >
+            <div ref="popMenu" class="pop-menu" :style="{ left: popMenuPosition.x + 'px', top: popMenuPosition.y + 'px' }" v-if="showPopMenu && (selectedStroke || selectedText)">
                 <div class="pop-menu-body">
                     <template v-if="selectedStroke">
-                        <ToolItem class="btn-pop-menu" label="Edit" icon="pencil-square" :action="editSelectedTextStroke"  v-if="isSelectedStrokeType('text')" />
+                        <ToolItem class="btn-pop-menu" label="Edit" icon="pencil-square" :action="editTextStroke"  v-if="isSelectedStrokeType('text')" />
                         <ToolItem class="btn-pop-menu" label="Delete" icon="trash3" :action="deleteSelectedStroke" />
                     </template>
                     <template v-else-if="selectedText">

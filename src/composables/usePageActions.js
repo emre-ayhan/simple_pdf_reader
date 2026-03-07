@@ -1003,7 +1003,7 @@ const setStrokeMeta = (el, strokeIndex) => {
     el.setAttribute('data-stroke-index', String(strokeIndex));
 };
 
-export function useDraw(pagesContainer, activePage, addToHistory) {
+export function usePageActions(pagesContainer, activePage, addToHistory) {
     const { get: storeGet, set: storeSet } = useStore();
 
     // Drawing variables
@@ -3598,6 +3598,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         selectedStrokes.value = [];
         selectedStroke.value = null;
         selectedText.value = '';
+        showPopMenu.value = false;
         isDragging.value = false;
         isResizing.value = false;
         resizeHandle.value = null;
@@ -3880,9 +3881,9 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         window.getSelection()?.removeAllRanges();
     };
 
-    const editSelectedTextStroke = () => {
+    const editTextStroke = () => {
         if (!selectedStroke.value) return;
-        if (selectedStroke.value.stroke?.[0]?.type !== 'text') return;
+        if (!isSelectedStrokeType('text')) return;
 
         const first = selectedStroke.value.stroke[0];
         const content = getTextStrokeContent(first);
@@ -4417,7 +4418,6 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
     const handleTextSelectionMouseUp = () => {
         nextTick(() => {
             if (!isTextSelectionMode.value && !isTextHighlightMode.value) {
-                showPopMenu.value = false;
                 return;
             }
 
@@ -4692,7 +4692,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         stopDrawing,
         onPointerMove,
         onPointerLeave,
-        editSelectedTextStroke,
+        editTextStroke,
         commitTextEditor,
         closeTextEditor,
         syncTextEditorPosition,
