@@ -3796,7 +3796,7 @@ export function usePageActions(pagesContainer, activePage, addToHistory) {
         redrawAllStrokes();
     };
 
-    const highlightTextSelection = () => {
+    const highlightTextSelection = (color) => {
         const selection = window.getSelection();
         if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;
         
@@ -4415,16 +4415,15 @@ export function usePageActions(pagesContainer, activePage, addToHistory) {
     // Text Selection Variables and Handlers
     const selectedText = ref('');
     const showCommentInput = ref(false);
-    const commentInputPosition = ref({ x: 0, y: 0 });
 
-    const handleTextSelectionMouseUp = () => {
+    const handleTextSelectionMouseUp = (event) => {
         setTimeout(() => {
             if (!isTextSelectionMode.value && !isTextHighlightMode.value) {
                 return;
             }
-
-            if (isTextHighlightMode.value) {
-                highlightTextSelection();
+            
+            if (isTextHighlightMode.value || showCommentInput.value) {
+                // highlightTextSelection();
                 return;
             }
             
@@ -4687,6 +4686,7 @@ export function usePageActions(pagesContainer, activePage, addToHistory) {
         selectedStroke,
         popMenu,
         showPopMenu,
+        showCommentInput,
         popMenuPosition,
         resizeCursor,
         handToolActive,

@@ -13,6 +13,7 @@ const props = defineProps({
 
 const onClick = () => {
     if (props.disabled) return;
+    if (typeof props.action !== 'function') return;
     props.action(props.value);
 }
 </script>

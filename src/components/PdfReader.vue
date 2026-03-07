@@ -119,6 +119,7 @@ const {
     selectedStroke,
     popMenu,
     showPopMenu,
+    showCommentInput,
     popMenuPosition,
     resizeCursor,
     handToolActive,
@@ -913,7 +914,7 @@ defineExpose({
                 </div>
             </bs-toast>
 
-            <!-- Stroke Menu -->
+            <!-- Pop Menu -->
             <div ref="popMenu" class="pop-menu" :style="{ left: popMenuPosition.x + 'px', top: popMenuPosition.y + 'px' }" v-if="showPopMenu && (selectedStroke || selectedText)">
                 <div class="pop-menu-body">
                     <template v-if="selectedStroke">
@@ -921,6 +922,7 @@ defineExpose({
                         <ToolItem class="btn-pop-menu" label="Delete" icon="trash3" :action="deleteSelectedStroke" />
                     </template>
                     <template v-else-if="selectedText">
+                        <ToolItem class="btn-pop-menu" label="Add Comment" icon="chat-left-text-fill" />
                         <ToolItem class="btn-pop-menu" label="Highlight Text" shortcut="H" icon="highlighter" :action="highlightTextSelection" />
                     </template>
                     <ToolItem class="btn-pop-menu" label="Copy" shortcut="Ctrl+D" icon="files" :action="copySelection" />
