@@ -3597,6 +3597,7 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         isStrokeHovering.value = false;
         selectedStrokes.value = [];
         selectedStroke.value = null;
+        selectedText.value = '';
         isDragging.value = false;
         isResizing.value = false;
         resizeHandle.value = null;
@@ -4410,6 +4411,38 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         }
     };
 
+    // Handle text selection on mouse up when in text selection mode (and not in highlight mode)
+    const selectedText = ref('');
+
+    const handleTextSelectionMouseUp = () => {
+        nextTick(() => {
+            if (!isTextSelectionMode.value && !isTextHighlightMode.value) {
+                showStrokeMenu.value = false;
+                return;
+            }
+
+            if (isTextHighlightMode.value) {
+                highlightTextSelection();
+                return;
+            }
+            
+            const selection = window.getSelection();
+            if (selection && selection.toString().trim().length > 0 && selection.rangeCount > 0) {
+                const range = selection.getRangeAt(0);
+                const rects = range.getClientRects();
+                const lastRect = rects.length > 0 ? rects[rects.length - 1] : range.getBoundingClientRect();
+                selectedText.value = selection.toString().trim();
+                strokeMenuPosition.value = {
+                    x: lastRect.right,
+                    y: lastRect.bottom + 5
+                };
+                showStrokeMenu.value = true;
+            } else {
+                showStrokeMenu.value = false;
+            }
+        });
+    };
+
     watch(
         () => !isDragging.value && !isResizing.value && !isRotating.value && (selectedStroke.value || selectedStrokes.value.length > 0) && isSelectModeActive.value,
         (isSelected) => {
@@ -4667,12 +4700,13 @@ export function useDraw(pagesContainer, activePage, addToHistory) {
         updateTextEditorPosition,
         resetToolState,
         redrawAllStrokes,
-        drawImageCanvas,
         deleteSelectedStroke,
         strokeStyles,
         activeStrokeStyle,
         updateStrokeStyle,
         showStrokeStyleMenu,
+        selectedText,
+        handleTextSelectionMouseUp,
         handleStrokeStyleButtonClick,
         clampStrokeMenuPosition,
         highlightTextSelection,

@@ -135,13 +135,14 @@ const {
     updateTextEditorPosition,
     resetToolState,
     redrawAllStrokes,
-    drawImageCanvas,
     deleteSelectedStroke,
     strokeStyles,
     activeStrokeStyle,
     updateStrokeStyle,
     showStrokeStyleMenu,
     handleStrokeStyleButtonClick,
+    selectedText,
+    handleTextSelectionMouseUp,
     clampStrokeMenuPosition,
     highlightTextSelection,
     copySelectedStroke,
@@ -199,7 +200,7 @@ const toggleThumbnailSidebar = () => {
 
 const toggleHandTool = () => {
     if (!isFileLoaded.value) return;
-    resetAllTools();
+    resetToolState();
     handToolActive.value = !handToolActive.value;
 };
 
@@ -208,38 +209,19 @@ const lockView = () => {
     isViewLocked.value = !isViewLocked.value;
 };
 
-const resetAllTools = () => {
-    resetToolState();
-    document.removeEventListener('mouseup', handleTextSelectionMouseUp);
-};
-
-
-const handleTextSelectionMouseUp = () => {
-    // Small delay to ensure selection is complete
-    setTimeout(highlightTextSelection, 10);
-};
-
-
 const toggleTextHighlightMode = () => {
     if (!isFileLoaded.value) return;
+    const wasActive = isTextHighlightMode.value;
     resetToolState();
-    isTextHighlightMode.value = !isTextHighlightMode.value;
-
-    if (isTextHighlightMode.value) {
-        isTextSelectionMode.value = true;
-        nextTick(() => {
-            document.addEventListener('mouseup', handleTextSelectionMouseUp);
-        });
-        return;
-    }
-
-    resetAllTools();
+    isTextHighlightMode.value = !wasActive;
+    isTextSelectionMode.value = true;
 };
 
 const toggleTextSelection = () => {
     if (!isFileLoaded.value) return;
-    resetAllTools();
-    isTextSelectionMode.value = !isTextSelectionMode.value;
+    const wasActive = isTextSelectionMode.value;
+    resetToolState();
+    isTextSelectionMode.value = !wasActive;
 };
 
 const imageInput = ref(null);
@@ -280,7 +262,7 @@ const selectDrawingTool = (mode) => {
     if (!isFileLoaded.value) return;
     
     const wasActive = isDrawing.value && drawMode.value === mode;
-    resetAllTools();
+    resetToolState();
     
     if (wasActive) {
         isTextSelectionMode.value = true;
@@ -303,7 +285,7 @@ const textEditorAlert = ref(null);
 const selectText = () => {
     if (!isFileLoaded.value) return;
     const wasActive = isTextInputMode.value;
-    resetAllTools();
+    resetToolState();
     isTextInputMode.value = !wasActive;
 
     if (!wasActive) {
@@ -315,7 +297,7 @@ const selectText = () => {
 
 const toggleStrokeSelectionMode = () => {
     if (!isFileLoaded.value) return;
-    resetAllTools();
+    resetToolState();
     isSelectModeActive.value = true;
 };
 
@@ -602,11 +584,13 @@ useWindowEvents(fileId, {
                 if (!hasActiveTool.value) return;
                 event.preventDefault();
                 if (isDrawing.value || isTextInputMode.value) {
-                    toggleStrokeSelectionMode();
+                    resetToolState();
+                    isSelectModeActive.value = true;
                     return;
                 }
-
-                toggleTextSelection();
+                
+                resetToolState();
+                isTextSelectionMode.value = true;
             }
         },
         ArrowLeft: {
@@ -628,6 +612,7 @@ useWindowEvents(fileId, {
 let unsubscribeFileOpen = null;
 
 onMounted(() => {
+    document.addEventListener('mouseup', handleTextSelectionMouseUp);
     const cache = fileDataCache.value;
     fileDataCache.value = null;
 
@@ -928,9 +913,9 @@ defineExpose({
             </bs-toast>
 
             <!-- Stroke Menu -->
-            <div v-if="showStrokeMenu && selectedStroke" 
+            <div v-if="showStrokeMenu && (selectedStroke || selectedText)" 
                 ref="strokeMenu"
-                class="stroke-menu" 
+                class="stroke-menu"
                 :style="{ 
                     left: strokeMenuPosition.x + 'px', 
                     top: strokeMenuPosition.y + 'px'
@@ -950,12 +935,17 @@ defineExpose({
                                 </button>
                                 <div class="vr bg-primary"></div>
                             </template>
-                            <button type="button" class="btn btn-link link-secondary btn-stroke-menu border-0 p-0" :title="$t('Copy')" @click.stop="copySelectedStroke()">
+                            <button type="button" class="btn btn-link link-secondary btn-stroke-menu border-0 p-0" :title="$t('Copy')" @click.stop="copySelection">
                                 <i class="bi bi-copy"></i>
                             </button>
-                            <button type="button" class="btn btn-link link-secondary btn-stroke-menu border-0 p-0" :title="$t('Delete')" @click.stop="deleteSelectedStroke()">
-                                <i class="bi bi-trash-fill"></i>
-                            </button>
+                            <template v-if="selectedStroke">
+                                <button type="button" class="btn btn-link link-secondary btn-stroke-menu border-0 p-0" :title="$t('Delete')" @click.stop="deleteSelectedStroke()">
+                                    <i class="bi bi-trash-fill"></i>
+                                </button>
+                            </template>
+                            <template v-else-if="selectedText">
+                                <ToolItem class="btn btn-link link-secondary btn-stroke-menu border-0 p-0" label="Highlight Text" shortcut="H" icon="highlighter" :action="highlightTextSelection" />
+                            </template>
                         </div>
                     </div>
                 </div>
