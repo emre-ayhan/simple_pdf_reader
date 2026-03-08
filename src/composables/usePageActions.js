@@ -3753,36 +3753,22 @@ export function usePageActions(pagesContainer, activePage, addToHistory) {
         selectedStroke.value = null;
     };
 
-    const createHighlightRectangle = (rectsOrX, y, width, height) => {
-        const id = uuid();
-        
+    const createHighlightRectangle = (rects) => {
         // Check if we received an array of rects or individual values
-        let highlightStroke;
-        if (Array.isArray(rectsOrX)) {
-            // Multiple rectangles - create a compound highlight
-            highlightStroke = [{
-                id,
-                type: 'highlight-rect',
-                rects: rectsOrX, // Array of {x, y, width, height}
-                color: drawStyle.value.color,
-                thickness: getScaledDrawingThickness(),
-                fill: true,
-                opacity: Math.min(drawStyle.value.opacity, 0.6),
-                dash: drawStyle.value.dash
-            }];
-        } else {
-            // Single rectangle (backward compatibility)
-            highlightStroke = [{
-                id,
-                type: 'highlight-rect',
-                rects: [{ x: rectsOrX, y, width, height }],
-                color: drawStyle.value.color,
-                thickness: getScaledDrawingThickness(),
-                fill: true,
-                opacity: Math.min(drawStyle.value.opacity, 0.6),
-                dash: drawStyle.value.dash
-            }];
-        }
+        if (!Array.isArray(rects)) return;
+        const id = uuid();
+
+        // Multiple rectangles - create a compound highlight
+        const highlightStroke = [{
+            id,
+            type: 'highlight-rect',
+            rects: rects, // Array of {x, y, width, height}
+            color: drawStyle.value.color,
+            thickness: getScaledDrawingThickness(),
+            fill: true,
+            opacity: Math.min(drawStyle.value.opacity, 0.6),
+            dash: drawStyle.value.dash
+        }];
         
         activePage.value.strokes.push(highlightStroke);
         
@@ -3796,7 +3782,7 @@ export function usePageActions(pagesContainer, activePage, addToHistory) {
         redrawAllStrokes();
     };
 
-    const highlightTextSelection = (color) => {
+    const highlightTextSelection = () => {
         const selection = window.getSelection();
         if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;
         
@@ -3808,13 +3794,15 @@ export function usePageActions(pagesContainer, activePage, addToHistory) {
         // Group rects by page and store all rectangles for each page
         const rectsByPage = new Map();
         
+        const page = activePage.value;
+
         Array.from(rects).forEach(rect => {
             // Skip very small rects (often artifacts)
             if (rect.width < 1 || rect.height < 1) return;
             
             // Find which page this rect belongs to
-            const canvas = activePage.value.drawingCanvas || null;
-            const canvasIndex = activePage.value.index;
+            const canvas = page.drawingCanvas || null;
+            const canvasIndex = page.index;
             const canvasRect = canvas.getBoundingClientRect();
             
             // Check if rect overlaps with canvas
@@ -3837,7 +3825,7 @@ export function usePageActions(pagesContainer, activePage, addToHistory) {
         });
         
         // Merge overlapping/adjacent rectangles and create highlights
-        rectsByPage.forEach((rects, pageIndex) => {
+        rectsByPage.forEach((rects) => {
             if (rects.length === 0) return;
             
             // Sort rectangles by y position first, then x
@@ -4423,7 +4411,7 @@ export function usePageActions(pagesContainer, activePage, addToHistory) {
             }
             
             if (isTextHighlightMode.value || showCommentInput.value) {
-                // highlightTextSelection();
+                highlightTextSelection();
                 return;
             }
             
