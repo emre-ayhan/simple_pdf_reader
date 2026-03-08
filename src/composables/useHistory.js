@@ -114,6 +114,14 @@ export function useHistory(fileId, redrawAllStrokes) {
                 }
                 if (page != null) redrawAllStrokes(page);
             }
+        } else if (action.type === 'comment-edit') {
+            if (action.previousStroke) {
+                const strokes = page.strokes;
+                if (strokes && strokes[action.strokeIndex]) {
+                    strokes[action.strokeIndex] = JSON.parse(JSON.stringify(action.previousStroke));
+                }
+                if (page != null) redrawAllStrokes(page);
+            }
         } else if (action.type === 'rotate') {
             if (action.previousStroke) {
                 const strokes = page.strokes;
@@ -175,6 +183,12 @@ export function useHistory(fileId, redrawAllStrokes) {
             }
             if (page != null) redrawAllStrokes(page);
         } else if (action.type === 'move') {
+            const strokes = page.strokes;
+            if (strokes && strokes[action.strokeIndex]) {
+                strokes[action.strokeIndex] = JSON.parse(JSON.stringify(action.stroke));
+            }
+            if (page != null) redrawAllStrokes(page);
+        } else if (action.type === 'comment-edit') {
             const strokes = page.strokes;
             if (strokes && strokes[action.strokeIndex]) {
                 strokes[action.strokeIndex] = JSON.parse(JSON.stringify(action.stroke));

@@ -1,0 +1,135 @@
+$top: $navtabsHeight + $toolbarHeight;
+
+.comments-sidebar {
+    width: 320px;
+    min-width: 320px;
+    align-self: stretch;
+    position: fixed;
+    top: $top;
+    right: 0;
+    height: 100%;
+    overflow: hidden;
+    background: $dark-bg-accent;
+    backdrop-filter: blur(18px);
+    z-index: 5;
+}
+
+.comments-sidebar-header {
+    padding: 16px 18px 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    top: 0;
+    background: $dark-bg-accent;
+    backdrop-filter: blur(18px);
+    z-index: 1;
+}
+
+.comments-sidebar-search {
+    .form-control {
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: $light;
+        border-radius: 999px;
+        padding-inline: 14px;
+
+        &::placeholder {
+            color: rgba(255, 255, 255, 0.48);
+        }
+
+        &:focus {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 193, 7, 0.35);
+            box-shadow: 0 0 0 0.2rem rgba(255, 193, 7, 0.14);
+        }
+    }
+}
+
+.comments-sidebar-kicker {
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: $warning;
+    margin-bottom: 4px;
+}
+
+.comments-sidebar-empty {
+    padding: 20px 18px;
+    line-height: 1.5;
+}
+
+.comments-sidebar-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px;
+    overflow-y: auto;
+    height: calc(100vh - #{$top + 128px}); // header height + padding-bottom of header + padding-top of list
+}
+
+.comments-sidebar-item {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.comments-sidebar-card {
+    position: relative;
+    width: 100%;
+    text-align: left;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.04);
+    padding: 14px;
+    transition: border-color 0.18s ease, background-color 0.18s ease, transform 0.18s ease;
+}
+
+.comments-sidebar-actions {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    padding: 6px;
+    display: none !important;
+
+    button {
+        border: none;
+        border-radius: $border-radius-lg;
+    }
+}
+
+.comments-sidebar-item.active .comments-sidebar-card,
+.comments-sidebar-card:hover {
+    border-color: rgba(255, 193, 7, 0.45);
+    // background: rgba(255, 193, 7, 0.08);
+    transform: translateX(-2px);
+    
+    .comments-sidebar-actions {
+        display: flex !important;
+    }
+}
+
+.comments-sidebar-selection {
+    margin-top: 10px;
+    line-height: 1.45;
+}
+
+.comments-sidebar-body {
+    margin-top: 10px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+}
+
+.comments-sidebar-author {
+    margin-top: 10px;
+    font-size: 12px;
+}
+
+@media (max-width: 991.98px) {
+    .comments-sidebar {
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: min(86vw, 320px);
+        min-width: min(86vw, 320px);
+        max-height: none;
+        box-shadow: -12px 0 30px rgba(0, 0, 0, 0.25);
+    }
+}

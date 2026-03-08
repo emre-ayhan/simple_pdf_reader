@@ -89,6 +89,10 @@
 
 
 .pdf-reader {
+    position: relative;
+    display: flex;
+    align-items: stretch;
+
     &.toolbar-top {
         margin-top: $navtabsHeight;
     }
@@ -121,6 +125,8 @@
 }
 
 .pages-container {
+    flex: 1 1 auto;
+    min-width: 0;
     margin: auto;
     display: flex;
     flex-direction: column;
@@ -204,6 +210,40 @@
     max-height: 100%;
     pointer-events: none;
     z-index: 3;
+}
+
+.comment-hover-tooltip {
+    position: absolute;
+    z-index: 6;
+    max-width: min(320px, calc(100vw - 48px));
+    padding: 10px 12px;
+    border-radius: 14px;
+    background: rgba(15, 23, 42, 0.94);
+    border: 1px solid rgba(245, 158, 11, 0.28);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.3);
+    color: $light;
+    pointer-events: none;
+    transform: translate(0, 8px);
+}
+
+.comment-hover-tooltip-author {
+    font-size: 12px;
+    font-weight: 600;
+    color: $warning;
+    margin-bottom: 6px;
+}
+
+.comment-hover-tooltip-body {
+    line-height: 1.45;
+    white-space: pre-wrap;
+}
+
+.comment-hover-tooltip-selection {
+    margin-top: 8px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: rgba(255, 255, 255, 0.72);
+    font-style: italic;
 }
 
 .text-layer {

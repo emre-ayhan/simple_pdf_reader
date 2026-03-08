@@ -79,6 +79,9 @@ const toCursorFromAngle = (angleRad) => {
 };
 
 const BOUNDING_BOX_HANDLE_COLOR = '#2a7fff';
+const COMMENT_ICON_DEFAULT_COLOR = '#664d03';
+const COMMENT_ICON_DETAIL_COLOR = '#ffffff';
+const COMMENT_ICON_DEFAULT_SIZE = 64;
 
 const toExactResizeCursor = (angleRad) => {
     if (!Number.isFinite(angleRad)) return null;
@@ -251,6 +254,8 @@ const stopEvent = (e) => {
     if (typeof e.stopPropagation === 'function') e.stopPropagation();
 };
 
+const clampNumber = (value, min, max) => Math.min(Math.max(value, min), max);
+
 const getCanvasPointFromEvent = (canvas, e) => {
     if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
@@ -265,6 +270,111 @@ const getCanvasPointFromEvent = (canvas, e) => {
         clientY,
         x: (clientX - rect.left) * scaleX,
         y: (clientY - rect.top) * scaleY
+    };
+};
+
+const getCanvasPointFromClient = (canvas, clientX, clientY) => {
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return {
+        rect,
+        scaleX,
+        scaleY,
+        clientX,
+        clientY,
+        x: (clientX - rect.left) * scaleX,
+        y: (clientY - rect.top) * scaleY
+    };
+};
+
+const isSelectOnlyStroke = (first) => {
+    if (!first) return false;
+    return [
+        'highlight-rect',
+        'comment',
+    ].includes(first.type);
+};
+
+const getCommentStrokeSize = (strokeOrFirst) => {
+    const first = Array.isArray(strokeOrFirst) ? strokeOrFirst[0] : strokeOrFirst;
+    if (!first) {
+        return { width: COMMENT_ICON_DEFAULT_SIZE, height: COMMENT_ICON_DEFAULT_SIZE };
+    }
+
+    return {
+        width: Math.max(18, Number(first.width) || COMMENT_ICON_DEFAULT_SIZE),
+        height: Math.max(18, Number(first.height) || COMMENT_ICON_DEFAULT_SIZE)
+    };
+};
+
+const normalizeTextForMatch = (value = '') => String(value || '').replace(/\s+/g, ' ').trim();
+
+const collectTextLayerTextNodes = (textLayer) => {
+    if (!textLayer) {
+        return { rawText: '', entries: [] };
+    }
+
+    const walker = document.createTreeWalker(textLayer, NodeFilter.SHOW_TEXT, {
+        acceptNode(node) {
+            return node?.nodeValue ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+        }
+    });
+
+    const entries = [];
+    let rawText = '';
+    let currentNode = walker.nextNode();
+
+    while (currentNode) {
+        const text = currentNode.nodeValue || '';
+        const start = rawText.length;
+        rawText += text;
+        entries.push({
+            node: currentNode,
+            start,
+            end: rawText.length
+        });
+        currentNode = walker.nextNode();
+    }
+
+    return { rawText, entries };
+};
+
+const getRawIndexFromTextLocation = (entries, node, offset) => {
+    const entry = Array.isArray(entries) ? entries.find(item => item.node === node) : null;
+    if (!entry) return null;
+    return entry.start + Math.max(0, Math.min(Number(offset) || 0, entry.end - entry.start));
+};
+
+const getSelectionTextAnchor = (textLayer, range) => {
+    if (!textLayer || !range) return null;
+
+    const startNode = range.startContainer?.nodeType === Node.TEXT_NODE ? range.startContainer : null;
+    const endNode = range.endContainer?.nodeType === Node.TEXT_NODE ? range.endContainer : null;
+    if (!startNode || !endNode) return null;
+
+    const startParent = startNode.parentElement || startNode.parentNode;
+    const endParent = endNode.parentElement || endNode.parentNode;
+    if (!textLayer.contains(startParent) || !textLayer.contains(endParent)) return null;
+
+    const { rawText, entries } = collectTextLayerTextNodes(textLayer);
+    if (!rawText || entries.length === 0) return null;
+
+    const startRaw = getRawIndexFromTextLocation(entries, startNode, range.startOffset);
+    const endRaw = getRawIndexFromTextLocation(entries, endNode, range.endOffset);
+    if (!Number.isFinite(startRaw) || !Number.isFinite(endRaw) || endRaw < startRaw) return null;
+
+    const totalLength = Math.max(1, rawText.length);
+    const beforeText = normalizeTextForMatch(rawText.slice(Math.max(0, startRaw - 72), startRaw));
+    const afterText = normalizeTextForMatch(rawText.slice(endRaw, Math.min(rawText.length, endRaw + 72)));
+
+    return {
+        beforeText,
+        afterText,
+        startRatio: Number((startRaw / totalLength).toFixed(6)),
+        endRatio: Number((endRaw / totalLength).toFixed(6)),
+        selectedText: normalizeTextForMatch(range.toString())
     };
 };
 
@@ -847,7 +957,7 @@ const transformStrokeFromOriginalBounds = (liveStroke, originalStroke, fromBound
         y: mapValueBetweenBounds(point.y, fromBounds.minY, fromBounds.maxY, toBounds.minY, toBounds.maxY)
     });
 
-    if (origFirst.type === 'image' || origFirst.type === 'text') {
+    if (origFirst.type === 'image' || origFirst.type === 'text' || origFirst.type === 'comment') {
         const topLeft = mapPoint({ x: origFirst.x, y: origFirst.y });
         const bottomRight = mapPoint({ x: origFirst.x + origFirst.width, y: origFirst.y + origFirst.height });
         first.x = Math.min(topLeft.x, bottomRight.x);
@@ -936,7 +1046,7 @@ const translateStrokeBy = (stroke, dx, dy) => {
     if (!Array.isArray(stroke) || stroke.length === 0) return;
     const first = stroke[0] || {};
 
-    if (first.type === 'image' || first.type === 'text') {
+    if (first.type === 'image' || first.type === 'text' || first.type === 'comment') {
         first.x += dx;
         first.y += dy;
     } else if (first.type === 'highlight-rect') {
@@ -1003,8 +1113,15 @@ const setStrokeMeta = (el, strokeIndex) => {
     el.setAttribute('data-stroke-index', String(strokeIndex));
 };
 
-export function usePageActions(pagesContainer, activePage, addToHistory) {
+export function usePageActions(pages, pagesContainer, activePage, addToHistory) {
     const { get: storeGet, set: storeSet } = useStore();
+
+    const getPageByRef = ({ pageId = null, pageIndex = null } = {}) => {
+        const pageList = Array.isArray(pages?.value) ? pages.value : [];
+        return pageList.find(page => page.id === pageId)
+            || pageList.find(page => page.index === pageIndex)
+            || null;
+    };
 
     // Drawing variables
     const isStrokeSelectModeActive = ref(false);
@@ -1045,6 +1162,64 @@ export function usePageActions(pagesContainer, activePage, addToHistory) {
         const el = pagesContainer?.value;
         if (!el) return null;
         return el.closest?.('.pdf-reader') || el;
+    };
+
+    const getPopMenuViewportMetrics = () => {
+        const host = getScrollContainer();
+        if (!host) {
+            return {
+                host: null,
+                hostRect: null,
+                scrollLeft: 0,
+                scrollTop: 0,
+                viewportWidth: window.innerWidth || document.documentElement.clientWidth || 0,
+                viewportHeight: window.innerHeight || document.documentElement.clientHeight || 0,
+                clientLeft: 0,
+                clientTop: 0,
+                clientRight: window.innerWidth || document.documentElement.clientWidth || 0,
+                clientBottom: window.innerHeight || document.documentElement.clientHeight || 0,
+            };
+        }
+
+        const hostRect = host.getBoundingClientRect();
+        let viewportWidth = host.clientWidth;
+
+        const sidebar = host.querySelector?.('.comments-sidebar');
+        if (sidebar instanceof HTMLElement) {
+            const sidebarRect = sidebar.getBoundingClientRect();
+            const overlapsHost = sidebarRect.width > 0
+                && sidebarRect.left < hostRect.right
+                && sidebarRect.right > hostRect.left;
+
+            if (overlapsHost) {
+                viewportWidth = Math.max(0, Math.min(host.clientWidth, sidebarRect.left - hostRect.left));
+            }
+        }
+
+        return {
+            host,
+            hostRect,
+            scrollLeft: host.scrollLeft,
+            scrollTop: host.scrollTop,
+            viewportWidth,
+            viewportHeight: host.clientHeight,
+            clientLeft: hostRect.left,
+            clientTop: hostRect.top,
+            clientRight: hostRect.left + viewportWidth,
+            clientBottom: hostRect.top + host.clientHeight,
+        };
+    };
+
+    const clientToPopMenuPosition = (clientX, clientY) => {
+        const { hostRect, scrollLeft, scrollTop } = getPopMenuViewportMetrics();
+        if (!hostRect) {
+            return { x: clientX, y: clientY };
+        }
+
+        return {
+            x: clientX - hostRect.left + scrollLeft,
+            y: clientY - hostRect.top + scrollTop,
+        };
     };
 
     const selectedStrokeIndex = ref(0);
@@ -2005,6 +2180,14 @@ export function usePageActions(pagesContainer, activePage, addToHistory) {
                      testY >= first.y - threshold && 
                      testY <= first.y + textHeight + threshold;
         }
+
+        if (first.type === 'comment') {
+            const commentBox = getCommentStrokeSize(first);
+            return testX >= first.x - threshold
+                && testX <= first.x + commentBox.width + threshold
+                && testY >= first.y - threshold
+                && testY <= first.y + commentBox.height + threshold;
+        }
         
         // Check shape strokes
         if (first.type === 'line') {
@@ -2190,6 +2373,32 @@ export function usePageActions(pagesContainer, activePage, addToHistory) {
                 maxY = Math.max(maxY, ry);
             });
             return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
+        } else if (first.type === 'comment') {
+            const box = getCommentStrokeSize(first);
+            const angle = first.rotation || 0;
+            const center = getStrokeRotationCenter(stroke) || { x: first.x + box.width / 2, y: first.y + box.height / 2 };
+            const cx = center.x;
+            const cy = center.y;
+            const corners = [
+                { x: first.x, y: first.y },
+                { x: first.x + box.width, y: first.y },
+                { x: first.x + box.width, y: first.y + box.height },
+                { x: first.x, y: first.y + box.height }
+            ];
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            const cosA = Math.cos(angle);
+            const sinA = Math.sin(angle);
+            corners.forEach(p => {
+                const dx = p.x - cx;
+                const dy = p.y - cy;
+                const rx = cx + dx * cosA - dy * sinA;
+                const ry = cy + dx * sinA + dy * cosA;
+                minX = Math.min(minX, rx);
+                minY = Math.min(minY, ry);
+                maxX = Math.max(maxX, rx);
+                maxY = Math.max(maxY, ry);
+            });
+            return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
         } else if (first.type === 'highlight-rect') {
             // Do NOT support rotation for highlight rectangles; compute simple union bounds
             return getHighlightRectsBounds(first, pad);
@@ -2291,6 +2500,9 @@ export function usePageActions(pagesContainer, activePage, addToHistory) {
         const pad = Math.max(0, padding);
         if (first.type === 'image') {
             return { minX: first.x - pad, minY: first.y - pad, maxX: first.x + first.width + pad, maxY: first.y + first.height + pad };
+        } else if (first.type === 'comment') {
+            const box = getCommentStrokeSize(first);
+            return { minX: first.x - pad, minY: first.y - pad, maxX: first.x + box.width + pad, maxY: first.y + box.height + pad };
         } else if (first.type === 'highlight-rect') {
             return getHighlightRectsBounds(first, pad);
         } else if (first.type === 'text') {
@@ -2362,8 +2574,9 @@ export function usePageActions(pagesContainer, activePage, addToHistory) {
 
     const getResizeHandle = (x, y, bounds, stroke, padding = 8) => {
         const first = stroke?.[0] || null;
-        if (first?.type === 'highlight-rect') return null;
-        const rotationAvailable = first && first.type !== 'highlight-rect';
+        const rotationAvailable = first && !isSelectOnlyStroke(first);
+        if (!rotationAvailable) return null;
+
         const rotatedSelection = getRotatedSelectionGeometry(stroke, padding);
         if (rotatedSelection?.handles) {
             if (rotationAvailable) {
@@ -2477,6 +2690,7 @@ export function usePageActions(pagesContainer, activePage, addToHistory) {
 
     const startDrawing = (e) => {
         showStrokeStyleMenu.value = false;
+        clearHoveredCommentPreview();
 
         if (handToolActive.value) {
             const scrollEl = getScrollContainer();
@@ -2537,7 +2751,7 @@ export function usePageActions(pagesContainer, activePage, addToHistory) {
                 
                 if (handle) {
                     const firstSel = selectedStroke.value.stroke[0];
-                    if (handle === 'rotate' && firstSel.type !== 'highlight-rect') {
+                    if (handle === 'rotate' && !isSelectOnlyStroke(firstSel)) {
                         if (firstSel.type === 'text') {
                             const textBox = getTextBoxSize(selectedStroke.value.stroke);
                             if (textBox) {
@@ -2618,69 +2832,66 @@ export function usePageActions(pagesContainer, activePage, addToHistory) {
                     }
                 }
             }
-            
+
             const found = findStrokeAtPoint(x, y);
 
             if (found) {
-                    const shift = !!e.shiftKey;
+                const shift = !!e.shiftKey;
 
-                    const newSelection = {
-                        pageId: page.id,
-                        pageIndex: canvasIndex,
-                        strokeIndex: found.strokeIndex,
-                        stroke: found.stroke,
-                        originalStroke: JSON.parse(JSON.stringify(found.stroke))
-                    };
+                const newSelection = {
+                    pageId: page.id,
+                    pageIndex: canvasIndex,
+                    strokeIndex: found.strokeIndex,
+                    stroke: found.stroke,
+                    originalStroke: JSON.parse(JSON.stringify(found.stroke))
+                };
 
-                    if (shift) {
-                        // Toggle multi-selection
-                        const idx = selectedStrokes.value.findIndex(s => s.pageIndex === canvasIndex && s.strokeIndex === found.strokeIndex);
-                        if (idx === -1) {
-                            selectedStrokes.value.push({ pageId: page.id, pageIndex: canvasIndex, strokeIndex: found.strokeIndex, stroke: found.stroke });
-                        } else {
-                            selectedStrokes.value.splice(idx, 1);
-                        }
-
-                        selectedStroke.value = newSelection; // latest selection
-
-                        // Redraw highlight on latest
-                        redrawAllStrokes();
-                        stopEvent(e);
-                        return;
+                if (shift) {
+                    // Toggle multi-selection
+                    const idx = selectedStrokes.value.findIndex(s => s.pageIndex === canvasIndex && s.strokeIndex === found.strokeIndex);
+                    if (idx === -1) {
+                        selectedStrokes.value.push({ pageId: page.id, pageIndex: canvasIndex, strokeIndex: found.strokeIndex, stroke: found.stroke });
+                    } else {
+                        selectedStrokes.value.splice(idx, 1);
                     }
 
-                    // Non-shift click: if multi-selection is active and clicking a member, keep multi-selection
-                    const isMemberOfSelection = Array.isArray(selectedStrokes.value)
-                        && selectedStrokes.value.some(s => s.pageIndex === canvasIndex && s.strokeIndex === found.strokeIndex);
-                    const multiActive = Array.isArray(selectedStrokes.value) && selectedStrokes.value.length > 1;
-                    if (!(multiActive && isMemberOfSelection)) {
-                        // Collapse to single selection only when clicking outside current multi-selection
-                        selectedStrokes.value = [{ pageId: page.id, pageIndex: canvasIndex, strokeIndex: found.strokeIndex, stroke: found.stroke }];
-                    }
-                    selectedStroke.value = newSelection;
-                    
-                    // Prepare for potential dragging (left-click only)
-                    isDragging.value = false; // Don't start dragging immediately
-                    dragStartPos.value = { x, y };
-                    lastX = x;
-                    lastY = y;
-                    
-                    isMouseDown.value = true;
-                    currentCanvasIndex = canvasIndex;
-                    
-                    if (canvas && e.pointerId !== undefined) {
-                        canvas.setPointerCapture(e.pointerId);
-                    }
-                    activePointerId.value = e.pointerId;
-                    
-                    // Redraw with highlight (will show combined bbox if multi)
+                    selectedStroke.value = newSelection; // latest selection
+
+                    // Redraw highlight on latest
                     redrawAllStrokes();
                     stopEvent(e);
                     return;
                 }
 
-            // stopEvent(e);
-            // return;
+                // Non-shift click: if multi-selection is active and clicking a member, keep multi-selection
+                const isMemberOfSelection = Array.isArray(selectedStrokes.value)
+                    && selectedStrokes.value.some(s => s.pageIndex === canvasIndex && s.strokeIndex === found.strokeIndex);
+                const multiActive = Array.isArray(selectedStrokes.value) && selectedStrokes.value.length > 1;
+                if (!(multiActive && isMemberOfSelection)) {
+                    // Collapse to single selection only when clicking outside current multi-selection
+                    selectedStrokes.value = [{ pageId: page.id, pageIndex: canvasIndex, strokeIndex: found.strokeIndex, stroke: found.stroke }];
+                }
+                selectedStroke.value = newSelection;
+                
+                // Prepare for potential dragging (left-click only)
+                isDragging.value = false; // Don't start dragging immediately
+                dragStartPos.value = { x, y };
+                lastX = x;
+                lastY = y;
+                
+                isMouseDown.value = true;
+                currentCanvasIndex = canvasIndex;
+                
+                if (canvas && e.pointerId !== undefined) {
+                    canvas.setPointerCapture(e.pointerId);
+                }
+                activePointerId.value = e.pointerId;
+                
+                // Redraw with highlight (will show combined bbox if multi)
+                redrawAllStrokes();
+                stopEvent(e);
+                return;
+            }
 
             // Start new selection rectangle
             handleSelectionStart(e);
@@ -3185,6 +3396,9 @@ export function usePageActions(pagesContainer, activePage, addToHistory) {
             // Check if we should start dragging
             else if (isMouseDown.value && selectedStroke.value) {
                 if (e.pointerId !== activePointerId.value) return;
+
+                const first = selectedStroke.value.stroke?.[0];
+                if (isSelectOnlyStroke(first)) return;
                 
                 const canvas = activePage.value.drawingCanvas || null;
                 const pt = getCanvasPointFromEvent(canvas, e);
@@ -3501,10 +3715,42 @@ export function usePageActions(pagesContainer, activePage, addToHistory) {
         redrawAllStrokes();
     };
 
+    const updateHoveredCommentPreview = (e) => {
+        if (isMouseDown.value || showCommentInput.value) {
+            clearHoveredCommentPreview();
+            return;
+        }
+
+        const canvas = activePage.value?.drawingCanvas || null;
+        const pt = getCanvasPointFromEvent(canvas, e);
+        if (!pt) {
+            clearHoveredCommentPreview();
+            return;
+        }
+
+        const hoveredStroke = pickStrokeAtPoint(pt.x, pt.y);
+        const first = hoveredStroke?.stroke?.[0] || null;
+        if (!first || first.type !== 'comment' || (!first.comment && !first.selectedText)) {
+            clearHoveredCommentPreview();
+            return;
+        }
+
+        const position = clientToPopMenuPosition(pt.clientX + 18, pt.clientY + 18);
+        hoveredCommentPreview.value = {
+            x: position.x,
+            y: position.y,
+            comment: String(first.comment || ''),
+            author: String(first.author || ''),
+            selectedText: String(first.selectedText || '')
+        };
+    };
+
     const onPointerMove = (e) => {
         if (e.pointerType === 'pen') {
             isPenHovering.value = true;
         }
+
+        updateHoveredCommentPreview(e);
 
         if (isStrokeSelectModeActive.value) {
             let newStrokeHovering = false;
@@ -3582,11 +3828,13 @@ export function usePageActions(pagesContainer, activePage, addToHistory) {
         
         isStrokeHovering.value = false;
         isBoundingBoxHovering.value = false;
+        clearHoveredCommentPreview();
         stopDrawing(e);
     };
     
     const resetToolState = () => {
         closeTextEditor();
+        cancelCommentInput();
         isCaptureSelectionMode.value = false;
         isStrokeSelectModeActive.value = false;
         isTextSelectionMode.value = false;
@@ -3595,6 +3843,7 @@ export function usePageActions(pagesContainer, activePage, addToHistory) {
         isDrawing.value = false;
         isEraser.value = false;
         isStrokeHovering.value = false;
+        clearHoveredCommentPreview();
         selectedStrokes.value = [];
         selectedStroke.value = null;
         selectedText.value = '';
@@ -3605,6 +3854,7 @@ export function usePageActions(pagesContainer, activePage, addToHistory) {
         resizeStartBounds.value = null;
         handToolActive.value = false;
         showStrokeStyleMenu.value = false;
+        clearPendingCommentSelection();
 
         // Also clear any native text selection that might be lingering, which can interfere with interactions
         window.getSelection()?.removeAllRanges();
@@ -4111,6 +4361,36 @@ export function usePageActions(pagesContainer, activePage, addToHistory) {
             return;
         }
 
+        if (first.type === 'comment') {
+            const box = getCommentStrokeSize(first);
+            const group = createSvgElement('g', { class: 'comment-group' });
+            const iconGroup = createSvgElement('g', {
+                transform: `translate(${first.x} ${first.y}) scale(${box.width / 16} ${box.height / 16})`
+            });
+            const bubble = createSvgElement('path', {
+                d: 'M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4.414a1 1 0 0 0-.707.293L.854 15.146A.5.5 0 0 1 0 14.793zm3.5 1a.5.5 0 0 0 0 1h9a.5.5 0 0 0 0-1zm0 2.5a.5.5 0 0 0 0 1h9a.5.5 0 0 0 0-1zm0 2.5a.5.5 0 0 0 0 1h5a.5.5 0 0 0 0-1z',
+                fill: first.color || COMMENT_ICON_DEFAULT_COLOR,
+                'fill-opacity': strokeOpacity
+            });
+            const title = createSvgElement('title');
+            title.textContent = [
+                first.author ? `Author: ${first.author}` : '',
+                first.selectedText ? `Selected: ${first.selectedText}` : '',
+                first.comment || ''
+            ]
+                .filter(Boolean)
+                .join('\n\n');
+            setStrokeMeta(bubble, strokeIndex);
+            if (transform) {
+                group.setAttribute('transform', transform);
+            }
+            group.appendChild(title);
+            iconGroup.appendChild(bubble);
+            group.appendChild(iconGroup);
+            svgLayer.appendChild(group);
+            return;
+        }
+
         const pathData = getStrokePenPath(stroke);
         if (!pathData) return;
         const path = createSvgElement('path', {
@@ -4208,7 +4488,7 @@ export function usePageActions(pagesContainer, activePage, addToHistory) {
 
         if (!multi && stroke?.[0]) {
             const first = stroke[0];
-            const canResize = first.type !== 'highlight-rect';
+            const canResize = !isSelectOnlyStroke(first);
             if (!canResize) {
                 svgLayer.appendChild(overlayGroup);
                 return;
@@ -4285,10 +4565,17 @@ export function usePageActions(pagesContainer, activePage, addToHistory) {
         const el = popMenu.value;
         if (!el) return;
 
-        
         const rect = el.getBoundingClientRect();
-        const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
-        const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+        const {
+            scrollLeft,
+            scrollTop,
+            viewportWidth,
+            viewportHeight,
+            clientLeft,
+            clientTop,
+            clientRight,
+            clientBottom,
+        } = getPopMenuViewportMetrics();
 
         // Account for CSS transform: translate(-50%, 10px)
         const halfW = rect.width / 2;
@@ -4353,44 +4640,48 @@ export function usePageActions(pagesContainer, activePage, addToHistory) {
                         desiredLeft = (rightAnchor?.x ?? clientMaxX) + offset;
                         desiredTop = (rightAnchor?.y ?? clientMaxY) - (menuHeight / 2);
 
-                        if (desiredLeft + menuWidth > viewportWidth - margin) {
+                        if (desiredLeft + menuWidth > clientRight - margin) {
                             desiredLeft = (leftAnchor?.x ?? clientMinX) - offset - menuWidth;
                         }
 
-                        if (desiredTop + menuHeight > viewportHeight - margin) {
-                            desiredTop = viewportHeight - margin - menuHeight;
+                        if (desiredTop + menuHeight > clientBottom - margin) {
+                            desiredTop = clientBottom - margin - menuHeight;
                         }
-                        if (desiredTop < margin) {
-                            desiredTop = margin;
+                        if (desiredTop < clientTop + margin) {
+                            desiredTop = clientTop + margin;
                         }
                     } else {
                         let desiredRight = clientMaxX + offset;
                         desiredTop = clientMaxY + offset;
                         desiredLeft = desiredRight - menuWidth;
 
-                        if (desiredRight > viewportWidth - margin) {
+                        if (desiredRight > clientRight - margin) {
                             desiredRight = clientMinX - offset;
                             desiredLeft = desiredRight - menuWidth;
                         }
 
-                        if (desiredTop + menuHeight > viewportHeight - margin) {
+                        if (desiredTop + menuHeight > clientBottom - margin) {
                             desiredTop = clientMinY - offset - menuHeight;
                         }
                     }
 
-                    desiredLeft = Math.min(Math.max(margin, desiredLeft), viewportWidth - margin - menuWidth);
-                    desiredTop = Math.min(Math.max(margin, desiredTop), viewportHeight - margin - menuHeight);
+                    desiredLeft = Math.min(Math.max(clientLeft + margin, desiredLeft), clientRight - margin - menuWidth);
+                    desiredTop = Math.min(Math.max(clientTop + margin, desiredTop), clientBottom - margin - menuHeight);
 
-                    preferredX = desiredLeft + halfW;
-                    preferredY = desiredTop - offsetY;
+                    const localPosition = clientToPopMenuPosition(
+                        desiredLeft + halfW,
+                        desiredTop - offsetY
+                    );
+                    preferredX = localPosition.x;
+                    preferredY = localPosition.y;
                 }
             }
         }
 
-        const minX = margin + halfW;
-        const maxX = viewportWidth - margin - halfW;
-        const minY = margin - offsetY; // ensure top (with offset) >= margin
-        const maxY = viewportHeight - margin - rect.height - offsetY;
+        const minX = scrollLeft + margin + halfW;
+        const maxX = scrollLeft + viewportWidth - margin - halfW;
+        const minY = scrollTop + margin - offsetY; // ensure top (with offset) >= margin
+        const maxY = scrollTop + viewportHeight - margin - rect.height - offsetY;
 
         const clampedX = Math.min(Math.max(minX, preferredX), Math.max(minX, maxX));
         const clampedY = Math.min(Math.max(minY, preferredY), Math.max(minY, maxY));
@@ -4403,6 +4694,245 @@ export function usePageActions(pagesContainer, activePage, addToHistory) {
     // Text Selection Variables and Handlers
     const selectedText = ref('');
     const showCommentInput = ref(false);
+    const commentDraft = ref('');
+    const commentAuthorDraft = ref('');
+    const preferredCommentAuthor = ref('');
+    const pendingCommentSelection = ref(null);
+    const editingCommentStroke = ref(null);
+    const hoveredCommentPreview = ref(null);
+
+    storeGet('commentAuthor', '').then(value => {
+        if (typeof value !== 'string') return;
+        preferredCommentAuthor.value = value.trim();
+    });
+
+    const clearPendingCommentSelection = () => {
+        pendingCommentSelection.value = null;
+    };
+
+    const clearHoveredCommentPreview = () => {
+        hoveredCommentPreview.value = null;
+    };
+
+    const cancelCommentInput = () => {
+        commentDraft.value = '';
+        commentAuthorDraft.value = '';
+        showCommentInput.value = false;
+        editingCommentStroke.value = null;
+    };
+
+    const getSelectionAnchorData = (selection, range) => {
+        const page = activePage.value;
+        const canvas = page?.drawingCanvas || null;
+        if (!selection || !range || !canvas || !page) return null;
+
+        const rects = Array.from(range.getClientRects?.() || []);
+        const lastRect = rects[rects.length - 1] || range.getBoundingClientRect?.() || null;
+        if (!lastRect) return null;
+
+        let anchorNode = range.commonAncestorContainer || range.endContainer || null;
+        if (anchorNode?.nodeType === Node.TEXT_NODE) {
+            anchorNode = anchorNode.parentElement;
+        }
+
+        const pageContainer = anchorNode?.closest?.('.page-container')
+            || document.elementFromPoint(
+                Math.max(0, Math.round(lastRect.right - 1)),
+                Math.max(0, Math.round(lastRect.top + Math.max(1, lastRect.height / 2)))
+            )?.closest?.('.page-container')
+            || null;
+
+        if (pageContainer?.dataset?.page && pageContainer.dataset.page !== page.id) {
+            return null;
+        }
+
+        const anchorPoint = getCanvasPointFromClient(
+            canvas,
+            lastRect.right + 10,
+            lastRect.top + (lastRect.height / 2)
+        );
+        if (!anchorPoint) return null;
+
+        const width = COMMENT_ICON_DEFAULT_SIZE;
+        const height = COMMENT_ICON_DEFAULT_SIZE;
+        const maxX = Math.max(0, canvas.width - width);
+        const maxY = Math.max(0, canvas.height - height);
+
+        return {
+            pageId: page.id,
+            pageIndex: page.index,
+            text: selection.toString().trim(),
+            selectionAnchor: getSelectionTextAnchor(page?.textLayer || null, range),
+            x: clampNumber(anchorPoint.x, 0, maxX),
+            y: clampNumber(anchorPoint.y - (height / 2), 0, maxY),
+            width,
+            height,
+            clientRect: {
+                left: lastRect.left,
+                top: lastRect.top,
+                right: lastRect.right,
+                bottom: lastRect.bottom,
+                width: lastRect.width,
+                height: lastRect.height
+            }
+        };
+    };
+
+    const beginCommentInput = () => {
+        if (!selectedText.value || !pendingCommentSelection.value) return;
+        commentDraft.value = '';
+        commentAuthorDraft.value = preferredCommentAuthor.value;
+        editingCommentStroke.value = null;
+        showCommentInput.value = true;
+        showPopMenu.value = true;
+    };
+
+    const selectStrokeByRef = ({ pageId = null, pageIndex = null, strokeIndex = -1 } = {}) => {
+        const targetPage = getPageByRef({ pageId, pageIndex });
+        const previousPage = selectedStroke.value
+            ? getPageByRef({ pageId: selectedStroke.value.pageId, pageIndex: selectedStroke.value.pageIndex })
+            : null;
+
+        if (!targetPage || !Array.isArray(targetPage.strokes) || strokeIndex < 0 || strokeIndex >= targetPage.strokes.length) {
+            selectedStrokes.value = [];
+            selectedStroke.value = null;
+            if (previousPage?.drawingCanvas) {
+                redrawAllStrokes(previousPage);
+            }
+            return null;
+        }
+
+        const stroke = targetPage.strokes[strokeIndex];
+        const selection = {
+            pageId: targetPage.id,
+            pageIndex: targetPage.index,
+            strokeIndex,
+            stroke,
+            originalStroke: JSON.parse(JSON.stringify(stroke))
+        };
+
+        selectedStrokes.value = [selection];
+        selectedStroke.value = selection;
+
+        if (previousPage?.id && previousPage.id !== targetPage.id && previousPage.drawingCanvas) {
+            redrawAllStrokes(previousPage);
+        }
+
+        if (targetPage.drawingCanvas) {
+            redrawAllStrokes(targetPage);
+        }
+
+        return selection;
+    };
+
+    const editCommentStroke = (strokeRef = null) => {
+        const baseSelection = strokeRef
+            ? selectStrokeByRef(strokeRef)
+            : selectedStroke.value;
+
+        if (!baseSelection?.stroke?.[0] || baseSelection.stroke[0].type !== 'comment') return;
+
+        const first = baseSelection.stroke[0];
+        editingCommentStroke.value = {
+            pageId: baseSelection.pageId,
+            pageIndex: baseSelection.pageIndex,
+            strokeIndex: baseSelection.strokeIndex
+        };
+        commentDraft.value = String(first.comment || '');
+        commentAuthorDraft.value = String(first.author || '');
+        showCommentInput.value = true;
+        showPopMenu.value = true;
+        popMenuPosition.value = {
+            x: first.x + (Number(first.width) || COMMENT_ICON_DEFAULT_SIZE),
+            y: first.y + (Number(first.height) || COMMENT_ICON_DEFAULT_SIZE)
+        };
+
+        if (baseSelection.pageId === activePage.value?.id) {
+            clampPopMenuPosition();
+        }
+    };
+
+    const commitComment = () => {
+        const comment = String(commentDraft.value || '').trim();
+        const author = String(commentAuthorDraft.value || '').trim();
+        const selection = pendingCommentSelection.value;
+        const page = activePage.value;
+
+        if (editingCommentStroke.value) {
+            const editTargetPage = getPageByRef(editingCommentStroke.value);
+            const targetStroke = editTargetPage?.strokes?.[editingCommentStroke.value.strokeIndex] || null;
+            const first = targetStroke?.[0] || null;
+
+            if (!comment || !editTargetPage || !first || first.type !== 'comment') return;
+
+            const previousStroke = JSON.parse(JSON.stringify(targetStroke));
+            first.comment = comment;
+            first.author = author;
+            first.updatedAt = new Date().toISOString();
+
+            addToHistory({
+                id: first.id,
+                type: 'comment-edit',
+                page: editTargetPage,
+                strokeIndex: editingCommentStroke.value.strokeIndex,
+                stroke: JSON.parse(JSON.stringify(targetStroke)),
+                previousStroke
+            });
+
+            commentDraft.value = '';
+            commentAuthorDraft.value = '';
+            showCommentInput.value = false;
+            editingCommentStroke.value = null;
+            showPopMenu.value = true;
+            if (editTargetPage.drawingCanvas) {
+                redrawAllStrokes(editTargetPage);
+            }
+            return;
+        }
+
+        if (!comment || !selection || !page || selection.pageId !== page.id) return;
+
+        const commentStroke = [{
+            id: uuid(),
+            type: 'comment',
+            x: selection.x,
+            y: selection.y,
+            width: selection.width,
+            height: selection.height,
+            color: COMMENT_ICON_DEFAULT_COLOR,
+            thickness: 2,
+            opacity: 1,
+            selectedText: selection.text,
+            selectionAnchor: selection.selectionAnchor || null,
+            comment,
+            author,
+            anchorRect: selection.clientRect,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            source: 'app-comment'
+        }];
+
+        page.strokes.push(commentStroke);
+        addToHistory({
+            id: commentStroke[0].id,
+            type: 'add',
+            page,
+            stroke: commentStroke
+        });
+
+        preferredCommentAuthor.value = author;
+        storeSet('commentAuthor', author);
+
+        commentDraft.value = '';
+        commentAuthorDraft.value = '';
+        showCommentInput.value = false;
+        editingCommentStroke.value = null;
+        showPopMenu.value = false;
+        selectedText.value = '';
+        clearPendingCommentSelection();
+        window.getSelection()?.removeAllRanges();
+        redrawAllStrokes();
+    };
 
     const handleTextSelectionMouseUp = (event) => {
         setTimeout(() => {
@@ -4410,12 +4940,17 @@ export function usePageActions(pagesContainer, activePage, addToHistory) {
                 return;
             }
             
-            if (isTextHighlightMode.value || showCommentInput.value) {
+            if (isTextHighlightMode.value) {
                 highlightTextSelection();
+                return;
+            }
+
+            if (showCommentInput.value) {
                 return;
             }
             
             selectedText.value = '';
+            clearPendingCommentSelection();
             const selection = window.getSelection();
 
             if (selection && selection.toString().trim().length > 0 && selection.rangeCount > 0) {
@@ -4423,13 +4958,14 @@ export function usePageActions(pagesContainer, activePage, addToHistory) {
                 const rects = range.getClientRects();
                 const lastRect = rects.length > 0 ? rects[rects.length - 1] : range.getBoundingClientRect();
                 selectedText.value = selection.toString().trim();
-                popMenuPosition.value = {
-                    x: lastRect.right,
-                    y: lastRect.bottom + 5
-                };
+                pendingCommentSelection.value = getSelectionAnchorData(selection, range);
+                popMenuPosition.value = clientToPopMenuPosition(lastRect.right, lastRect.bottom + 5);
             }
 
             showPopMenu.value = !!selectedText.value;
+            if (showPopMenu.value) {
+                clampPopMenuPosition();
+            }
         }, 10);
     };
 
@@ -4696,6 +5232,14 @@ export function usePageActions(pagesContainer, activePage, addToHistory) {
         activeStrokeStyle,
         updateStrokeStyle,
         showStrokeStyleMenu,
+        commentDraft,
+        commentAuthorDraft,
+        hoveredCommentPreview,
+        beginCommentInput,
+        cancelCommentInput,
+        commitComment,
+        editCommentStroke,
+        selectStrokeByRef,
         selectedText,
         handleTextSelectionMouseUp,
         handleStrokeStyleButtonClick,

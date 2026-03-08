@@ -16,6 +16,7 @@ import PdfForm from "./PdfForm.vue";
 import QuillEditor from "./QuillEditor.vue";
 import SimpleTextEditor from "./SimpleTextEditor.vue";
 import BsToast from "./BsToast.vue";
+import CommentsSidebar from "./CommentsSidebar.vue";
 
 // Cursor Style
 const cursorStyle = computed(() => {
@@ -141,6 +142,14 @@ const {
     activeStrokeStyle,
     updateStrokeStyle,
     showStrokeStyleMenu,
+    commentDraft,
+    commentAuthorDraft,
+    hoveredCommentPreview,
+    beginCommentInput,
+    cancelCommentInput,
+    commitComment,
+    editCommentStroke,
+    selectStrokeByRef,
     handleStrokeStyleButtonClick,
     selectedText,
     handleTextSelectionMouseUp,
@@ -151,7 +160,7 @@ const {
     isSelectedStrokeType,
     copiedStrokes,
     selectStrokes,
-} = usePageActions(pagesContainer, activePage, strokeChangeCallback);
+} = usePageActions(pages, pagesContainer, activePage, strokeChangeCallback);
 
 // History management
 const { 
@@ -187,7 +196,299 @@ const touchAction = computed(() => {
 
 const isViewLocked = ref(false);
 const isThumbnailSidebarVisible = ref(false);
+const isCommentsSidebarVisible = ref(false);
 const hasDismissedTextGestureHint = ref(false);
+
+const collapseWhitespace = (value = '') => String(value || '').replace(/\s+/g, ' ').trim();
+
+const previewCommentSelection = (value = '') => {
+    const text = collapseWhitespace(value);
+    return text.length > 160 ? `${text.slice(0, 157)}...` : text;
+};
+
+const buildNormalizedTextIndex = (value = '') => {
+    let normalized = '';
+    const rawByNormalized = [];
+    let pendingWhitespaceIndex = -1;
+    let hasVisibleCharacter = false;
+
+    for (let index = 0; index < value.length; index++) {
+        const char = value[index];
+        if (/\s/.test(char)) {
+            if (hasVisibleCharacter && pendingWhitespaceIndex === -1) {
+                pendingWhitespaceIndex = index;
+            }
+            continue;
+        }
+
+        if (pendingWhitespaceIndex !== -1) {
+            normalized += ' ';
+            rawByNormalized.push(pendingWhitespaceIndex);
+            pendingWhitespaceIndex = -1;
+        }
+
+        normalized += char;
+        rawByNormalized.push(index);
+        hasVisibleCharacter = true;
+    }
+
+    return { text: normalized, rawByNormalized };
+};
+
+const collectTextLayerNodes = (textLayer) => {
+    if (!textLayer) {
+        return { rawText: '', nodes: [] };
+    }
+
+    const walker = document.createTreeWalker(textLayer, NodeFilter.SHOW_TEXT, {
+        acceptNode(node) {
+            if (!node?.nodeValue?.trim()) {
+                return NodeFilter.FILTER_REJECT;
+            }
+            return NodeFilter.FILTER_ACCEPT;
+        }
+    });
+
+    const nodes = [];
+    let rawText = '';
+    let currentNode = walker.nextNode();
+
+    while (currentNode) {
+        const text = currentNode.nodeValue || '';
+        const start = rawText.length;
+        rawText += text;
+        nodes.push({
+            node: currentNode,
+            element: currentNode.parentElement || textLayer,
+            start,
+            end: rawText.length
+        });
+        currentNode = walker.nextNode();
+    }
+
+    return { rawText, nodes };
+};
+
+const getTextLocationAtRawIndex = (nodes, rawIndex) => {
+    if (!Array.isArray(nodes) || nodes.length === 0) return null;
+
+    for (const entry of nodes) {
+        if (rawIndex < entry.end) {
+            return {
+                node: entry.node,
+                element: entry.element,
+                offset: Math.max(0, rawIndex - entry.start)
+            };
+        }
+    }
+
+    const last = nodes[nodes.length - 1];
+    const lastLength = last?.node?.nodeValue?.length || 0;
+    return {
+        node: last.node,
+        element: last.element,
+        offset: lastLength
+    };
+};
+
+const getCommentAnchorClientPoint = (page, commentRef) => {
+    const first = commentRef?.stroke?.[0] || null;
+    const canvas = page?.drawingCanvas || null;
+    if (!first || !canvas) return null;
+
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height || !canvas.width || !canvas.height) return null;
+
+    const scaleX = rect.width / canvas.width;
+    const scaleY = rect.height / canvas.height;
+    const width = Number(first.width) || 0;
+    const height = Number(first.height) || 0;
+
+    return {
+        x: rect.left + ((Number(first.x) || 0) + width / 2) * scaleX,
+        y: rect.top + ((Number(first.y) || 0) + height / 2) * scaleY
+    };
+};
+
+const buildTextRangeCandidate = (nodes, normalizedIndex, needleLength, normalizedLookup) => {
+    const startRaw = normalizedLookup.rawByNormalized[normalizedIndex];
+    const endRawInclusive = normalizedLookup.rawByNormalized[normalizedIndex + needleLength - 1];
+    if (!Number.isFinite(startRaw) || !Number.isFinite(endRawInclusive)) return null;
+
+    const startLocation = getTextLocationAtRawIndex(nodes, startRaw);
+    const endLocation = getTextLocationAtRawIndex(nodes, endRawInclusive + 1);
+    if (!startLocation || !endLocation) return null;
+
+    const range = document.createRange();
+    range.setStart(startLocation.node, startLocation.offset);
+    range.setEnd(endLocation.node, endLocation.offset);
+
+    return {
+        range,
+        element: startLocation.element || endLocation.element || null,
+        rect: range.getBoundingClientRect(),
+        rawStart: startRaw,
+        rawEnd: endRawInclusive + 1
+    };
+};
+
+const getCommentTextAnchor = (commentRef) => commentRef?.stroke?.[0]?.selectionAnchor || null;
+
+const scoreCommentTextCandidate = (candidate, rawText, commentRef, anchorPoint) => {
+    let score = 0;
+    const totalLength = Math.max(1, rawText.length);
+    const selectionAnchor = getCommentTextAnchor(commentRef);
+
+    if (selectionAnchor) {
+        if (Number.isFinite(selectionAnchor.startRatio)) {
+            const candidateRatio = candidate.rawStart / totalLength;
+            score += Math.max(0, 4 - Math.abs(candidateRatio - selectionAnchor.startRatio) * 20);
+        }
+
+        const beforeHint = collapseWhitespace(selectionAnchor.beforeText || '').toLowerCase();
+        if (beforeHint) {
+            const beforeWindow = collapseWhitespace(
+                rawText.slice(Math.max(0, candidate.rawStart - Math.max(96, beforeHint.length * 2)), candidate.rawStart)
+            ).toLowerCase();
+            if (beforeWindow.endsWith(beforeHint)) {
+                score += 5;
+            } else if (beforeWindow.includes(beforeHint)) {
+                score += 2;
+            }
+        }
+
+        const afterHint = collapseWhitespace(selectionAnchor.afterText || '').toLowerCase();
+        if (afterHint) {
+            const afterWindow = collapseWhitespace(
+                rawText.slice(candidate.rawEnd, Math.min(rawText.length, candidate.rawEnd + Math.max(96, afterHint.length * 2)))
+            ).toLowerCase();
+            if (afterWindow.startsWith(afterHint)) {
+                score += 5;
+            } else if (afterWindow.includes(afterHint)) {
+                score += 2;
+            }
+        }
+    }
+
+    if (anchorPoint && candidate.rect) {
+        const centerX = candidate.rect.left + candidate.rect.width / 2;
+        const centerY = candidate.rect.top + candidate.rect.height / 2;
+        const distance = Math.hypot(centerX - anchorPoint.x, centerY - anchorPoint.y);
+        score += Math.max(0, 2 - (distance / 320));
+    }
+
+    return score;
+};
+
+const findBestCommentTextRange = (page, commentRef) => {
+    const textLayer = page?.textLayer || null;
+    const needle = collapseWhitespace(commentRef?.selectedText || '');
+    if (!textLayer || !needle) return null;
+
+    const { rawText, nodes } = collectTextLayerNodes(textLayer);
+    if (!rawText || nodes.length === 0) return null;
+
+    const normalizedLookup = buildNormalizedTextIndex(rawText);
+    const normalizedNeedle = buildNormalizedTextIndex(needle).text;
+    if (!normalizedLookup.text || !normalizedNeedle) return null;
+
+    const candidates = [];
+    let searchFrom = 0;
+    const normalizedHaystack = normalizedLookup.text.toLowerCase();
+    const normalizedTarget = normalizedNeedle.toLowerCase();
+
+    while (searchFrom < normalizedHaystack.length) {
+        const matchIndex = normalizedHaystack.indexOf(normalizedTarget, searchFrom);
+        if (matchIndex === -1) break;
+
+        const candidate = buildTextRangeCandidate(nodes, matchIndex, normalizedTarget.length, normalizedLookup);
+        if (candidate) {
+            candidates.push(candidate);
+        }
+
+        searchFrom = matchIndex + Math.max(1, normalizedTarget.length);
+    }
+
+    if (candidates.length === 0) return null;
+    if (candidates.length === 1) return candidates[0];
+
+    const anchor = getCommentAnchorClientPoint(page, commentRef);
+    return candidates.reduce((best, candidate) => {
+        const score = scoreCommentTextCandidate(candidate, rawText, commentRef, anchor);
+        if (!best || score > best.score) {
+            return { ...candidate, score };
+        }
+        return best;
+    }, null);
+};
+
+const ensureCommentPageReady = async (commentRef) => {
+    const page = pages.value.find(entry => entry.id === commentRef?.pageId)
+        || pages.value.find(entry => entry.index === commentRef?.pageIndex)
+        || null;
+
+    if (!page) return null;
+
+    if (pageIndex.value !== page.index) {
+        scrollToPage(page.index);
+        await nextTick();
+    }
+
+    if (!page.rendered) {
+        await renderPdfPage(page.id);
+        await nextTick();
+    }
+
+    return page;
+};
+
+const revealCommentSourceText = async (commentRef) => {
+    const page = await ensureCommentPageReady(commentRef);
+    if (!page) return false;
+
+    const match = findBestCommentTextRange(page, commentRef);
+    if (!match?.range) return false;
+
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(match.range);
+
+    match.element?.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+    return true;
+};
+
+const documentComments = computed(() => {
+    return pages.value
+        .flatMap((page) => (page.strokes || []).map((stroke, strokeIndex) => {
+            const first = stroke?.[0] || null;
+            if (!first || first.type !== 'comment') return null;
+            return {
+                id: String(first.id || `${page.id}-${strokeIndex}`),
+                pageId: page.id,
+                pageIndex: page.index,
+                strokeIndex,
+                stroke,
+                selectedText: String(first.selectedText || ''),
+                comment: String(first.comment || ''),
+                author: String(first.author || ''),
+                source: String(first.source || ''),
+                canJumpToText: Boolean(collapseWhitespace(first.selectedText || '')),
+                updatedAt: first.updatedAt || first.createdAt || null,
+            };
+        }))
+        .filter(Boolean)
+        .sort((left, right) => {
+            if (left.pageIndex !== right.pageIndex) return left.pageIndex - right.pageIndex;
+            const leftTime = left.updatedAt ? new Date(left.updatedAt).getTime() : 0;
+            const rightTime = right.updatedAt ? new Date(right.updatedAt).getTime() : 0;
+            return rightTime - leftTime;
+        });
+});
+
+const activeCommentId = computed(() => {
+    const first = selectedStroke.value?.stroke?.[0] || null;
+    return first?.type === 'comment' ? String(first.id || '') : null;
+});
 
 watch(() => textEditorPosition.value, (position) => {
     if (position) {
@@ -195,8 +496,45 @@ watch(() => textEditorPosition.value, (position) => {
     }
 });
 
+watch(() => documentComments.value.length, (count, previousCount = 0) => {
+    if (count > 0 && previousCount === 0) {
+        isCommentsSidebarVisible.value = true;
+    }
+});
+
 const toggleThumbnailSidebar = () => {
     isThumbnailSidebarVisible.value = !isThumbnailSidebarVisible.value;
+};
+
+const toggleCommentsSidebar = () => {
+    if (!isFileLoaded.value) return;
+    isCommentsSidebarVisible.value = !isCommentsSidebarVisible.value;
+};
+
+const focusComment = async (commentRef) => {
+    if (!commentRef) return;
+
+    await ensureCommentPageReady(commentRef);
+
+    selectStrokeByRef(commentRef);
+    isCommentsSidebarVisible.value = true;
+};
+
+const jumpToCommentText = async (commentRef) => {
+    if (!commentRef?.canJumpToText) return;
+
+    await focusComment(commentRef);
+    await revealCommentSourceText(commentRef);
+};
+
+const editCommentFromSidebar = async (commentRef) => {
+    await focusComment(commentRef);
+    editCommentStroke();
+};
+
+const deleteCommentFromSidebar = async (commentRef) => {
+    await focusComment(commentRef);
+    deleteSelectedStroke();
 };
 
 const toggleHandTool = () => {
@@ -833,6 +1171,9 @@ defineExpose({
             </ul>
             <ul class="navbar-nav flex-row gap-1">
                 <li class="nav-item">
+                    <ToolItem class="nav-link" label="Comments" icon="chat-square-text" :active="isCommentsSidebarVisible" :action="toggleCommentsSidebar" />
+                </li>
+                <li class="nav-item">
                     <ToolItem class="nav-link" label="Save File" icon="floppy-fill" :action="handleSaveFile" :disabled="historyStep === savedHistoryStep" />
                 </li>
                 <li class="nav-item">
@@ -883,6 +1224,32 @@ defineExpose({
                     </div>
                 </template>
             </div>
+            <CommentsSidebar
+                v-if="isCommentsSidebarVisible"
+                :comments="documentComments"
+                :active-comment-id="activeCommentId"
+                :select-comment="focusComment"
+                :jump-to-text="jumpToCommentText"
+                :edit-comment="editCommentFromSidebar"
+                :delete-comment="deleteCommentFromSidebar"
+                :close-sidebar="toggleCommentsSidebar"
+            />
+
+            <div
+                v-if="hoveredCommentPreview && !showCommentInput"
+                class="comment-hover-tooltip"
+                :style="{ left: `${hoveredCommentPreview.x}px`, top: `${hoveredCommentPreview.y}px` }"
+            >
+                <div v-if="hoveredCommentPreview.author" class="comment-hover-tooltip-author">
+                    {{ hoveredCommentPreview.author }}
+                </div>
+                <div v-if="hoveredCommentPreview.comment" class="comment-hover-tooltip-body">
+                    {{ hoveredCommentPreview.comment }}
+                </div>
+                <div v-if="hoveredCommentPreview.selectedText" class="comment-hover-tooltip-selection">
+                    "{{ previewCommentSelection(hoveredCommentPreview.selectedText) }}"
+                </div>
+            </div>
 
             <template v-if="!!textEditorPosition">
                 <SimpleTextEditor
@@ -917,15 +1284,38 @@ defineExpose({
             <!-- Pop Menu -->
             <div ref="popMenu" class="pop-menu" :style="{ left: popMenuPosition.x + 'px', top: popMenuPosition.y + 'px' }" v-if="showPopMenu && (selectedStroke || selectedText)">
                 <div class="pop-menu-body">
-                    <template v-if="selectedStroke">
-                        <ToolItem class="btn-pop-menu" label="Edit" icon="pencil-square" :action="editTextStroke"  v-if="isSelectedStrokeType('text')" />
-                        <ToolItem class="btn-pop-menu" label="Delete" icon="trash3" :action="deleteSelectedStroke" />
+                    <div class="comment-editor" v-if="showCommentInput">
+                        <div class="form-floating mb-2">
+                            <input v-model="commentAuthorDraft" type="text" class="form-control comment-author-input" :placeholder="$t('Optional name')" :id="`comment-author-form-${fileId}`" @contextmenu.stop.prevent>
+                            <label :for="`comment-author-form-${fileId}`" class="comment-label">
+                                <i class="bi bi-person-badge"></i>
+                                {{ $t('Author') }}
+                            </label>
+                        </div>
+                        <div class="form-floating">
+                            <textarea v-model="commentDraft" class="form-control comment-input" :placeholder="$t('Leave a comment here')" :id="`comment-form-${fileId}`" @keydown.ctrl.enter.prevent="commitComment" @contextmenu.stop.prevent></textarea>
+                            <label :for="`comment-form-${fileId}`" class="comment-label">
+                                <i class="bi bi-chat-right-text-fill"></i>
+                                {{ $t('Comment') }}
+                            </label>
+                        </div>
+                        <div class="d-flex justify-content-end gap-2 m-1">
+                            <button type="button" class="btn btn-sm btn-outline-warning" @click="cancelCommentInput">{{ $t('Cancel') }}</button>
+                            <button type="button" class="btn btn-sm btn-warning" :disabled="!commentDraft.trim()" @click="commitComment">{{ $t('Save') }}</button>
+                        </div>
+                    </div>
+                    <template v-else>
+                        <template v-if="selectedStroke">
+                            <ToolItem class="btn-pop-menu" label="Edit" icon="pencil-square" :action="editCommentStroke" v-if="isSelectedStrokeType('comment')" />
+                            <ToolItem class="btn-pop-menu" label="Edit" icon="pencil-square" :action="editTextStroke"  v-if="isSelectedStrokeType('text')" />
+                            <ToolItem class="btn-pop-menu" label="Delete" icon="trash3" :action="deleteSelectedStroke" />
+                        </template>
+                        <template v-else-if="selectedText">
+                            <ToolItem class="btn-pop-menu" label="Add Comment" icon="chat-left-text-fill" :action="beginCommentInput" />
+                            <ToolItem class="btn-pop-menu" label="Highlight Text" shortcut="H" icon="highlighter" :action="highlightTextSelection" />
+                        </template>
+                        <ToolItem class="btn-pop-menu" label="Copy" shortcut="Ctrl+D" icon="files" :action="copySelection" />
                     </template>
-                    <template v-else-if="selectedText">
-                        <ToolItem class="btn-pop-menu" label="Add Comment" icon="chat-left-text-fill" />
-                        <ToolItem class="btn-pop-menu" label="Highlight Text" shortcut="H" icon="highlighter" :action="highlightTextSelection" />
-                    </template>
-                    <ToolItem class="btn-pop-menu" label="Copy" shortcut="Ctrl+D" icon="files" :action="copySelection" />
                 </div>
             </div>
 

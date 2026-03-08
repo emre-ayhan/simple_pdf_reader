@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref, nextTick } from 'vue';
+import { onMounted, onBeforeUnmount, ref, nextTick } from 'vue';
 
 const props = defineProps({
     parent: {
@@ -18,6 +18,65 @@ const style = ref({
     top: 0,
     left: 0
 });
+
+let parentEl = null;
+
+const getParentMetrics = () => {
+    const el = parentEl || document.querySelector(props.parent);
+    if (!el) {
+        return {
+            parentEl: null,
+            parentRect: null,
+            scrollLeft: 0,
+            scrollTop: 0,
+            clientLeft: 0,
+            clientTop: 0,
+            clientRight: window.innerWidth || document.documentElement.clientWidth || 0,
+            clientBottom: window.innerHeight || document.documentElement.clientHeight || 0,
+        };
+    }
+
+    const parentRect = el.getBoundingClientRect();
+    let visibleWidth = el.clientWidth;
+
+    const sidebar = el.querySelector?.('.comments-sidebar');
+    if (sidebar instanceof HTMLElement) {
+        const sidebarRect = sidebar.getBoundingClientRect();
+        const overlapsParent = sidebarRect.width > 0
+            && sidebarRect.left < parentRect.right
+            && sidebarRect.right > parentRect.left;
+
+        if (overlapsParent) {
+            visibleWidth = Math.max(0, Math.min(el.clientWidth, sidebarRect.left - parentRect.left));
+        }
+    }
+
+    return {
+        parentEl: el,
+        parentRect,
+        scrollLeft: el.scrollLeft,
+        scrollTop: el.scrollTop,
+        clientLeft: parentRect.left,
+        clientTop: parentRect.top,
+        clientRight: parentRect.left + visibleWidth,
+        clientBottom: parentRect.top + el.clientHeight,
+    };
+};
+
+const toLocalPosition = (clientX, clientY) => {
+    const { parentRect, scrollLeft, scrollTop } = getParentMetrics();
+    if (!parentRect) {
+        return {
+            left: clientX,
+            top: clientY,
+        };
+    }
+
+    return {
+        left: clientX - parentRect.left + scrollLeft,
+        top: clientY - parentRect.top + scrollTop,
+    };
+};
 
 const handleContextMenu = async (event) => {
     if (event.type === 'pointermove') {
@@ -47,53 +106,74 @@ const handleContextMenu = async (event) => {
     // Wait for the menu to render
     await nextTick();
 
-    const parentEl = document.querySelector(props.parent);
     const menuEl = menuRef.value;
+    const {
+        parentRect,
+        scrollLeft,
+        scrollTop,
+        clientLeft,
+        clientTop,
+        clientRight,
+        clientBottom,
+    } = getParentMetrics();
 
-    if (!parentEl || !menuEl) {
-        style.value = {
-            top: `${event.clientY}px`,
-            left: `${event.clientX}px`
-        };
+    if (!menuEl) {
         return;
     }
-
-    const parentRect = parentEl.getBoundingClientRect();
     const menuRect = menuEl.getBoundingClientRect();
 
     let top = event.clientY;
     let left = event.clientX;
 
     // Check if menu overflows bottom
-    if (top + menuRect.height > parentRect.bottom) {
-        top = parentRect.bottom - menuRect.height;
+    if (top + menuRect.height > clientBottom) {
+        top = clientBottom - menuRect.height;
     }
 
     // Check if menu overflows top
-    if (top < parentRect.top) {
-        top = parentRect.top;
+    if (top < clientTop) {
+        top = clientTop;
     }
 
     // Check if menu overflows right
-    if (left + menuRect.width > parentRect.right) {
-        left = parentRect.right - menuRect.width;
+    if (left + menuRect.width > clientRight) {
+        left = clientRight - menuRect.width;
     }
 
     // Check if menu overflows left
-    if (left < parentRect.left) {
-        left = parentRect.left;
+    if (left < clientLeft) {
+        left = clientLeft;
     }
 
+    const localPosition = parentRect
+        ? {
+            left: left - parentRect.left + scrollLeft,
+            top: top - parentRect.top + scrollTop,
+        }
+        : toLocalPosition(left, top);
+
     style.value = {
-        top: `${top}px`,
-        left: `${left}px`
+        top: `${localPosition.top}px`,
+        left: `${localPosition.left}px`
     };
 };
 
 onMounted(() => {
-    document.querySelector(props.parent).addEventListener('pointermove', handleContextMenu);
-    document.querySelector(props.parent).addEventListener('contextmenu', handleContextMenu);
-    document.querySelector(props.parent).addEventListener('click', handleContextMenu);
+    parentEl = document.querySelector(props.parent);
+    if (!parentEl) return;
+
+    parentEl.addEventListener('pointermove', handleContextMenu);
+    parentEl.addEventListener('contextmenu', handleContextMenu);
+    parentEl.addEventListener('click', handleContextMenu);
+});
+
+onBeforeUnmount(() => {
+    if (!parentEl) return;
+
+    parentEl.removeEventListener('pointermove', handleContextMenu);
+    parentEl.removeEventListener('contextmenu', handleContextMenu);
+    parentEl.removeEventListener('click', handleContextMenu);
+    parentEl = null;
 });
 </script>
 <template>

@@ -1,6 +1,6 @@
 import { ref, nextTick, computed, watch, toRaw } from "vue";
 import { GlobalWorkerOptions, getDocument } from "pdfjs-dist";
-import { PDFDocument, rgb, degrees as pdfDegrees } from "pdf-lib";
+import { PDFDocument, rgb, degrees as pdfDegrees, PDFHexString, PDFName, PDFString } from "pdf-lib";
 import { uuid, Electron } from "./useAppSettings";
 import { useStore } from "./useStore";
 import { showModal } from "./usePageModal";
@@ -27,7 +27,6 @@ const getPages = (length) => {
         strokes: [],
         annotations: [],
         calculationRules: [],
-        comments: [],
         form: {
             original: {}, // fieldName → original value at extraction time
         },
@@ -53,6 +52,21 @@ const formatPdfDate = (dateStr) => {
     return dateStr;
 };
 
+const formatPdfAnnotationDate = (value = new Date()) => {
+    const date = value instanceof Date ? value : new Date(value || Date.now());
+    const safeDate = Number.isNaN(date.getTime()) ? new Date() : date;
+    const pad = (part) => String(part).padStart(2, '0');
+    return `D:${safeDate.getFullYear()}${pad(safeDate.getMonth() + 1)}${pad(safeDate.getDate())}${pad(safeDate.getHours())}${pad(safeDate.getMinutes())}${pad(safeDate.getSeconds())}`;
+};
+
+const readAnnotationString = (...values) => {
+    for (const value of values) {
+        if (typeof value === 'string' && value.trim()) return value.trim();
+        if (value && typeof value.str === 'string' && value.str.trim()) return value.str.trim();
+    }
+    return '';
+};
+
 export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
     const fileId = uuid();
 
@@ -60,6 +74,105 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
 
     // Prevent concurrent render() calls per page/canvas
     const pageRenderPromises = new Map();
+
+    const syncCommentStrokesFromAnnotations = (page, annotations = [], viewport = null) => {
+        if (!page || !viewport || !Array.isArray(page.strokes)) return;
+
+        const commentAnnotations = annotations.filter(annotation => {
+            return annotation?.subtype === 'Text' || annotation?.annotationType === 1;
+        });
+
+        const importedCommentStrokes = commentAnnotations.map((annotation) => {
+            const rect = Array.isArray(annotation?.rect) ? annotation.rect : null;
+            let x = 0;
+            let y = 0;
+            let width = 28;
+            let height = 28;
+
+            if (rect && rect.length >= 4) {
+                try {
+                    const [vx1, vy1, vx2, vy2] = viewport.convertToViewportRectangle(rect);
+                    x = Math.min(vx1, vx2);
+                    y = Math.min(vy1, vy2);
+                    width = Math.max(18, Math.abs(vx2 - vx1) || 28);
+                    height = Math.max(18, Math.abs(vy2 - vy1) || 28);
+                } catch (err) {
+                    // Fall back to a default icon size if viewport conversion fails.
+                }
+            }
+
+            return [{
+                id: String(annotation.id || annotation.annotationId || uuid()),
+                type: 'comment',
+                x,
+                y,
+                width,
+                height,
+                color: 'orange',
+                thickness: 2,
+                opacity: 1,
+                selectedText: readAnnotationString(annotation.subject, annotation.subjectObj, annotation.subj),
+                comment: readAnnotationString(annotation.contents, annotation.contentsObj, annotation.richText),
+                author: readAnnotationString(annotation.title, annotation.titleObj, annotation.userName),
+                createdAt: annotation.creationDate || null,
+                updatedAt: annotation.modificationDate || annotation.modDate || null,
+                source: 'pdf-text-annotation',
+                pdfAnnotationId: String(annotation.id || annotation.annotationId || ''),
+            }];
+        });
+
+        const nonImportedStrokes = page.strokes.filter(stroke => {
+            const first = stroke?.[0] || null;
+            return first?.type !== 'comment' || first.source !== 'pdf-text-annotation';
+        });
+
+        page.strokes = [...nonImportedStrokes, ...importedCommentStrokes];
+    };
+
+    const removeNativeTextCommentAnnotations = (pdfLibDoc, pdfPage) => {
+        const annots = pdfPage?.node?.Annots?.() || null;
+        if (!annots) return;
+
+        for (let i = annots.size() - 1; i >= 0; i--) {
+            const annotRef = annots.get(i);
+            const annotDict = pdfLibDoc.context.lookup(annotRef);
+            const subtype = annotDict?.get?.(PDFName.of('Subtype')) || null;
+            if (String(subtype) === '/Text') {
+                annots.remove(i);
+            }
+        }
+    };
+
+    const addNativeCommentAnnotation = (pdfLibDoc, pdfPage, first, scaleX, scaleY, pageHeight) => {
+        if (!first?.comment) return;
+
+        const width = Math.max(18, Number(first.width) || 28) * scaleX;
+        const height = Math.max(18, Number(first.height) || 28) * scaleY;
+        const x = Number(first.x || 0) * scaleX;
+        const y = pageHeight - ((Number(first.y || 0) + (Number(first.height) || 28)) * scaleY);
+        const annotDict = pdfLibDoc.context.obj({
+            Type: 'Annot',
+            Subtype: 'Text',
+            Rect: [x, y, x + width, y + height],
+            Contents: PDFHexString.fromText(String(first.comment || '')),
+            T: PDFHexString.fromText(String(first.author || 'Simple PDF Reader')),
+            NM: PDFHexString.fromText(String(first.id || uuid())),
+            M: PDFString.of(formatPdfAnnotationDate(first.updatedAt || first.createdAt || new Date())),
+            Name: 'Comment',
+            Open: false,
+            C: [1, 0.65, 0],
+        });
+
+        if (first.selectedText) {
+            annotDict.set(PDFName.of('Subj'), PDFHexString.fromText(String(first.selectedText)));
+        }
+        if (pdfPage.ref) {
+            annotDict.set(PDFName.of('P'), pdfPage.ref);
+        }
+
+        const annotRef = pdfLibDoc.context.register(annotDict);
+        pdfPage.node.addAnnot(annotRef);
+    };
 
     const renderPdfPage = async (pageId) => {
         if (!pdfDoc) return;
@@ -196,15 +309,17 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
             }
 
             page.rendered = true;
-            lazyLoadCallback(page);
 
             // Re-extract annotations with the high-res viewport so positions are pixel-accurate
             try {
                 const rawAnnotations = await pdfPage.getAnnotations();
                 setPageAnnotations(page, rawAnnotations, viewport);
+                syncCommentStrokesFromAnnotations(page, rawAnnotations, viewport);
             } catch (e) {
                 console.warn('Form annotation re-extraction failed for page', pageId, e);
             }
+
+            lazyLoadCallback(page);
         })();
 
         pageRenderPromises.set(pageId, promise);
@@ -638,10 +753,12 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
             // Process each page with annotations
             for (const page of pages.value) {
                 const strokes = page.strokes || [];
-                if (!strokes || strokes.length === 0) continue;
-
                 const pdfPage = pdfLibDoc.getPage(page.index);
                 const { width, height } = pdfPage.getSize();
+
+                removeNativeTextCommentAnnotations(pdfLibDoc, pdfPage);
+
+                if (!strokes || strokes.length === 0) continue;
 
                 // Get the canvas dimensions for scaling
                 const canvas = page.canvas;
@@ -756,6 +873,8 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
                                 borderWidth: 0
                             });
                         }
+                    } else if (first.type === 'comment') {
+                        addNativeCommentAnnotation(pdfLibDoc, pdfPage, first, scaleX, scaleY, height);
                     } else if (first.type === 'pen') {
                         // Draw pen strokes as connected lines
                         for (let i = 0; i < stroke.length - 1; i++) {

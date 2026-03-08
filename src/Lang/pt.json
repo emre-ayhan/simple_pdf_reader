@@ -79,5 +79,17 @@
     "You have unsaved changes in this tab. Are you sure you want to close it?": "Você tem alterações não salvas nesta aba. Tem certeza de que deseja fechá-la?",
     "You have unsaved changes in one or more tabs. Are you sure you want to close the application?": "Você tem alterações não salvas em uma ou mais abas. Tem certeza de que deseja fechar o aplicativo?",
     "Import From Clipboard": "Importar da Área de Transferência",
-    "Insert Last Copied Stroke": "Inserir Último Traço Copiado"
+    "Insert Last Copied Stroke": "Inserir Último Traço Copiado",
+    "Comments": "Comentários",
+    "Annotations": "Anotações",
+    "Comment": "Comentário",
+    "Author": "Autor",
+    "Optional name": "Nome opcional",
+    "Leave a comment here": "Escreva um comentário aqui",
+    "Filter comments": "Filtrar comentários",
+    "No comments yet. Select text and add one to start a review trail.": "Ainda não há comentários. Selecione um texto e adicione um para iniciar o histórico de revisão.",
+    "No matching comments for this search.": "Nenhum comentário corresponde a esta busca.",
+    "Jump to text": "Ir para o texto",
+    "Page": "Página",
+    "Edit": "Editar"
 }

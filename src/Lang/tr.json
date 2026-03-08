@@ -141,5 +141,15 @@
     "solid": "düz",
     "dashed": "kesikli",
     "dotted": "noktalı",
-    "Opacity": "Opaklık"
+    "Opacity": "Opaklık",
+    "Comments": "Yorumlar",
+    "Annotations": "Açıklamalar",
+    "Comment": "Yorum",
+    "Optional name": "İsteğe bağlı ad",
+    "Leave a comment here": "Buraya bir yorum yazın",
+    "Filter comments": "Yorumları filtrele",
+    "No comments yet. Select text and add one to start a review trail.": "Henüz yorum yok. Bir inceleme izi başlatmak için metin seçip yorum ekleyin.",
+    "No matching comments for this search.": "Bu aramayla eşleşen yorum yok.",
+    "Jump to text": "Metne git",
+    "Edit": "Düzenle"
 }

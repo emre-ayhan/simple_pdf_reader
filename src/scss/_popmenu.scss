@@ -13,6 +13,45 @@
         align-items: center;
         justify-content: space-between;
         flex-wrap: wrap;
+
+        &:has(.comment-input) {
+            background-color: $warning-bg-subtle !important;
+        }
+
+        .comment-editor {
+            min-width: 320px;
+            padding: 8px;
+        }
+
+        .comment-author-input,
+        .comment-input {
+            background-color: transparent !important;
+            color: $warning-text-emphasis !important;
+            border: none !important;
+            box-shadow: none !important;
+        }
+
+        .comment-author-input {
+            min-width: 280px;
+            padding-top: 1.8rem;
+        }
+
+        .comment-input {
+            min-width: 280px;
+            min-height: 160px;
+            resize: none !important;
+            padding-top: 2rem;
+        }
+
+        .comment-label {
+            color:  $warning-text-emphasis !important;
+            font-weight: bold;
+            height: auto;
+
+            &::after {
+                background-color: $warning-bg-subtle !important;
+            }
+        }
     }
 
     .btn-pop-menu {
