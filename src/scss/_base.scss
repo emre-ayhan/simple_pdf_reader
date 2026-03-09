@@ -38,13 +38,12 @@ body {
 }
 
 *::-webkit-scrollbar-thumb {
-    background: $secondary;
+    background: $dark;
     border-radius: 8px;
-    border: 2px solid $dark;
 }
 
 *::-webkit-scrollbar-track {
-    background: $dark;
+    background: $secondary;
 }
 
 .link-accent {

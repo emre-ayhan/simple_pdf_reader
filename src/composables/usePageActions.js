@@ -81,7 +81,7 @@ const toCursorFromAngle = (angleRad) => {
 const BOUNDING_BOX_HANDLE_COLOR = '#2a7fff';
 const COMMENT_ICON_DEFAULT_COLOR = '#664d03';
 const COMMENT_ICON_DETAIL_COLOR = '#ffffff';
-const COMMENT_ICON_DEFAULT_SIZE = 64;
+const COMMENT_ICON_DEFAULT_SIZE = 32;
 
 const toExactResizeCursor = (angleRad) => {
     if (!Number.isFinite(angleRad)) return null;
@@ -299,13 +299,15 @@ const isSelectOnlyStroke = (first) => {
 
 const getCommentStrokeSize = (strokeOrFirst) => {
     const first = Array.isArray(strokeOrFirst) ? strokeOrFirst[0] : strokeOrFirst;
+    const dpr = window.devicePixelRatio;
+    const defaultSize = dpr * COMMENT_ICON_DEFAULT_SIZE;
     if (!first) {
-        return { width: COMMENT_ICON_DEFAULT_SIZE, height: COMMENT_ICON_DEFAULT_SIZE };
+        return { width: defaultSize, height: defaultSize };
     }
 
     return {
-        width: Math.max(18, Number(first.width) || COMMENT_ICON_DEFAULT_SIZE),
-        height: Math.max(18, Number(first.height) || COMMENT_ICON_DEFAULT_SIZE)
+        width: Math.max(18, Number(first.width) || defaultSize),
+        height: Math.max(18, Number(first.height) || defaultSize)
     };
 };
 

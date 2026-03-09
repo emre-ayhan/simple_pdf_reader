@@ -21,6 +21,26 @@
         .comment-editor {
             min-width: 320px;
             padding: 8px;
+
+            * {
+                scrollbar-width: thin;
+                scrollbar-color: $warning-text-emphasis $secondary-bg-subtle;
+            }
+            
+            *::-webkit-scrollbar {
+                width: 10px;
+                background: $warning-text-emphasis;
+            }
+
+            *::-webkit-scrollbar-thumb {
+                background: $secondary;
+                border-radius: 8px;
+            }
+
+            *::-webkit-scrollbar-track {
+                background: $secondary-bg-subtle;
+            }
+            
         }
 
         .comment-author-input,

@@ -92,11 +92,11 @@ const handleCommentClick = (comment) => {
             </div>
         </div>
 
-        <div v-if="!comments.length" class="comments-sidebar-empty text-secondary">
+        <div v-if="!comments.length" class="comments-sidebar-empty">
             {{ $t('No comments yet. Select text and add one to start a review trail.') }}
         </div>
 
-        <div v-else-if="!filteredComments.length" class="comments-sidebar-empty text-secondary">
+        <div v-else-if="!filteredComments.length" class="comments-sidebar-empty">
             {{ $t('No matching comments for this search.') }}
         </div>
 
@@ -114,13 +114,13 @@ const handleCommentClick = (comment) => {
                         </span>
                         <small class="text-secondary">{{ formatTimestamp(comment.updatedAt) }}</small>
                     </div>
-                    <div v-if="comment.selectedText" class="comments-sidebar-selection text-secondary fst-italic">
+                    <div v-if="comment.selectedText" class="comments-sidebar-selection fst-italic">
                         "{{ previewSelection(comment.selectedText) }}"
                     </div>
                     <div class="comments-sidebar-body text-light">
                         {{ comment.comment }}
                     </div>
-                    <div v-if="comment.author" class="comments-sidebar-author text-secondary">
+                    <div v-if="comment.author" class="comments-sidebar-author">
                         {{ comment.author }}
                         <div class="comments-sidebar-actions btn-group-sm">
                             <button v-if="comment.canJumpToText && comment.source !== 'pdf-text-annotation'" type="button" class="btn btn-outline-warning" @click="jumpToText?.(comment)" :title="$t('Jump to text')">

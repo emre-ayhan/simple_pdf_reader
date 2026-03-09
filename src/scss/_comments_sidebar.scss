@@ -53,6 +53,7 @@ $top: $navtabsHeight + $toolbarHeight;
 .comments-sidebar-empty {
     padding: 20px 18px;
     line-height: 1.5;
+    color: $secondary;
 }
 
 .comments-sidebar-list {
@@ -60,6 +61,7 @@ $top: $navtabsHeight + $toolbarHeight;
     flex-direction: column;
     gap: 12px;
     padding: 14px;
+    overflow-x: hidden;
     overflow-y: auto;
     height: calc(100vh - #{$top + 128px}); // header height + padding-bottom of header + padding-top of list
 }
@@ -97,8 +99,6 @@ $top: $navtabsHeight + $toolbarHeight;
 .comments-sidebar-item.active .comments-sidebar-card,
 .comments-sidebar-card:hover {
     border-color: rgba(255, 193, 7, 0.45);
-    // background: rgba(255, 193, 7, 0.08);
-    transform: translateX(-2px);
     
     .comments-sidebar-actions {
         display: flex !important;
@@ -106,17 +106,23 @@ $top: $navtabsHeight + $toolbarHeight;
 }
 
 .comments-sidebar-selection {
+    overflow: hidden;
+    white-space: wrap;
     margin-top: 10px;
     line-height: 1.45;
+    color: $secondary;
 }
 
 .comments-sidebar-body {
     margin-top: 10px;
     line-height: 1.55;
-    white-space: pre-wrap;
+    overflow: hidden;
+    white-space: wrap;
+    word-wrap: break-word;
 }
 
 .comments-sidebar-author {
+    color: $secondary;
     margin-top: 10px;
     font-size: 12px;
 }
