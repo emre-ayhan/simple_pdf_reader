@@ -90,9 +90,6 @@
 
 .pdf-reader {
     position: relative;
-    display: flex;
-    align-items: stretch;
-
     &.toolbar-top {
         margin-top: $navtabsHeight;
     }
