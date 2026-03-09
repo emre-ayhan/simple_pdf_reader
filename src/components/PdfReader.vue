@@ -86,6 +86,7 @@ const {
     renderPdfPage,
     renderPageThumbnail,
     resyncRenderedTextLayers,
+    searchTextIndex,
     showDocumentProperties,
     rotatePage,
     openPreferences,
@@ -558,9 +559,8 @@ const toggleTextHighlightMode = () => {
 
 const toggleTextSelection = () => {
     if (!isFileLoaded.value) return;
-    const wasActive = isTextSelectionMode.value;
     resetToolState();
-    isTextSelectionMode.value = !wasActive;
+    isTextSelectionMode.value = true;
 };
 
 const imageInput = ref(null);
@@ -1009,7 +1009,7 @@ defineExpose({
                     <ToolItem class="nav-link" label="Thumbnail Sidebar" icon="layout-sidebar-inset" :active="isThumbnailSidebarVisible" :action="toggleThumbnailSidebar" />
                 </li>
                 <!-- Search -->
-                <PageSearch :fileid="fileId" :pages="pages" :disabled="textActionsDisabled" :scrollToPage="scrollToPage" />
+                <PageSearch :fileid="fileId" :pages="pages" :disabled="textActionsDisabled" :scrollToPage="scrollToPage" :search-text-index="searchTextIndex" />
 
                 <!-- Reset Form -->
                 <li class="nav-item" v-if="isTextSelectionMode && activePage.annotations?.length">
@@ -1130,7 +1130,7 @@ defineExpose({
                 <li class="nav-item vr"></li>
                 <li class="nav-item">
                     <div class="input-group align-items-center flex-nowrap">
-                        <input id="page-number" type="text" class="form-control-plaintext" v-model="pageNum" @input="handlePageNumberInput" />
+                        <input id="page-number" type="text" class="form-control-plaintext" autocomplete="off" v-model="pageNum" @input="handlePageNumberInput" />
                         <span class="text-secondary">/ {{ activePages.length }}</span>
                     </div>
                 </li>
@@ -1192,7 +1192,7 @@ defineExpose({
             />
             <div class="pages-container flex-grow-1" ref="pagesContainer" :style="{ width: `${zoomPercentage}%` }">
                 <template v-for="page in pages" :key="page.id">
-                    <div class="page-container" :data-page="page.id" v-show="!page.deleted">
+                    <div class="page-container" :data-page="page.id" v-show="!page.deleted" v-if="page.visible">
                         <div class="canvas-container" :class="{ 'canvas-loading': !page.rendered }">
                             <canvas class="pdf-canvas" :ref="el => page.canvas = el"></canvas>
                             <div class="text-layer" :class="{ 'text-selectable': isTextSelectionMode }" :ref="el => page.textLayer = el"></div>
@@ -1208,8 +1208,8 @@ defineExpose({
                                 :ref="el => page.drawingCanvas = el"
                                 class="drawing-canvas"
                                 @pointerdown="startDrawing"
-                                @pointermove="onPointerMove"
                                 @pointerup="stopDrawing"
+                                @pointermove="onPointerMove"
                                 @pointerleave="onPointerLeave"
                                 @pointercancel="stopDrawing"
                                 :style="{

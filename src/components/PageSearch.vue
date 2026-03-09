@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, computed } from 'vue';
+import { ref, watch, computed, onUnmounted } from 'vue';
 import BsToast from './BsToast.vue';
 
 // Define props to receive the necessary data from parent
@@ -7,7 +7,8 @@ const props = defineProps({
     disabled: Boolean,
     fileid: String,
     pages: { type: Object, required: true },
-    scrollToPage: { type: Function }
+    scrollToPage: { type: Function },
+    searchTextIndex: { type: Function }
 });
 
 const searchToolbar = ref(null);
@@ -16,6 +17,9 @@ const caseSensitive = ref(false);
 const wholeWords = ref(false);
 const currentMatchIndex = ref(0);
 const allMatches = ref([]);
+const isSearching = ref(false);
+let latestSearchToken = 0;
+let searchDebounceTimeout = null;
 
 const showSearch = () => {
     if (props.disabled) return;
@@ -31,7 +35,9 @@ const showSearch = () => {
 
 const totalMatches = computed(() => allMatches.value.length);
 
-const performSearch = (resetIndex = true) => {
+const performSearch = async (resetIndex = true) => {
+    const token = ++latestSearchToken;
+
     // Store current match details if we want to preserve position
     let previousMatch = null;
     if (!resetIndex && currentMatchIndex.value > 0 && allMatches.value.length > 0) {
@@ -49,49 +55,30 @@ const performSearch = (resetIndex = true) => {
     const searchTerm = search.value;
     if (!searchTerm) return;
 
-    const pageIndices = Object.keys(props.pages).map(Number).sort((a, b) => a - b);
-
-    // Prepare Regex
-    let regex;
-    const escapedTerm = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const flags = caseSensitive.value ? 'g' : 'gi';
-    
-    if (wholeWords.value) {
-        regex = new RegExp(`\\b${escapedTerm}\\b`, flags);
-    } else {
-        regex = new RegExp(escapedTerm, flags);
-    }
-
-    // Search through the extracted text data
-    for (const pageIndex of pageIndices) {
-        const content = props.pages[pageIndex].textContent;
-        if (!content || !content.items) continue;
-
-        let spanIndex = 0;
-
-        content.items.forEach((item, itemIdx) => {
-            if (!item.str) return;
-            
-            // Reset regex lastIndex for global searches
-            regex.lastIndex = 0;
-            
-            let match;
-            // Scan the string for all occurrences
-            while ((match = regex.exec(item.str)) !== null) {
-                allMatches.value.push({
-                    pageIndex: pageIndex,
-                    itemIndex: spanIndex,
-                    matchIndex: match.index,
-                    str: item.str,
-                    matchLength: match[0].length
-                });
-                
-                // Prevent infinite loop if match is empty string (though unlikely with proper regex)
-                if (match.index === regex.lastIndex) regex.lastIndex++;
-                if (!regex.global) break; 
+    if (typeof props.searchTextIndex === 'function') {
+        isSearching.value = true;
+        try {
+            allMatches.value = await props.searchTextIndex(searchTerm, {
+                caseSensitive: caseSensitive.value,
+                wholeWords: wholeWords.value,
+                onPartial: (partialMatches) => {
+                    if (token !== latestSearchToken) return;
+                    allMatches.value = partialMatches;
+                }
+            });
+            if (token !== latestSearchToken) return;
+        } catch (error) {
+            if (token !== latestSearchToken) return;
+            const message = error?.message || '';
+            if (!message.includes('Search superseded')) {
+                console.error('Search failed:', error);
             }
-            spanIndex++;
-        });
+            return;
+        } finally {
+            if (token === latestSearchToken) {
+                isSearching.value = false;
+            }
+        }
     }
 
     if (allMatches.value.length > 0) {
@@ -280,11 +267,24 @@ const goToPreviousMatch = () => {
     highlightCurrentMatch();
 };
 
-watch([search, caseSensitive, wholeWords], () => performSearch(true));
-watch(() => props.pages, () => {
-    // If text content loads late, re-run search if we have a term, but preserve position
-    if (search.value) performSearch(false);
-}, { deep: true });
+watch([search, caseSensitive, wholeWords], () => {
+    if (searchDebounceTimeout) {
+        clearTimeout(searchDebounceTimeout);
+    }
+
+    searchDebounceTimeout = setTimeout(() => {
+        performSearch(true);
+    }, 180);
+});
+
+onUnmounted(() => {
+    if (searchDebounceTimeout) {
+        clearTimeout(searchDebounceTimeout);
+        searchDebounceTimeout = null;
+    }
+
+    isSearching.value = false;
+});
 
 defineExpose({
     search,
@@ -309,6 +309,7 @@ defineExpose({
                         <span>{{ currentMatchIndex }}</span>
                         <span>/</span>
                         <span>{{ totalMatches }}</span>
+                        <span v-if="isSearching" class="small text-muted ms-1">searching...</span>
                     </div>
                 </div>
                 <div class="d-flex align-items-center justify-content-between gap-4 mt-2">

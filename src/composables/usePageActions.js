@@ -3469,7 +3469,11 @@ export function usePageActions(pages, pagesContainer, activePage, addToHistory) 
                 dash: drawStyle.value.dash,
                 type: 'pen'
             });
-            
+
+            // Draw only the newest segment to keep live preview thickness
+            // consistent with the final persisted SVG path.
+            drawingContext.beginPath();
+            drawingContext.moveTo(lastX, lastY);
             drawingContext.lineTo(currentX, currentY);
             drawingContext.strokeStyle = drawStyle.value.color;
             drawingContext.lineWidth = getScaledDrawingThickness();
@@ -3478,6 +3482,7 @@ export function usePageActions(pages, pagesContainer, activePage, addToHistory) 
             drawingContext.globalAlpha = drawStyle.value.opacity;
             drawingContext.setLineDash(drawStyle.value.dash === 'dashed' ? [8, 6] : (drawStyle.value.dash === 'dotted' ? [2, 6] : []));
             drawingContext.stroke();
+            drawingContext.closePath();
             drawingContext.setLineDash([]);
             drawingContext.globalAlpha = 1;
         } else {
@@ -4937,6 +4942,9 @@ export function usePageActions(pages, pagesContainer, activePage, addToHistory) 
     };
 
     const handleTextSelectionMouseUp = (event) => {
+        if (!pagesContainer.value) return;
+        if (!pagesContainer.value.contains(event.target)) return;
+
         setTimeout(() => {
             if (!isTextSelectionMode.value && !isTextHighlightMode.value) {
                 return;

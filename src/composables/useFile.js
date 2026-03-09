@@ -1,4 +1,4 @@
-import { ref, nextTick, computed, watch, toRaw } from "vue";
+import { ref, nextTick, computed, watch, toRaw, onUnmounted } from "vue";
 import { GlobalWorkerOptions, getDocument } from "pdfjs-dist";
 import { PDFDocument, rgb, degrees as pdfDegrees, PDFHexString, PDFName, PDFString } from "pdf-lib";
 import { uuid, Electron } from "./useAppSettings";
@@ -19,11 +19,13 @@ const getPages = (length) => {
         id: uuid(),
         index,
         rendered: false,
+        renderQuality: 'none',
         canvas: null,
         textLayer: null,
         annotationSvg: null,
         drawingCanvas: null,
         drawingContext: null,
+        visible: false,
         strokes: [],
         annotations: [],
         calculationRules: [],
@@ -74,6 +76,292 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
 
     // Prevent concurrent render() calls per page/canvas
     const pageRenderPromises = new Map();
+    const VISIBLE_PAGE_WINDOW_SIZE = 5;
+    const MIN_RENDER_SCALE = 1;
+    const MAX_RENDER_SCALE = 3;
+    const MAX_EFFECTIVE_DPR = 2.25;
+    const MAX_CANVAS_PIXELS = 10_000_000;
+    const LOW_QUALITY_DPR = 1.15;
+    const LOW_QUALITY_CANVAS_PIXELS = 4_000_000;
+    const HIGH_QUALITY_UPGRADE_DELAY_MS = 140;
+    const MAX_LETTER_SPACING_ITEMS = 700;
+    let visibleWindowStart = -1;
+    let isProgrammaticNavigation = false;
+    let programmaticNavigationToken = 0;
+    let programmaticNavigationTimer = null;
+    let programmaticTargetPageId = null;
+    let textExtractionRunId = 0;
+    let extractTextTimeout = null;
+    let highQualityUpgradeTimeout = null;
+    let searchRequestId = 0;
+
+    const indexedTextPages = new Set();
+    const pendingSearchRequests = new Map();
+    const hasWorkerSupport = typeof Worker !== 'undefined';
+    const searchWorker = hasWorkerSupport
+        ? new Worker(new URL('../workers/pdfSearchWorker.js', import.meta.url), { type: 'module' })
+        : null;
+
+    const resetSearchIndex = (count = 0) => {
+        indexedTextPages.clear();
+        if (searchWorker) {
+            searchWorker.postMessage({ type: 'reset', pageCount: count });
+        }
+    };
+
+    const buildSearchItems = (textContent) => {
+        if (!textContent?.items?.length) return [];
+        return textContent.items
+            .map(item => item?.str)
+            .filter(text => typeof text === 'string' && text.length > 0);
+    };
+
+    const syncPageTextIndex = (pageIndexToSync, textContent) => {
+        if (!Number.isInteger(pageIndexToSync) || pageIndexToSync < 0) return;
+        const items = buildSearchItems(textContent);
+        indexedTextPages.add(pageIndexToSync);
+
+        if (searchWorker) {
+            searchWorker.postMessage({
+                type: 'index-page',
+                pageIndex: pageIndexToSync,
+                items,
+            });
+        }
+    };
+
+    if (searchWorker) {
+        searchWorker.onmessage = (event) => {
+            const { type, requestId, matches = [], error = null, scannedPages = 0, totalPages = 0, totalMatches = 0 } = event.data || {};
+            if (!pendingSearchRequests.has(requestId)) return;
+
+            const { resolve, reject, onPartial } = pendingSearchRequests.get(requestId);
+
+            if (type === 'search-partial') {
+                if (typeof onPartial === 'function') {
+                    onPartial(matches, { scannedPages, totalPages, totalMatches, done: false });
+                }
+                return;
+            }
+
+            if (type === 'search-error' || error) {
+                pendingSearchRequests.delete(requestId);
+                reject(new Error(error));
+                return;
+            }
+
+            if (type === 'search-done') {
+                pendingSearchRequests.delete(requestId);
+                resolve({ totalMatches });
+            }
+        };
+    }
+
+    onUnmounted(() => {
+        if (extractTextTimeout) {
+            clearTimeout(extractTextTimeout);
+            extractTextTimeout = null;
+        }
+
+        if (programmaticNavigationTimer) {
+            clearTimeout(programmaticNavigationTimer);
+            programmaticNavigationTimer = null;
+        }
+
+        if (highQualityUpgradeTimeout) {
+            clearTimeout(highQualityUpgradeTimeout);
+            highQualityUpgradeTimeout = null;
+        }
+
+        pendingSearchRequests.forEach(({ reject }) => {
+            reject(new Error('Search worker disposed'));
+        });
+        pendingSearchRequests.clear();
+
+        if (searchWorker) {
+            searchWorker.terminate();
+        }
+    });
+
+    const textMeasureCanvas = document.createElement('canvas');
+    const textMeasureContext = textMeasureCanvas.getContext('2d');
+
+    const measureTextWidth = (text, fontSize, fontFamily) => {
+        if (!textMeasureContext) return 0;
+        textMeasureContext.font = `${fontSize}px ${fontFamily || 'sans-serif'}`;
+        return textMeasureContext.measureText(text || '').width;
+    };
+
+    const yieldToUI = () => {
+        return new Promise(resolve => {
+            if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+                window.requestIdleCallback(() => resolve(), { timeout: 100 });
+                return;
+            }
+            setTimeout(resolve, 0);
+        });
+    };
+
+    const computeAdaptiveRenderScale = (unscaledViewport, desiredDisplayWidth, pixelRatio, options = {}) => {
+        const {
+            dprCap = MAX_EFFECTIVE_DPR,
+            pixelBudget = MAX_CANVAS_PIXELS,
+        } = options;
+
+        if (!unscaledViewport?.width || !unscaledViewport?.height) {
+            return MIN_RENDER_SCALE;
+        }
+
+        const cssScale = desiredDisplayWidth / unscaledViewport.width;
+        const effectiveDpr = Math.min(Math.max(pixelRatio || 1, 1), dprCap);
+        const desiredScale = cssScale * effectiveDpr;
+
+        let scale = Math.min(MAX_RENDER_SCALE, Math.max(MIN_RENDER_SCALE, desiredScale));
+        const pixelCount = (unscaledViewport.width * scale) * (unscaledViewport.height * scale);
+
+        if (pixelCount > pixelBudget) {
+            const reductionFactor = Math.sqrt(pixelBudget / pixelCount);
+            scale = Math.max(MIN_RENDER_SCALE, scale * reductionFactor);
+        }
+
+        return scale;
+    };
+
+    const getQualityRank = (quality) => {
+        if (quality === 'high') return 2;
+        if (quality === 'low') return 1;
+        return 0;
+    };
+
+    const getVisiblePageSourceIndex = (activeIdx = pageIndex.value) => {
+        const maxActive = Math.max(0, activePages.value.length - 1);
+        const safeActive = Math.min(Math.max(0, Number(activeIdx) || 0), maxActive);
+        const active = activePages.value[safeActive];
+        if (!active) return -1;
+        return pages.value.findIndex(page => page.id === active.id);
+    };
+
+    const scheduleHighQualityUpgrade = () => {
+        if (highQualityUpgradeTimeout) {
+            clearTimeout(highQualityUpgradeTimeout);
+            highQualityUpgradeTimeout = null;
+        }
+
+        highQualityUpgradeTimeout = setTimeout(() => {
+            const centerSourceIndex = getVisiblePageSourceIndex(pageIndex.value);
+            if (centerSourceIndex === -1) return;
+
+            const targets = pages.value
+                .filter(page => page.visible && !page.deleted)
+                .map(page => ({ page, distance: Math.abs((page.index ?? 0) - centerSourceIndex) }))
+                .sort((a, b) => a.distance - b.distance)
+                .slice(0, 3)
+                .map(entry => entry.page);
+
+            targets.forEach(page => {
+                renderPdfPage(page.id, 'high').catch(() => {});
+            });
+        }, HIGH_QUALITY_UPGRADE_DELAY_MS);
+    };
+
+    const beginProgrammaticNavigation = (targetPageId = null) => {
+        programmaticNavigationToken += 1;
+        if (programmaticNavigationTimer) {
+            clearTimeout(programmaticNavigationTimer);
+            programmaticNavigationTimer = null;
+        }
+
+        isProgrammaticNavigation = true;
+        programmaticTargetPageId = targetPageId;
+        return programmaticNavigationToken;
+    };
+
+    const endProgrammaticNavigation = (token, delayMs = 350) => {
+        if (programmaticNavigationTimer) {
+            clearTimeout(programmaticNavigationTimer);
+        }
+
+        programmaticNavigationTimer = setTimeout(() => {
+            if (token === programmaticNavigationToken) {
+                isProgrammaticNavigation = false;
+                programmaticTargetPageId = null;
+            }
+        }, delayMs);
+    };
+
+    const getVisibleWindowBounds = (sourceIndex) => {
+        const total = pages.value.length;
+        if (!total) return { start: 0, end: -1 };
+
+        if (total <= VISIBLE_PAGE_WINDOW_SIZE) {
+            return { start: 0, end: total - 1 };
+        }
+
+        const safeSource = Math.min(total - 1, Math.max(0, Number(sourceIndex) || 0));
+        const radius = Math.floor(VISIBLE_PAGE_WINDOW_SIZE / 2);
+        const maxStart = total - VISIBLE_PAGE_WINDOW_SIZE;
+        const start = Math.min(Math.max(0, safeSource - radius), maxStart);
+        const end = start + VISIBLE_PAGE_WINDOW_SIZE - 1;
+        return { start, end };
+    };
+
+    const applyVisibleWindowAroundSourceIndex = (sourceIndex) => {
+        if (!pages.value.length) return false;
+
+        const { start, end } = getVisibleWindowBounds(sourceIndex);
+        let changed = false;
+
+        for (let i = 0; i < pages.value.length; i++) {
+            const shouldBeVisible = i >= start && i <= end;
+            if (pages.value[i].visible !== shouldBeVisible) {
+                if (!shouldBeVisible) {
+                    // v-if unmounts canvas/text-layer nodes; force a fresh render when remounted.
+                    pages.value[i].rendered = false;
+                    pages.value[i].renderQuality = 'none';
+                }
+                pages.value[i].visible = shouldBeVisible;
+                changed = true;
+            }
+        }
+
+        return changed;
+    };
+
+    const applyVisibleWindowForActiveIndex = (activeIndex = pageIndex.value, options = {}) => {
+        const { force = false } = options;
+        const maxActiveIndex = Math.max(0, activePages.value.length - 1);
+        const safeActiveIndex = Math.min(Math.max(0, Number(activeIndex) || 0), maxActiveIndex);
+        const active = activePages.value[safeActiveIndex];
+        if (!active) return false;
+
+        const sourceIndex = pages.value.findIndex(page => page.id === active.id);
+        if (sourceIndex === -1) return false;
+
+        const total = pages.value.length;
+        const maxStart = Math.max(0, total - VISIBLE_PAGE_WINDOW_SIZE);
+
+        let nextStart;
+
+        if (force || visibleWindowStart < 0 || total <= VISIBLE_PAGE_WINDOW_SIZE) {
+            const centered = getVisibleWindowBounds(sourceIndex).start;
+            nextStart = centered;
+        } else {
+            nextStart = Math.min(Math.max(0, visibleWindowStart), maxStart);
+
+            // Keep current source inside an inner buffer to avoid frequent DOM churn.
+            const innerStart = nextStart + 1;
+            const innerEnd = nextStart + VISIBLE_PAGE_WINDOW_SIZE - 2;
+
+            if (sourceIndex < innerStart) {
+                nextStart = Math.max(0, sourceIndex - 1);
+            } else if (sourceIndex > innerEnd) {
+                nextStart = Math.min(maxStart, sourceIndex - (VISIBLE_PAGE_WINDOW_SIZE - 2));
+            }
+        }
+
+        visibleWindowStart = nextStart;
+        return applyVisibleWindowAroundSourceIndex(nextStart + Math.floor(VISIBLE_PAGE_WINDOW_SIZE / 2));
+    };
 
     const syncCommentStrokesFromAnnotations = (page, annotations = [], viewport = null) => {
         if (!page || !viewport || !Array.isArray(page.strokes)) return;
@@ -174,15 +462,29 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
         pdfPage.node.addAnnot(annotRef);
     };
 
-    const renderPdfPage = async (pageId) => {
+    const renderPdfPage = async (pageId, quality = 'low', options = {}) => {
+        const { force = false } = options;
         if (!pdfDoc) return;
 
         const page = pages.value.find(p => p.id === pageId);
 
-        if (page?.rendered || page?.deleted || page.index < 0) return;
+        if (!page || page.deleted || page.index < 0) return;
+
+        const requestedQuality = quality === 'high' ? 'high' : 'low';
+        const requestedRank = getQualityRank(requestedQuality);
+        const currentRank = getQualityRank(page.renderQuality);
+
+        if (!force && page.rendered && currentRank >= requestedRank) return;
 
         if (pageRenderPromises.has(pageId)) {
-            return pageRenderPromises.get(pageId);
+            const inflight = pageRenderPromises.get(pageId);
+            const inflightRank = getQualityRank(inflight?.quality);
+
+            if (inflightRank >= requestedRank) {
+                return inflight.promise;
+            }
+
+            await inflight.promise;
         }
 
         const promise = (async () => {
@@ -193,7 +495,14 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
             const zoomFactor = Math.max(zoomPercentage.value, 100) / 100;
             const desiredDisplayWidth = containerWidth * zoomFactor;
             const unscaledViewport = pdfPage.getViewport({ scale: 1 });
-            const scale = Math.max((desiredDisplayWidth * pixelRatio) / unscaledViewport.width, 3);
+            const scale = computeAdaptiveRenderScale(
+                unscaledViewport,
+                desiredDisplayWidth,
+                pixelRatio,
+                requestedQuality === 'high'
+                    ? { dprCap: MAX_EFFECTIVE_DPR, pixelBudget: MAX_CANVAS_PIXELS }
+                    : { dprCap: LOW_QUALITY_DPR, pixelBudget: LOW_QUALITY_CANVAS_PIXELS }
+            );
             const viewport = pdfPage.getViewport({ scale });
 
             const canvas = page?.canvas;
@@ -240,10 +549,20 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
 
                 textLayerDiv.style.width = `${canvas.width}px`;
                 textLayerDiv.style.height = `${canvas.height}px`;
+                textLayerDiv.style.transformOrigin = '0 0';
                 textLayerDiv.style.transform = `scale(${scaleX}, ${scaleY})`;
 
-                const textContent = await pdfPage.getTextContent();
-                page.textContent = textContent;
+                const textContent = page.textContent || await pdfPage.getTextContent();
+                if (!page.textContent) {
+                    page.textContent = textContent;
+                }
+                if (!indexedTextPages.has(page.index)) {
+                    syncPageTextIndex(page.index, textContent);
+                }
+
+                const useLetterSpacing = textContent.items.length <= MAX_LETTER_SPACING_ITEMS;
+                const fragment = document.createDocumentFragment();
+                const tx = viewport.transform;
 
                 for (const item of textContent.items) {
                     if (!item.str) continue;
@@ -251,7 +570,6 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
                     const span = document.createElement('span');
                     span.textContent = item.str;
 
-                    const tx = viewport.transform;
                     const m = item.transform;
 
                     const x = tx[0] * m[4] + tx[2] * m[5] + tx[4];
@@ -288,27 +606,26 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
                     }
                     span.style.transform = transform;
 
-                    const measureSpan = document.createElement('span');
-                    measureSpan.style.font = span.style.font || `${fontHeight}px ${item.fontName || 'sans-serif'}`;
-                    measureSpan.style.position = 'absolute';
-                    measureSpan.style.visibility = 'hidden';
-                    measureSpan.style.whiteSpace = 'pre';
-                    measureSpan.textContent = item.str;
-                    textLayerDiv.appendChild(measureSpan);
-                    const naturalWidth = measureSpan.offsetWidth;
-                    textLayerDiv.removeChild(measureSpan);
+                    const naturalWidth = useLetterSpacing
+                        ? measureTextWidth(item.str, fontHeight, item.fontName || 'sans-serif')
+                        : 0;
 
                     if (textWidth > 0 && naturalWidth > 0 && item.str.length > 1) {
                         const extraSpace = textWidth - naturalWidth;
                         const letterSpacing = extraSpace / (item.str.length - 1);
-                        span.style.letterSpacing = `${letterSpacing}px`;
+                        if (Number.isFinite(letterSpacing) && Math.abs(letterSpacing) < fontHeight) {
+                            span.style.letterSpacing = `${letterSpacing}px`;
+                        }
                     }
 
-                    textLayerDiv.appendChild(span);
+                    fragment.appendChild(span);
                 }
+
+                textLayerDiv.appendChild(fragment);
             }
 
             page.rendered = true;
+            page.renderQuality = requestedQuality;
 
             // Re-extract annotations with the high-res viewport so positions are pixel-accurate
             try {
@@ -322,7 +639,7 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
             lazyLoadCallback(page);
         })();
 
-        pageRenderPromises.set(pageId, promise);
+        pageRenderPromises.set(pageId, { quality: requestedQuality, promise });
 
         try {
             await promise;
@@ -421,6 +738,13 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
     });
 
     const setPages = (length) => {
+        textExtractionRunId += 1;
+        if (extractTextTimeout) {
+            clearTimeout(extractTextTimeout);
+            extractTextTimeout = null;
+        }
+        visibleWindowStart = -1;
+        resetSearchIndex(length);
         pageCount.value = length;
         pages.value = getPages(length);
     }
@@ -433,6 +757,7 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
 
         page.id = uuid();
         page.rendered = false;
+        page.renderQuality = 'none';
         pages.value = [...oldPages];
     }
 
@@ -443,6 +768,8 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
         const newPage = getPages(1)[0];
         newPage.index = index;
         newPage.rendered = false;
+        newPage.renderQuality = 'none';
+        newPage.visible = false;
         oldPages.splice(index, 0, newPage);
 
         // Update indexes of subsequent pages
@@ -452,11 +779,21 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
 
         pageCount.value = oldPages.length;
         pages.value = [...oldPages];
+        applyVisibleWindowForActiveIndex(pageIndex.value, { force: true });
     }
 
-    watch(pageIndex, (newIndex) => {
+    watch(pageIndex, async (newIndex) => {
         pageNum.value = newIndex + 1;
         storePageIndex(filename.value, newIndex);
+
+        const windowChanged = applyVisibleWindowForActiveIndex(newIndex);
+        if (windowChanged) {
+            await nextTick();
+            setupIntersectionObserver();
+            setupLazyLoadObserver();
+        }
+
+        scheduleHighQualityUpgrade();
     });
 
     const isFirstPage = computed(() => {
@@ -497,13 +834,21 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
             rootMargin: '200px', // Start loading 200px before entering viewport
             threshold: 0.01
         };
-        
+
         lazyLoadObserver.value = new IntersectionObserver((entries) => {
             entries.forEach(async entry => {
                 if (entry.isIntersecting) {
                     const pageId = entry.target.getAttribute('data-page');
+                    const page = pages.value.find(p => p.id === pageId);
+                    if (!page || !page.visible) return;
+
                     if (!pdfDoc) return;
-                    await renderPdfPage(pageId);
+                    await renderPdfPage(pageId, 'low');
+
+                    const activeSourceIndex = getVisiblePageSourceIndex(pageIndex.value);
+                    if (activeSourceIndex !== -1 && Math.abs(page.index - activeSourceIndex) <= 1) {
+                        renderPdfPage(pageId, 'high').catch(() => {});
+                    }
                 }
             });
         }, options);
@@ -548,8 +893,12 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
                 const page = pages.value.find(p => p.id === visiblePageId);
 
                 if (page && !page.deleted) {
+                    if (isProgrammaticNavigation && programmaticTargetPageId && visiblePageId !== programmaticTargetPageId) {
+                        return;
+                    }
+
                     const activeIndex = activePages.value.findIndex(p => p.id === visiblePageId);
-                    if (activeIndex !== -1 && activeIndex !== pageIndex.value) {
+                    if (!isProgrammaticNavigation && activeIndex !== -1 && activeIndex !== pageIndex.value) {
                         pageIndex.value = activeIndex;
                         storePageIndex();
                     }
@@ -572,22 +921,55 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
         });
     }
 
-    const getStoredPageIndex = () => {
-        storeGet(filename.value).then(data => {
+    const getStoredPageIndex = async () => {
+        try {
+            const data = await storeGet(filename.value);
             if (Number.isInteger(data?.pageIndex) && data.pageIndex >= 0) {
-                pageIndex.value = data.pageIndex;
+                return data.pageIndex;
             }
-        })
+        } catch (error) {
+            console.warn('Failed to get stored page index:', error);
+        }
+
+        return 0;
     }
     
     const scrollToPage = (targetPageIndex) => {
         if (isNaN(targetPageIndex)) return;
         const maxIndex = Math.max(0, activePages.value.length - 1);
         const normalizedIndex = Math.min(Math.max(0, targetPageIndex), maxIndex);
+        const targetPage = activePages.value[normalizedIndex];
+        if (!targetPage) return;
+
+        const sourceIndex = pages.value.findIndex(p => p.id === targetPage.id);
+        if (sourceIndex === -1) return;
+
+        visibleWindowStart = -1;
+        const windowChanged = applyVisibleWindowForActiveIndex(normalizedIndex, { force: true });
+
+        const navigationToken = beginProgrammaticNavigation(targetPage.id);
         pageIndex.value = normalizedIndex;
-        const page = activePages.value[normalizedIndex];
-        if (!page || !page.canvas) return;
-        page.canvas.scrollIntoView({ block: 'start' });
+
+        const scrollToTarget = () => {
+            const container = pagesContainer.value?.querySelector(`.page-container[data-page="${targetPage.id}"]`);
+            if (!container) return;
+            container.scrollIntoView({ block: 'start' });
+        };
+
+        if (windowChanged) {
+            nextTick().then(() => {
+                setupIntersectionObserver();
+                setupLazyLoadObserver();
+                scrollToTarget();
+                scheduleHighQualityUpgrade();
+                endProgrammaticNavigation(navigationToken);
+            });
+            return;
+        }
+
+        scrollToTarget();
+        scheduleHighQualityUpgrade();
+        endProgrammaticNavigation(navigationToken);
     };
 
     const scrollToFirstPage = () => {
@@ -600,10 +982,8 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
     };
 
     // File Loaded Event Emitter
-    const handleFileLoadEvent = (type, page_count) => {
+    const handleFileLoadEvent = (type) => {
         isFileLoaded.value = true;
-        setPages(page_count || 1);
-        getStoredPageIndex();
 
         setCurrentTab({
             id: fileId,
@@ -613,28 +993,159 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
         });
     };
 
-    const extractAllText = async () => {
-        if (!pdfDoc) return;
-        
-        const numPages = pdfDoc.numPages;
-        const promises = [];
+    const getTextExtractionOrder = (priorityIndex = pageIndex.value) => {
+        const total = pages.value.length;
+        if (!total) return [];
 
-        for (let i = 1; i <= numPages; i++) {
-            // Check if we already have it
-            if (pages.value[i-1]?.textContent) continue;
+        const safePriority = Math.min(Math.max(0, Number(priorityIndex) || 0), total - 1);
+        const ordered = [];
+        const seen = new Set();
 
-            promises.push(
-                pdfDoc.getPage(i).then(async (page) => {
-                    const textContent = await page.getTextContent();
-                    if (pages.value[i-1]) {
-                        pages.value[i-1].textContent = textContent;
-                    }
-                })
-            );
+        const pushIndex = (idx) => {
+            if (idx < 0 || idx >= total || seen.has(idx)) return;
+            seen.add(idx);
+            ordered.push(idx);
+        };
+
+        pushIndex(safePriority);
+
+        for (let offset = 1; ordered.length < total; offset++) {
+            pushIndex(safePriority - offset);
+            pushIndex(safePriority + offset);
         }
-        
-        // Wait for all text to be extracted
-        await Promise.all(promises);
+
+        return ordered;
+    };
+
+    const ensureTextContentForSearch = async (priorityIndex = pageIndex.value) => {
+        if (!pdfDoc) return;
+
+        textExtractionRunId += 1;
+        const runId = textExtractionRunId;
+
+        if (extractTextTimeout) {
+            clearTimeout(extractTextTimeout);
+            extractTextTimeout = null;
+        }
+
+        const orderedIndices = getTextExtractionOrder(priorityIndex);
+        let processedSinceYield = 0;
+
+        for (const index of orderedIndices) {
+            if (runId !== textExtractionRunId || !pdfDoc) return;
+
+            const pageState = pages.value[index];
+            if (!pageState || pageState.textContent?.items?.length) continue;
+
+            try {
+                const page = await pdfDoc.getPage(index + 1);
+                if (runId !== textExtractionRunId || !pdfDoc) return;
+
+                const textContent = await page.getTextContent();
+                if (pages.value[index]) {
+                    pages.value[index].textContent = textContent;
+                    syncPageTextIndex(index, textContent);
+                }
+
+                processedSinceYield += 1;
+                if (processedSinceYield >= 2) {
+                    processedSinceYield = 0;
+                    await yieldToUI();
+                }
+            } catch (error) {
+                console.error(`Error extracting text from page ${index + 1}:`, error);
+            }
+        }
+    };
+
+    const searchTextIndexFallback = (term, options = {}) => {
+        const { caseSensitive = false, wholeWords = false } = options;
+        const escaped = String(term || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const flags = caseSensitive ? 'g' : 'gi';
+        const regex = new RegExp(wholeWords ? `\\b${escaped}\\b` : escaped, flags);
+        const matches = [];
+
+        for (let pageIndex = 0; pageIndex < pages.value.length; pageIndex++) {
+            const items = buildSearchItems(pages.value[pageIndex]?.textContent);
+            for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
+                const itemText = items[itemIndex];
+                regex.lastIndex = 0;
+                let match;
+
+                while ((match = regex.exec(itemText)) !== null) {
+                    matches.push({
+                        pageIndex,
+                        itemIndex,
+                        matchIndex: match.index,
+                        str: itemText,
+                        matchLength: match[0].length,
+                    });
+
+                    if (match.index === regex.lastIndex) regex.lastIndex += 1;
+                    if (!regex.global) break;
+                }
+            }
+        }
+
+        return matches;
+    };
+
+    const searchTextIndex = async (term, options = {}) => {
+        const safeTerm = String(term || '').trim();
+        if (!safeTerm) return [];
+
+        pendingSearchRequests.forEach((request, requestId) => {
+            request.reject(new Error('Search superseded by newer query'));
+            pendingSearchRequests.delete(requestId);
+            if (searchWorker) {
+                searchWorker.postMessage({ type: 'search-cancel', requestId });
+            }
+        });
+
+        // Run extraction in background so worker can stream partial matches as pages are indexed.
+        ensureTextContentForSearch(pageIndex.value);
+
+        if (!searchWorker) {
+            const matches = searchTextIndexFallback(safeTerm, options);
+            if (typeof options.onPartial === 'function') {
+                options.onPartial(matches, {
+                    scannedPages: pages.value.length,
+                    totalPages: pages.value.length,
+                    totalMatches: matches.length,
+                    done: true,
+                });
+            }
+            return matches;
+        }
+
+        const requestId = ++searchRequestId;
+
+        const results = [];
+
+        return new Promise((resolve, reject) => {
+            pendingSearchRequests.set(requestId, {
+                resolve,
+                reject,
+                onPartial: (chunk = [], meta = {}) => {
+                    if (chunk.length > 0) {
+                        results.push(...chunk);
+                    }
+
+                    if (typeof options.onPartial === 'function') {
+                        options.onPartial(results.slice(), meta);
+                    }
+                },
+            });
+
+            searchWorker.postMessage({
+                type: 'search-start',
+                requestId,
+                term: safeTerm,
+                caseSensitive: !!options.caseSensitive,
+                wholeWords: !!options.wholeWords,
+                totalPages: pages.value.length,
+            });
+        }).then(() => results);
     };
 
     const renderAllPages = async () => {
@@ -642,12 +1153,12 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
 
         const numPages = pdfDoc.numPages;
         setPages(numPages);
+        applyVisibleWindowForActiveIndex(pageIndex.value, { force: true });
 
         // Wait for Vue to render new page elements (keys changed due to new UUIDs)
         await nextTick();
 
-        // Start extracting text for search capability (non-blocking)
-        extractAllText();
+        // Keep startup light: extract text on demand from search flow.
 
         // Don't render any pages here - let lazy loading handle it
         // Setup observers after pages structure is ready
@@ -658,8 +1169,11 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
     const getDocumentCallback = async (pdfDoc_) => {
         loadFileCallback();
         pdfDoc = pdfDoc_;
-        handleFileLoadEvent('pdf', pdfDoc.numPages);
+        handleFileLoadEvent('pdf');
         await renderAllPages();
+
+        const storedPageIndex = await getStoredPageIndex();
+        scrollToPage(storedPageIndex);
     }
 
     const loadFile = async (event) => {
@@ -1096,7 +1610,7 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
             filepath.value = null;
             loadFileCallback();
             pdfDoc = pdfDoc_;
-            handleFileLoadEvent('pdf', pdfDoc.numPages);
+            handleFileLoadEvent('pdf');
             
             await renderAllPages();
             
@@ -1464,6 +1978,8 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
         renderPdfPage,
         renderPageThumbnail,
         resyncRenderedTextLayers,
+        ensureTextContentForSearch,
+        searchTextIndex,
         showDocumentProperties,
         rotatePage,
         openPreferences,
