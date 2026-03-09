@@ -1408,7 +1408,7 @@ export function usePageActions(pages, pagesContainer, activePage, addToHistory) 
 
                         textEditorSimpleMode.value = true;
                         textPosition.value = { x, y };
-                        textCanvasIndex.value = activePage.value.index;
+                        textCanvasIndex.value = page.index;
 
                         openTextEditor({
                             bounds: { x: clampedX, y: clampedY + 24, width, height },
@@ -1435,7 +1435,7 @@ export function usePageActions(pages, pagesContainer, activePage, addToHistory) 
                     const height = Math.min(rawHeight, maxAvailableHeight);
 
                     textPosition.value = { x: sx, y: sy };
-                    textCanvasIndex.value = activePage.value.index;
+                    textCanvasIndex.value = page.index;
 
                     openTextEditor({
                         bounds: { x: sx, y: editorY, width, height },
