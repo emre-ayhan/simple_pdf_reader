@@ -29,18 +29,13 @@
             color: $warning-text-emphasis !important;
             border: none !important;
             box-shadow: none !important;
-        }
-
-        .comment-author-input {
             min-width: 280px;
-            padding-top: 1.8rem;
+            padding-top: 2rem;
         }
 
         .comment-input {
-            min-width: 280px;
             min-height: 160px;
             resize: none !important;
-            padding-top: 2rem;
         }
 
         .comment-label {

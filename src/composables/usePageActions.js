@@ -4974,9 +4974,13 @@ export function usePageActions(pages, pagesContainer, activePage, addToHistory) 
         (isSelected) => {
             showPopMenu.value = isSelected;
             drawSelectionBoundingBox();
-
+            
             if (isSelected) {
                 clampPopMenuPosition();
+            }
+
+            if (showCommentInput.value) {
+                cancelCommentInput();
             }
         },
     )

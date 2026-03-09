@@ -1285,7 +1285,7 @@ defineExpose({
             <div ref="popMenu" class="pop-menu" :style="{ left: popMenuPosition.x + 'px', top: popMenuPosition.y + 'px' }" v-if="showPopMenu && (selectedStroke || selectedText)">
                 <div class="pop-menu-body">
                     <div class="comment-editor" v-if="showCommentInput">
-                        <div class="form-floating mb-2">
+                        <div class="form-floating">
                             <input v-model="commentAuthorDraft" type="text" class="form-control comment-author-input" :placeholder="$t('Optional name')" :id="`comment-author-form-${fileId}`" @contextmenu.stop.prevent>
                             <label :for="`comment-author-form-${fileId}`" class="comment-label">
                                 <i class="bi bi-person-badge"></i>
