@@ -160,7 +160,7 @@ const {
     isSelectedStrokeType,
     copiedStrokes,
     selectStrokes,
-} = usePageActions(pages, pagesContainer, activePage, strokeChangeCallback);
+} = usePageActions(activePages, pagesContainer, activePage, strokeChangeCallback);
 
 // History management
 const { 
