@@ -26,6 +26,33 @@ const colorPalette = [
     '#a855f7', '#d946ef', '#92400e', '#78350f', '#a16207',
 ];
 
+const drawingTools = [
+    {
+        icon: 'slash-lg',
+        label: 'Line',
+        shortcut: 'L',
+        value: 'line',
+    },
+    {
+        icon: 'square',
+        label: 'Rectangle',
+        shortcut: 'R',
+        value: 'rectangle',
+    },
+    {
+        icon: 'circle',
+        label: 'Circle',
+        shortcut: 'O',
+        value: 'circle',
+    },
+    {
+        icon: 'pencil-fill',
+        label: 'Draw',
+        shortcut: 'D',
+        value: 'pen',
+    },
+]
+
 const normalizeDash = (dash) => {
     const allowed = ['solid', 'dashed', 'dotted'];
     return allowed.includes(dash) ? dash : 'solid';
@@ -1115,10 +1142,267 @@ const setStrokeMeta = (el, strokeIndex) => {
     el.setAttribute('data-stroke-index', String(strokeIndex));
 };
 
-export function usePageActions(pages, pagesContainer, addToHistory) {
+// Comment Helpers
+const collapseWhitespace = (value = '') => String(value || '').replace(/\s+/g, ' ').trim();
+
+const previewCommentSelection = (value = '') => {
+    const text = collapseWhitespace(value);
+    return text.length > 160 ? `${text.slice(0, 157)}...` : text;
+};
+
+const buildNormalizedTextIndex = (value = '') => {
+    let normalized = '';
+    const rawByNormalized = [];
+    let pendingWhitespaceIndex = -1;
+    let hasVisibleCharacter = false;
+
+    for (let index = 0; index < value.length; index++) {
+        const char = value[index];
+        if (/\s/.test(char)) {
+            if (hasVisibleCharacter && pendingWhitespaceIndex === -1) {
+                pendingWhitespaceIndex = index;
+            }
+            continue;
+        }
+
+        if (pendingWhitespaceIndex !== -1) {
+            normalized += ' ';
+            rawByNormalized.push(pendingWhitespaceIndex);
+            pendingWhitespaceIndex = -1;
+        }
+
+        normalized += char;
+        rawByNormalized.push(index);
+        hasVisibleCharacter = true;
+    }
+
+    return { text: normalized, rawByNormalized };
+};
+
+const collectTextLayerNodes = (textLayer) => {
+    if (!textLayer) {
+        return { rawText: '', nodes: [] };
+    }
+
+    const walker = document.createTreeWalker(textLayer, NodeFilter.SHOW_TEXT, {
+        acceptNode(node) {
+            if (!node?.nodeValue?.trim()) {
+                return NodeFilter.FILTER_REJECT;
+            }
+            return NodeFilter.FILTER_ACCEPT;
+        }
+    });
+
+    const nodes = [];
+    let rawText = '';
+    let currentNode = walker.nextNode();
+
+    while (currentNode) {
+        const text = currentNode.nodeValue || '';
+        const start = rawText.length;
+        rawText += text;
+        nodes.push({
+            node: currentNode,
+            element: currentNode.parentElement || textLayer,
+            start,
+            end: rawText.length
+        });
+        currentNode = walker.nextNode();
+    }
+
+    return { rawText, nodes };
+};
+
+const getTextLocationAtRawIndex = (nodes, rawIndex) => {
+    if (!Array.isArray(nodes) || nodes.length === 0) return null;
+
+    for (const entry of nodes) {
+        if (rawIndex < entry.end) {
+            return {
+                node: entry.node,
+                element: entry.element,
+                offset: Math.max(0, rawIndex - entry.start)
+            };
+        }
+    }
+
+    const last = nodes[nodes.length - 1];
+    const lastLength = last?.node?.nodeValue?.length || 0;
+    return {
+        node: last.node,
+        element: last.element,
+        offset: lastLength
+    };
+};
+
+const getCommentAnchorClientPoint = (page, commentRef) => {
+    const first = commentRef?.stroke?.[0] || null;
+    const canvas = page?.drawingCanvas || null;
+    if (!first || !canvas) return null;
+
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height || !canvas.width || !canvas.height) return null;
+
+    const scaleX = rect.width / canvas.width;
+    const scaleY = rect.height / canvas.height;
+    const width = Number(first.width) || 0;
+    const height = Number(first.height) || 0;
+
+    return {
+        x: rect.left + ((Number(first.x) || 0) + width / 2) * scaleX,
+        y: rect.top + ((Number(first.y) || 0) + height / 2) * scaleY
+    };
+};
+
+const buildTextRangeCandidate = (nodes, normalizedIndex, needleLength, normalizedLookup) => {
+    const startRaw = normalizedLookup.rawByNormalized[normalizedIndex];
+    const endRawInclusive = normalizedLookup.rawByNormalized[normalizedIndex + needleLength - 1];
+    if (!Number.isFinite(startRaw) || !Number.isFinite(endRawInclusive)) return null;
+
+    const startLocation = getTextLocationAtRawIndex(nodes, startRaw);
+    const endLocation = getTextLocationAtRawIndex(nodes, endRawInclusive + 1);
+    if (!startLocation || !endLocation) return null;
+
+    const range = document.createRange();
+    range.setStart(startLocation.node, startLocation.offset);
+    range.setEnd(endLocation.node, endLocation.offset);
+
+    return {
+        range,
+        element: startLocation.element || endLocation.element || null,
+        rect: range.getBoundingClientRect(),
+        rawStart: startRaw,
+        rawEnd: endRawInclusive + 1
+    };
+};
+
+const getCommentTextAnchor = (commentRef) => commentRef?.stroke?.[0]?.selectionAnchor || null;
+
+const scoreCommentTextCandidate = (candidate, rawText, commentRef, anchorPoint) => {
+    let score = 0;
+    const totalLength = Math.max(1, rawText.length);
+    const selectionAnchor = getCommentTextAnchor(commentRef);
+
+    if (selectionAnchor) {
+        if (Number.isFinite(selectionAnchor.startRatio)) {
+            const candidateRatio = candidate.rawStart / totalLength;
+            score += Math.max(0, 4 - Math.abs(candidateRatio - selectionAnchor.startRatio) * 20);
+        }
+
+        const beforeHint = collapseWhitespace(selectionAnchor.beforeText || '').toLowerCase();
+        if (beforeHint) {
+            const beforeWindow = collapseWhitespace(
+                rawText.slice(Math.max(0, candidate.rawStart - Math.max(96, beforeHint.length * 2)), candidate.rawStart)
+            ).toLowerCase();
+            if (beforeWindow.endsWith(beforeHint)) {
+                score += 5;
+            } else if (beforeWindow.includes(beforeHint)) {
+                score += 2;
+            }
+        }
+
+        const afterHint = collapseWhitespace(selectionAnchor.afterText || '').toLowerCase();
+        if (afterHint) {
+            const afterWindow = collapseWhitespace(
+                rawText.slice(candidate.rawEnd, Math.min(rawText.length, candidate.rawEnd + Math.max(96, afterHint.length * 2)))
+            ).toLowerCase();
+            if (afterWindow.startsWith(afterHint)) {
+                score += 5;
+            } else if (afterWindow.includes(afterHint)) {
+                score += 2;
+            }
+        }
+    }
+
+    if (anchorPoint && candidate.rect) {
+        const centerX = candidate.rect.left + candidate.rect.width / 2;
+        const centerY = candidate.rect.top + candidate.rect.height / 2;
+        const distance = Math.hypot(centerX - anchorPoint.x, centerY - anchorPoint.y);
+        score += Math.max(0, 2 - (distance / 320));
+    }
+
+    return score;
+};
+
+const findBestCommentTextRange = (page, commentRef) => {
+    const textLayer = page?.textLayer || null;
+    const needle = collapseWhitespace(commentRef?.selectedText || '');
+    if (!textLayer || !needle) return null;
+
+    const { rawText, nodes } = collectTextLayerNodes(textLayer);
+    if (!rawText || nodes.length === 0) return null;
+
+    const normalizedLookup = buildNormalizedTextIndex(rawText);
+    const normalizedNeedle = buildNormalizedTextIndex(needle).text;
+    if (!normalizedLookup.text || !normalizedNeedle) return null;
+
+    const candidates = [];
+    let searchFrom = 0;
+    const normalizedHaystack = normalizedLookup.text.toLowerCase();
+    const normalizedTarget = normalizedNeedle.toLowerCase();
+
+    while (searchFrom < normalizedHaystack.length) {
+        const matchIndex = normalizedHaystack.indexOf(normalizedTarget, searchFrom);
+        if (matchIndex === -1) break;
+
+        const candidate = buildTextRangeCandidate(nodes, matchIndex, normalizedTarget.length, normalizedLookup);
+        if (candidate) {
+            candidates.push(candidate);
+        }
+
+        searchFrom = matchIndex + Math.max(1, normalizedTarget.length);
+    }
+
+    if (candidates.length === 0) return null;
+    if (candidates.length === 1) return candidates[0];
+
+    const anchor = getCommentAnchorClientPoint(page, commentRef);
+    return candidates.reduce((best, candidate) => {
+        const score = scoreCommentTextCandidate(candidate, rawText, commentRef, anchor);
+        if (!best || score > best.score) {
+            return { ...candidate, score };
+        }
+        return best;
+    }, null);
+};
+
+export function usePageActions(pages, pagesContainer, pageIndex, addToHistory) {
     const { get: storeGet, set: storeSet } = useStore();
 
     const activePage = ref(null);
+
+    const documentComments = computed(() => {
+        return pages.value
+            .flatMap((page) => (page.strokes || []).map((stroke, strokeIndex) => {
+                const first = stroke?.[0] || null;
+                if (!first || first.type !== 'comment') return null;
+                return {
+                    id: String(first.id || `${page.id}-${strokeIndex}`),
+                    pageId: page.id,
+                    pageIndex: page.index,
+                    strokeIndex,
+                    stroke,
+                    selectedText: String(first.selectedText || ''),
+                    comment: String(first.comment || ''),
+                    author: String(first.author || ''),
+                    source: String(first.source || ''),
+                    canJumpToText: Boolean(collapseWhitespace(first.selectedText || '')),
+                    updatedAt: first.updatedAt || first.createdAt || null,
+                };
+            }))
+            .filter(Boolean)
+            .sort((left, right) => {
+                if (left.pageIndex !== right.pageIndex) return left.pageIndex - right.pageIndex;
+                const leftTime = left.updatedAt ? new Date(left.updatedAt).getTime() : 0;
+                const rightTime = right.updatedAt ? new Date(right.updatedAt).getTime() : 0;
+                return rightTime - leftTime;
+            });
+    });
+
+    const activeCommentId = computed(() => {
+        const first = selectedStroke.value?.stroke?.[0] || null;
+        return first?.type === 'comment' ? String(first.id || '') : null;
+    });
 
     const getPageByRef = ({ pageId = null, pageIndex = null } = {}) => {
         const pageList = Array.isArray(pages?.value) ? pages.value : [];
@@ -1127,10 +1411,29 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
             || null;
     };
 
-    // Drawing variables
-    const isStrokeSelectModeActive = ref(false);
+    // General Variables
     const isTextSelectionMode = ref(true);
     const isTextHighlightMode = ref(false);
+    const textModesActive = computed(() => {
+        // Modes where we want the PDF.js text layer to receive pointer events.
+        return isTextSelectionMode.value || isTextHighlightMode.value;
+    })
+
+    const textActionsDisabled = computed(() => Object.values(pages.value).map(page => page.textContent?.items.length || 0).reduce((a, b) => a + b, 0) === 0);
+
+    const isStrokeSelectModeActive = ref(false);
+
+    if (textActionsDisabled.value) {
+        isStrokeSelectModeActive.value = true;
+        isTextSelectionMode.value = false;
+    }
+
+    const isViewLocked = ref(false);
+    const isThumbnailSidebarVisible = ref(false);
+    const isCommentsSidebarVisible = ref(false);
+    const hasDismissedTextGestureHint = ref(false);
+
+    // Drawing variables
     const isDrawing = ref(false);
     const isEraser = ref(false);
     const drawMode = ref('pen'); // 'pen', 'line', 'rectangle', 'circle', 'text', 'highlight'
@@ -1154,11 +1457,6 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
     const handPanStart = ref(null); // { x, y, scrollLeft, scrollTop }
     const handPanPointerId = ref(null);
     const handPanCanvasEl = ref(null);
-
-    const textModesActive = computed(() => {
-        // Modes where we want the PDF.js text layer to receive pointer events.
-        return isTextSelectionMode.value || isTextHighlightMode.value;
-    })
 
     const getScrollContainer = () => {
         // The element with overflow scrolling is `.pdf-reader`.
@@ -1322,6 +1620,12 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
     const editingTextStroke = ref(null); // { pageId, pageIndex, strokeIndex }
     const textEditorPreferredSize = ref({ width: 420, height: 256 });
 
+    watch(() => textEditorPosition.value, (position) => {
+        if (position) {
+            hasDismissedTextGestureHint.value = true;
+        }
+    });
+
     storeGet('textEditorPreferredSize').then(value => {
         if (!value || typeof value !== 'object') return;
         const width = Number(value.width);
@@ -1456,13 +1760,13 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
     }
 
     // Stroke selection and dragging
+    const showPopMenu = computed(() => (!isDragging.value && !isResizing.value && !isRotating.value && (selectedStroke.value || selectedStrokes.value.length > 0) && isStrokeSelectModeActive.value) || selectedText.value);
     const selectedStrokes = ref([]); // For multi-selection
     const selectedStroke = ref(null); // { pageIndex, strokeIndex, stroke }
     const popMenu = ref(null);
     const popMenuPosition = ref({ x: 0, y: 0 });
     const isDragging = ref(false);
     const dragStartPos = ref(null);
-    const showPopMenu = computed(() => (!isDragging.value && !isResizing.value && !isRotating.value && (selectedStroke.value || selectedStrokes.value.length > 0) && isStrokeSelectModeActive.value) || selectedText.value);
     const isResizing = ref(false);
     const resizeHandle = ref(null); // 'nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'
     const resizeStartBounds = ref(null);
@@ -1521,10 +1825,11 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
     })
 
     // Check Selected Stroke Type
-    const isSelectedStrokeType = (type) => {
+    const isSelectedStrokeType = (types) => {
+        const typeArray = types.split('|');
         if (!selectedStroke.value) return false;
         const first = selectedStroke.value.stroke[0];
-        return first.type === type;
+        return typeArray.includes(first.type);
     };
 
     // Copy Selected Stroke
@@ -5212,6 +5517,182 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
         }
     }
 
+    // Page Tool Actions
+    const ensureCommentPageReady = async (commentRef) => {
+        const page = pages.value.find(entry => entry.id === commentRef?.pageId)
+            || pages.value.find(entry => entry.index === commentRef?.pageIndex)
+            || null;
+
+        if (!page) return null;
+
+        if (pageIndex.value !== page.index) {
+            scrollToPage(page.index);
+            await nextTick();
+        }
+
+        if (!page.rendered) {
+            await renderPdfPage(page.id);
+            await nextTick();
+        }
+
+        return page;
+    };
+
+    const revealCommentSourceText = async (commentRef) => {
+        const page = await ensureCommentPageReady(commentRef);
+        if (!page) return false;
+
+        const match = findBestCommentTextRange(page, commentRef);
+        if (!match?.range) return false;
+
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(match.range);
+
+        match.element?.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+        return true;
+    };
+
+    const toggleThumbnailSidebar = () => {
+        isThumbnailSidebarVisible.value = !isThumbnailSidebarVisible.value;
+    };
+
+    const toggleCommentsSidebar = () => {
+        
+        isCommentsSidebarVisible.value = !isCommentsSidebarVisible.value;
+    };
+
+    const focusComment = async (commentRef) => {
+        if (!commentRef) return;
+
+        await ensureCommentPageReady(commentRef);
+
+        selectStrokeByRef(commentRef);
+    };
+
+    const jumpToCommentText = async (commentRef) => {
+        if (!commentRef?.canJumpToText) return;
+
+        await focusComment(commentRef);
+        await revealCommentSourceText(commentRef);
+    };
+
+    const editCommentFromSidebar = async (commentRef) => {
+        if (isTextSelectionMode.value) {
+            isTextSelectionMode.value = false;
+            isStrokeSelectModeActive.value = true;
+        }
+
+        await focusComment(commentRef);
+        editCommentStroke();
+    };
+
+    const deleteCommentFromSidebar = async (commentRef) => {
+        await focusComment(commentRef);
+        deleteSelectedStroke();
+    };
+
+    const cancelCommentStroke = () => {
+        if (isStrokeSelectModeActive.value) {
+            deselectAllStrokes();
+            return;
+        }
+
+        cancelCommentInput();
+    }
+
+    const toggleHandTool = () => {
+        resetToolState();
+        handToolActive.value = !handToolActive.value;
+    };
+
+    const lockView = () => {
+        isViewLocked.value = !isViewLocked.value;
+    };
+
+    const toggleTextHighlightMode = () => {
+        const wasActive = isTextHighlightMode.value;
+        resetToolState();
+        isTextHighlightMode.value = !wasActive;
+        isTextSelectionMode.value = true;
+    };
+
+    const toggleTextSelection = () => {
+        resetToolState();
+        isTextSelectionMode.value = true;
+    };
+
+    const imageInput = ref(null);
+
+    const importImage = () => {
+        imageInput.value?.click();
+    };
+
+    const selectDrawingTool = (mode) => {
+        const wasActive = isDrawing.value && drawMode.value === mode;
+        resetToolState();
+        
+        if (wasActive) {
+            isTextSelectionMode.value = true;
+            return;
+        }
+
+        isDrawing.value = true;
+        drawMode.value = mode;
+    };
+
+    const selectEraser = () => {
+        const wasActive = isEraser.value;
+        resetToolState();
+        isEraser.value = !wasActive;
+    };
+
+    const textEditorAlert = ref(null);
+
+    const selectText = () => {
+        const wasActive = isTextInputMode.value;
+        resetToolState();
+        isTextInputMode.value = !wasActive;
+
+        if (!wasActive) {
+            nextTick(() => {
+                textEditorAlert.value?.show();
+            });
+        }
+    };
+
+    const toggleStrokeSelectionMode = () => {
+        resetToolState();
+        isStrokeSelectModeActive.value = true;
+    };
+
+    const toggleCaptureSelectionMode = () => {
+        const wasActive = isCaptureSelectionMode.value;
+        resetToolState();
+        isCaptureSelectionMode.value = !wasActive;
+    };
+
+    const copySelection = () => {
+        copySelectedStroke();
+        const selection = window.getSelection();
+
+        if (selection) {
+            window.navigator.clipboard.writeText(selection.toString());
+            selection.removeAllRanges();
+        }
+    }
+
+    const hasActiveTool = computed(() => {
+        return isDrawing.value || isEraser.value || isTextInputMode.value || isCaptureSelectionMode.value || isTextHighlightMode.value;
+    });
+
+    const touchAction = computed(() => {
+        if (isViewLocked.value || isPenHovering.value || isStrokeSelectModeActive.value || isCaptureSelectionMode.value || (enableTouchDrawing.value && hasActiveTool.value)) {
+            return 'none';
+        }
+        return 'pan-y pan-x';
+    });
+
     return {
         colorPalette,
         isStrokeSelectModeActive,
@@ -5226,7 +5707,6 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
         textEditorPosition,
         textEditorSimpleMode,
         isCaptureSelectionMode,
-        isPenHovering,
         isStrokeHovering,
         isDragging,
         selectedStroke,
@@ -5259,13 +5739,16 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
         commentAuthorDraft,
         hoveredCommentPreview,
         beginCommentInput,
-        cancelCommentInput,
         commitComment,
         editCommentStroke,
-        selectStrokeByRef,
-        selectedText,
-        handleTextSelectionMouseUp,
         handleStrokeStyleButtonClick,
+        selectedText,
+        textActionsDisabled,
+        isViewLocked,
+        isThumbnailSidebarVisible,
+        isCommentsSidebarVisible,
+        hasDismissedTextGestureHint,
+        handleTextSelectionMouseUp,
         clampPopMenuPosition,
         highlightTextSelection,
         copySelectedStroke,
@@ -5273,6 +5756,31 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
         isSelectedStrokeType,
         copiedStrokes,
         selectStrokes,
-        deselectAllStrokes,
+        previewCommentSelection,
+        documentComments,
+        activeCommentId,
+        toggleThumbnailSidebar,
+        toggleCommentsSidebar,
+        focusComment,
+        jumpToCommentText,
+        editCommentFromSidebar,
+        deleteCommentFromSidebar,
+        cancelCommentStroke,
+        toggleHandTool,
+        lockView,
+        toggleTextHighlightMode,
+        toggleTextSelection,
+        imageInput,
+        importImage,
+        drawingTools,
+        selectDrawingTool,
+        selectEraser,
+        selectText,
+        toggleStrokeSelectionMode,
+        toggleCaptureSelectionMode,
+        copySelection,
+        textEditorAlert,
+        hasActiveTool,
+        touchAction
     };
 }

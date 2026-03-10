@@ -1946,6 +1946,77 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
         showModal({}, false, 'lg', 'Preferences');
     };
 
+    // Zoom Management
+    const minZoom = 25;
+    const maxZoom = 300;
+    const zoomLevels = computed(() => {
+        const levels = [];
+        for (let z = minZoom; z <= maxZoom; z += 25) {
+            levels.push(z);
+        }
+        return levels;
+    });
+
+    const toggleZoomMode = (mode) => {
+        if (!isFileLoaded.value) return;
+        
+        if (mode === 'fit-height') {
+            const pageContainer = document.querySelector(`.page-container[data-page="${activePage.value.id}"]`);
+            const percentage = pdfReader.value.clientHeight * zoomPercentage.value / pageContainer.clientHeight;
+            zoomPercentage.value = Math.ceil(percentage);
+        } else {
+            zoomPercentage.value = 100; // Full width
+        }
+        
+        // Keep text selection aligned after CSS zoom changes
+        nextTick(async () => {
+            await resyncRenderedTextLayers();
+            scrollToPage(pageIndex.value);
+            // syncTextEditorPosition();
+        });
+    };
+
+    const handleZoomLevel = (percentage) => {
+        if (!isFileLoaded.value) return;
+
+        if (isNaN(percentage)) {
+            toggleZoomMode(percentage);
+            return;
+        }
+
+        if (!zoomLevels.value.includes(percentage)) {
+            percentage = zoomLevels.value.reduce((prev, curr) => {
+                return (Math.abs(curr - percentage) < Math.abs(prev - percentage) ? curr : prev);
+            });
+        }
+
+        zoomPercentage.value = Math.min(Math.max(minZoom, percentage), maxZoom);
+
+        // Keep text selection aligned after CSS zoom changes
+        nextTick(async () => {
+            await resyncRenderedTextLayers();
+            scrollToPage(pageIndex.value);
+            // syncTextEditorPosition();
+        });
+    };
+
+    const onZoomLevelChange = (event) => {
+        let percentage = event.target.value;
+        handleZoomLevel(percentage);
+    }
+
+    const zoom = (direction) => {
+        if (!isFileLoaded.value) return;
+        const newZoom = zoomPercentage.value + (direction * 25);
+        handleZoomLevel(newZoom);
+    }
+
+    // Print
+    const printModal = ref(null);
+    const printPage = () => {
+        printModal.value?.printPage();
+    };
+
     return {
         fileId,
         pages,
@@ -1983,9 +2054,14 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
         showDocumentProperties,
         rotatePage,
         openPreferences,
-
-        // Form Fill
+        printModal,
+        printPage,
         resetForm,
         handlePdfButtonAction,
+        minZoom,
+        maxZoom,
+        zoomLevels,
+        onZoomLevelChange,
+        zoom,
     }
 }

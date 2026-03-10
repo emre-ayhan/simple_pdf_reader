@@ -1,6 +1,6 @@
 <script setup>
-import { ref, computed, nextTick, onMounted, onUnmounted, onBeforeUnmount, watch } from "vue";
-import { Electron, enableTouchDrawing, toolbarPosition } from "../composables/useAppSettings";
+import { computed, nextTick, onMounted, onUnmounted, onBeforeUnmount } from "vue";
+import { Electron, toolbarPosition } from "../composables/useAppSettings";
 import { useFile } from "../composables/useFile";
 import { usePageActions } from "../composables/usePageActions";
 import { useHistory } from "../composables/useHistory";
@@ -90,10 +90,15 @@ const {
     showDocumentProperties,
     rotatePage,
     openPreferences,
-
-    // Form Fill
+    printModal,
+    printPage,
     resetForm,
     handlePdfButtonAction,
+    minZoom,
+    maxZoom,
+    zoomLevels,
+    onZoomLevelChange,
+    zoom,
 } = useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback);
 
 // Drawing Management
@@ -115,7 +120,6 @@ const {
     textEditorPosition,
     textEditorSimpleMode,
     isCaptureSelectionMode,
-    isPenHovering,
     isStrokeHovering,
     isDragging,
     selectedStroke,
@@ -148,13 +152,15 @@ const {
     commentAuthorDraft,
     hoveredCommentPreview,
     beginCommentInput,
-    cancelCommentInput,
-    deselectAllStrokes,
     commitComment,
     editCommentStroke,
-    selectStrokeByRef,
     handleStrokeStyleButtonClick,
     selectedText,
+    textActionsDisabled,
+    isViewLocked,
+    isThumbnailSidebarVisible,
+    isCommentsSidebarVisible,
+    hasDismissedTextGestureHint,
     handleTextSelectionMouseUp,
     clampPopMenuPosition,
     highlightTextSelection,
@@ -163,7 +169,33 @@ const {
     isSelectedStrokeType,
     copiedStrokes,
     selectStrokes,
-} = usePageActions(activePages, pagesContainer, strokeChangeCallback);
+    previewCommentSelection,
+    documentComments,
+    activeCommentId,
+    textEditorAlert,
+    toggleThumbnailSidebar,
+    toggleCommentsSidebar,
+    focusComment,
+    jumpToCommentText,
+    editCommentFromSidebar,
+    deleteCommentFromSidebar,
+    cancelCommentStroke,
+    toggleHandTool,
+    lockView,
+    toggleTextHighlightMode,
+    toggleTextSelection,
+    imageInput,
+    importImage,
+    drawingTools,
+    selectDrawingTool,
+    selectEraser,
+    selectText,
+    toggleStrokeSelectionMode,
+    toggleCaptureSelectionMode,
+    copySelection,
+    hasActiveTool,
+    touchAction
+} = usePageActions(activePages, pagesContainer, pageIndex, strokeChangeCallback);
 
 // History management
 const { 
@@ -185,563 +217,7 @@ startSession();
 // Create handleImageImport handler with the callbacks
 const handleImageImport = createImageImportHandler(redrawAllStrokes, addToHistory);
 
-
-// Toolbar Actions
-const textActionsDisabled = computed(() => Object.values(pages.value).map(page => page.textContent?.items.length || 0).reduce((a, b) => a + b, 0) === 0);
-
-const touchAction = computed(() => {
-    if (isViewLocked.value || isPenHovering.value || isStrokeSelectModeActive.value || isCaptureSelectionMode.value || (enableTouchDrawing.value && hasActiveTool.value)) {
-        return 'none';
-    }
-    return 'pan-y pan-x';
-});
-
-const isViewLocked = ref(false);
-const isThumbnailSidebarVisible = ref(false);
-const isCommentsSidebarVisible = ref(false);
-const hasDismissedTextGestureHint = ref(false);
-
-const collapseWhitespace = (value = '') => String(value || '').replace(/\s+/g, ' ').trim();
-
-const previewCommentSelection = (value = '') => {
-    const text = collapseWhitespace(value);
-    return text.length > 160 ? `${text.slice(0, 157)}...` : text;
-};
-
-const buildNormalizedTextIndex = (value = '') => {
-    let normalized = '';
-    const rawByNormalized = [];
-    let pendingWhitespaceIndex = -1;
-    let hasVisibleCharacter = false;
-
-    for (let index = 0; index < value.length; index++) {
-        const char = value[index];
-        if (/\s/.test(char)) {
-            if (hasVisibleCharacter && pendingWhitespaceIndex === -1) {
-                pendingWhitespaceIndex = index;
-            }
-            continue;
-        }
-
-        if (pendingWhitespaceIndex !== -1) {
-            normalized += ' ';
-            rawByNormalized.push(pendingWhitespaceIndex);
-            pendingWhitespaceIndex = -1;
-        }
-
-        normalized += char;
-        rawByNormalized.push(index);
-        hasVisibleCharacter = true;
-    }
-
-    return { text: normalized, rawByNormalized };
-};
-
-const collectTextLayerNodes = (textLayer) => {
-    if (!textLayer) {
-        return { rawText: '', nodes: [] };
-    }
-
-    const walker = document.createTreeWalker(textLayer, NodeFilter.SHOW_TEXT, {
-        acceptNode(node) {
-            if (!node?.nodeValue?.trim()) {
-                return NodeFilter.FILTER_REJECT;
-            }
-            return NodeFilter.FILTER_ACCEPT;
-        }
-    });
-
-    const nodes = [];
-    let rawText = '';
-    let currentNode = walker.nextNode();
-
-    while (currentNode) {
-        const text = currentNode.nodeValue || '';
-        const start = rawText.length;
-        rawText += text;
-        nodes.push({
-            node: currentNode,
-            element: currentNode.parentElement || textLayer,
-            start,
-            end: rawText.length
-        });
-        currentNode = walker.nextNode();
-    }
-
-    return { rawText, nodes };
-};
-
-const getTextLocationAtRawIndex = (nodes, rawIndex) => {
-    if (!Array.isArray(nodes) || nodes.length === 0) return null;
-
-    for (const entry of nodes) {
-        if (rawIndex < entry.end) {
-            return {
-                node: entry.node,
-                element: entry.element,
-                offset: Math.max(0, rawIndex - entry.start)
-            };
-        }
-    }
-
-    const last = nodes[nodes.length - 1];
-    const lastLength = last?.node?.nodeValue?.length || 0;
-    return {
-        node: last.node,
-        element: last.element,
-        offset: lastLength
-    };
-};
-
-const getCommentAnchorClientPoint = (page, commentRef) => {
-    const first = commentRef?.stroke?.[0] || null;
-    const canvas = page?.drawingCanvas || null;
-    if (!first || !canvas) return null;
-
-    const rect = canvas.getBoundingClientRect();
-    if (!rect.width || !rect.height || !canvas.width || !canvas.height) return null;
-
-    const scaleX = rect.width / canvas.width;
-    const scaleY = rect.height / canvas.height;
-    const width = Number(first.width) || 0;
-    const height = Number(first.height) || 0;
-
-    return {
-        x: rect.left + ((Number(first.x) || 0) + width / 2) * scaleX,
-        y: rect.top + ((Number(first.y) || 0) + height / 2) * scaleY
-    };
-};
-
-const buildTextRangeCandidate = (nodes, normalizedIndex, needleLength, normalizedLookup) => {
-    const startRaw = normalizedLookup.rawByNormalized[normalizedIndex];
-    const endRawInclusive = normalizedLookup.rawByNormalized[normalizedIndex + needleLength - 1];
-    if (!Number.isFinite(startRaw) || !Number.isFinite(endRawInclusive)) return null;
-
-    const startLocation = getTextLocationAtRawIndex(nodes, startRaw);
-    const endLocation = getTextLocationAtRawIndex(nodes, endRawInclusive + 1);
-    if (!startLocation || !endLocation) return null;
-
-    const range = document.createRange();
-    range.setStart(startLocation.node, startLocation.offset);
-    range.setEnd(endLocation.node, endLocation.offset);
-
-    return {
-        range,
-        element: startLocation.element || endLocation.element || null,
-        rect: range.getBoundingClientRect(),
-        rawStart: startRaw,
-        rawEnd: endRawInclusive + 1
-    };
-};
-
-const getCommentTextAnchor = (commentRef) => commentRef?.stroke?.[0]?.selectionAnchor || null;
-
-const scoreCommentTextCandidate = (candidate, rawText, commentRef, anchorPoint) => {
-    let score = 0;
-    const totalLength = Math.max(1, rawText.length);
-    const selectionAnchor = getCommentTextAnchor(commentRef);
-
-    if (selectionAnchor) {
-        if (Number.isFinite(selectionAnchor.startRatio)) {
-            const candidateRatio = candidate.rawStart / totalLength;
-            score += Math.max(0, 4 - Math.abs(candidateRatio - selectionAnchor.startRatio) * 20);
-        }
-
-        const beforeHint = collapseWhitespace(selectionAnchor.beforeText || '').toLowerCase();
-        if (beforeHint) {
-            const beforeWindow = collapseWhitespace(
-                rawText.slice(Math.max(0, candidate.rawStart - Math.max(96, beforeHint.length * 2)), candidate.rawStart)
-            ).toLowerCase();
-            if (beforeWindow.endsWith(beforeHint)) {
-                score += 5;
-            } else if (beforeWindow.includes(beforeHint)) {
-                score += 2;
-            }
-        }
-
-        const afterHint = collapseWhitespace(selectionAnchor.afterText || '').toLowerCase();
-        if (afterHint) {
-            const afterWindow = collapseWhitespace(
-                rawText.slice(candidate.rawEnd, Math.min(rawText.length, candidate.rawEnd + Math.max(96, afterHint.length * 2)))
-            ).toLowerCase();
-            if (afterWindow.startsWith(afterHint)) {
-                score += 5;
-            } else if (afterWindow.includes(afterHint)) {
-                score += 2;
-            }
-        }
-    }
-
-    if (anchorPoint && candidate.rect) {
-        const centerX = candidate.rect.left + candidate.rect.width / 2;
-        const centerY = candidate.rect.top + candidate.rect.height / 2;
-        const distance = Math.hypot(centerX - anchorPoint.x, centerY - anchorPoint.y);
-        score += Math.max(0, 2 - (distance / 320));
-    }
-
-    return score;
-};
-
-const findBestCommentTextRange = (page, commentRef) => {
-    const textLayer = page?.textLayer || null;
-    const needle = collapseWhitespace(commentRef?.selectedText || '');
-    if (!textLayer || !needle) return null;
-
-    const { rawText, nodes } = collectTextLayerNodes(textLayer);
-    if (!rawText || nodes.length === 0) return null;
-
-    const normalizedLookup = buildNormalizedTextIndex(rawText);
-    const normalizedNeedle = buildNormalizedTextIndex(needle).text;
-    if (!normalizedLookup.text || !normalizedNeedle) return null;
-
-    const candidates = [];
-    let searchFrom = 0;
-    const normalizedHaystack = normalizedLookup.text.toLowerCase();
-    const normalizedTarget = normalizedNeedle.toLowerCase();
-
-    while (searchFrom < normalizedHaystack.length) {
-        const matchIndex = normalizedHaystack.indexOf(normalizedTarget, searchFrom);
-        if (matchIndex === -1) break;
-
-        const candidate = buildTextRangeCandidate(nodes, matchIndex, normalizedTarget.length, normalizedLookup);
-        if (candidate) {
-            candidates.push(candidate);
-        }
-
-        searchFrom = matchIndex + Math.max(1, normalizedTarget.length);
-    }
-
-    if (candidates.length === 0) return null;
-    if (candidates.length === 1) return candidates[0];
-
-    const anchor = getCommentAnchorClientPoint(page, commentRef);
-    return candidates.reduce((best, candidate) => {
-        const score = scoreCommentTextCandidate(candidate, rawText, commentRef, anchor);
-        if (!best || score > best.score) {
-            return { ...candidate, score };
-        }
-        return best;
-    }, null);
-};
-
-const ensureCommentPageReady = async (commentRef) => {
-    const page = pages.value.find(entry => entry.id === commentRef?.pageId)
-        || pages.value.find(entry => entry.index === commentRef?.pageIndex)
-        || null;
-
-    if (!page) return null;
-
-    if (pageIndex.value !== page.index) {
-        scrollToPage(page.index);
-        await nextTick();
-    }
-
-    if (!page.rendered) {
-        await renderPdfPage(page.id);
-        await nextTick();
-    }
-
-    return page;
-};
-
-const revealCommentSourceText = async (commentRef) => {
-    const page = await ensureCommentPageReady(commentRef);
-    if (!page) return false;
-
-    const match = findBestCommentTextRange(page, commentRef);
-    if (!match?.range) return false;
-
-    const selection = window.getSelection();
-    selection?.removeAllRanges();
-    selection?.addRange(match.range);
-
-    match.element?.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
-    return true;
-};
-
-const documentComments = computed(() => {
-    return pages.value
-        .flatMap((page) => (page.strokes || []).map((stroke, strokeIndex) => {
-            const first = stroke?.[0] || null;
-            if (!first || first.type !== 'comment') return null;
-            return {
-                id: String(first.id || `${page.id}-${strokeIndex}`),
-                pageId: page.id,
-                pageIndex: page.index,
-                strokeIndex,
-                stroke,
-                selectedText: String(first.selectedText || ''),
-                comment: String(first.comment || ''),
-                author: String(first.author || ''),
-                source: String(first.source || ''),
-                canJumpToText: Boolean(collapseWhitespace(first.selectedText || '')),
-                updatedAt: first.updatedAt || first.createdAt || null,
-            };
-        }))
-        .filter(Boolean)
-        .sort((left, right) => {
-            if (left.pageIndex !== right.pageIndex) return left.pageIndex - right.pageIndex;
-            const leftTime = left.updatedAt ? new Date(left.updatedAt).getTime() : 0;
-            const rightTime = right.updatedAt ? new Date(right.updatedAt).getTime() : 0;
-            return rightTime - leftTime;
-        });
-});
-
-const activeCommentId = computed(() => {
-    const first = selectedStroke.value?.stroke?.[0] || null;
-    return first?.type === 'comment' ? String(first.id || '') : null;
-});
-
-watch(() => textEditorPosition.value, (position) => {
-    if (position) {
-        hasDismissedTextGestureHint.value = true;
-    }
-});
-
-const toggleThumbnailSidebar = () => {
-    isThumbnailSidebarVisible.value = !isThumbnailSidebarVisible.value;
-};
-
-const toggleCommentsSidebar = () => {
-    if (!isFileLoaded.value) return;
-    isCommentsSidebarVisible.value = !isCommentsSidebarVisible.value;
-};
-
-const focusComment = async (commentRef) => {
-    if (!commentRef) return;
-
-    await ensureCommentPageReady(commentRef);
-
-    selectStrokeByRef(commentRef);
-    isCommentsSidebarVisible.value = true;
-};
-
-const jumpToCommentText = async (commentRef) => {
-    if (!commentRef?.canJumpToText) return;
-
-    await focusComment(commentRef);
-    await revealCommentSourceText(commentRef);
-};
-
-const editCommentFromSidebar = async (commentRef) => {
-    if (isTextSelectionMode.value) {
-        isTextSelectionMode.value = false;
-        isStrokeSelectModeActive.value = true;
-    }
-
-    await focusComment(commentRef);
-    editCommentStroke();
-};
-
-const deleteCommentFromSidebar = async (commentRef) => {
-    await focusComment(commentRef);
-    deleteSelectedStroke();
-};
-
-const cancelCommentStroke = () => {
-    if (isStrokeSelectModeActive.value) {
-        deselectAllStrokes();
-        return;
-    }
-
-    cancelCommentInput();
-}
-
-const toggleHandTool = () => {
-    if (!isFileLoaded.value) return;
-    resetToolState();
-    handToolActive.value = !handToolActive.value;
-};
-
-const lockView = () => {
-    if (!isFileLoaded.value) return;
-    isViewLocked.value = !isViewLocked.value;
-};
-
-const toggleTextHighlightMode = () => {
-    if (!isFileLoaded.value) return;
-    const wasActive = isTextHighlightMode.value;
-    resetToolState();
-    isTextHighlightMode.value = !wasActive;
-    isTextSelectionMode.value = true;
-};
-
-const toggleTextSelection = () => {
-    if (!isFileLoaded.value) return;
-    resetToolState();
-    isTextSelectionMode.value = true;
-};
-
-const imageInput = ref(null);
-
-const importImage = () => {
-    if (!isFileLoaded.value) return;
-    imageInput.value?.click();
-};
-
-const dravingTools = [
-    {
-        icon: 'slash-lg',
-        label: 'Line',
-        shortcut: 'L',
-        value: 'line',
-    },
-    {
-        icon: 'square',
-        label: 'Rectangle',
-        shortcut: 'R',
-        value: 'rectangle',
-    },
-    {
-        icon: 'circle',
-        label: 'Circle',
-        shortcut: 'O',
-        value: 'circle',
-    },
-    {
-        icon: 'pencil-fill',
-        label: 'Draw',
-        shortcut: 'D',
-        value: 'pen',
-    },
-]
-
-const selectDrawingTool = (mode) => {
-    if (!isFileLoaded.value) return;
-    
-    const wasActive = isDrawing.value && drawMode.value === mode;
-    resetToolState();
-    
-    if (wasActive) {
-        isTextSelectionMode.value = true;
-        return;
-    }
-
-    isDrawing.value = true;
-    drawMode.value = mode;
-};
-
-const selectEraser = () => {
-    if (!isFileLoaded.value) return;
-    const wasActive = isEraser.value;
-    resetToolState();
-    isEraser.value = !wasActive;
-};
-
-const textEditorAlert = ref(null);
-
-const selectText = () => {
-    if (!isFileLoaded.value) return;
-    const wasActive = isTextInputMode.value;
-    resetToolState();
-    isTextInputMode.value = !wasActive;
-
-    if (!wasActive) {
-        nextTick(() => {
-            textEditorAlert.value?.show();
-        });
-    }
-};
-
-const toggleStrokeSelectionMode = () => {
-    if (!isFileLoaded.value) return;
-    resetToolState();
-    isStrokeSelectModeActive.value = true;
-};
-
-const captureSelection = () => {
-    if (!isFileLoaded.value) return;
-    const wasActive = isCaptureSelectionMode.value;
-    resetToolState();
-    isCaptureSelectionMode.value = !wasActive;
-};
-
-const copySelection = () => {
-    copySelectedStroke();
-    const selection = window.getSelection();
-
-    if (selection) {
-        window.navigator.clipboard.writeText(selection.toString());
-        selection.removeAllRanges();
-    }
-}
-
-// Zoom Management
-const minZoom = 25;
-const maxZoom = 300;
-const zoomLevels = computed(() => {
-    const levels = [];
-    for (let z = minZoom; z <= maxZoom; z += 25) {
-        levels.push(z);
-    }
-    return levels;
-});
-
-const toggleZoomMode = (mode) => {
-    if (!isFileLoaded.value) return;
-    
-    if (mode === 'fit-height') {
-        const pageContainer = document.querySelector(`.page-container[data-page="${activePage.value.id}"]`);        
-        const percentage = pdfReader.value.clientHeight * zoomPercentage.value / pageContainer.clientHeight;
-        zoomPercentage.value = Math.ceil(percentage);
-    } else {
-        zoomPercentage.value = 100; // Full width
-    }
-    
-    // Keep text selection aligned after CSS zoom changes
-    nextTick(async () => {
-        await resyncRenderedTextLayers();
-        scrollToPage(pageIndex.value);
-        syncTextEditorPosition();
-    });
-};
-
-const handleZoomLevel = (percentage) => {
-    if (!isFileLoaded.value) return;
-
-    if (isNaN(percentage)) {
-        toggleZoomMode(percentage);
-        return;
-    }
-
-    if (!zoomLevels.value.includes(percentage)) {
-        percentage = zoomLevels.value.reduce((prev, curr) => {
-            return (Math.abs(curr - percentage) < Math.abs(prev - percentage) ? curr : prev);
-        });
-    }
-
-    zoomPercentage.value = Math.min(Math.max(minZoom, percentage), maxZoom);
-
-    // Keep text selection aligned after CSS zoom changes
-    nextTick(async () => {
-        await resyncRenderedTextLayers();
-        scrollToPage(pageIndex.value);
-        syncTextEditorPosition();
-    });
-};
-
-const onZoomLevelChange = (event) => {
-    let percentage = event.target.value;
-    handleZoomLevel(percentage);
-}
-
-const zoom = (direction) => {
-    if (!isFileLoaded.value) return;
-    const newZoom = zoomPercentage.value + (direction * 25);
-    handleZoomLevel(newZoom);
-}
-
-const hasActiveTool = computed(() => {
-    return isDrawing.value || isEraser.value || isTextInputMode.value || isCaptureSelectionMode.value || isTextHighlightMode.value;
-});
-
 let resizeTimeout = null;
-
-const printModal = ref(null);
-
-const printPage = () => {
-    printModal.value?.printPage();
-};
 
 // Page Event Handlers
 useWindowEvents(fileId, {
@@ -772,7 +248,12 @@ useWindowEvents(fileId, {
             action: (event) => {
                 if (isStrokeSelectModeActive.value) {
                     event.preventDefault();
-                    selectStrokes(activePage.value.strokes);
+                    const strokes = activePage.value.strokes?.filter(el => {
+                        const first = el[0];
+                        return !['comment', 'highlight-rect'].includes(first.type);
+                    }) || [];
+
+                    selectStrokes(strokes);
                 }
             }
         },
@@ -893,7 +374,7 @@ useWindowEvents(fileId, {
                     return;
                 }
 
-                captureSelection();
+                toggleCaptureSelectionMode();
             }
         },
         v: {
@@ -1108,7 +589,7 @@ defineExpose({
                 <li class="nav-item" v-if="isDrawing || isEraser">
                     <ToolItem class="nav-link" label="Eraser" shortcut="E" icon="eraser-fill" :active="isEraser" :disabled="drawMode !== 'pen'" :action="selectEraser" />
                 </li>
-                <template v-for="tool in dravingTools">
+                <template v-for="tool in drawingTools">
                     <li class="nav-item" v-if="isDrawing || isEraser || tool.value === 'pen'">
                         <ToolItem class="nav-link" v-bind="tool" :action="selectDrawingTool" :active="drawMode === tool.value && isDrawing" />
                     </li>
@@ -1123,7 +604,7 @@ defineExpose({
                     <ToolItem class="nav-link" label="Import Image" shortcut="I" icon="image" :action="importImage" />
                 </li>
                 <li class="nav-item">
-                    <ToolItem class="nav-link" label="Capture Selection" icon="scissors" :active="isCaptureSelectionMode" :action="captureSelection" />
+                    <ToolItem class="nav-link" label="Capture Selection" icon="scissors" :active="isCaptureSelectionMode" :action="toggleCaptureSelectionMode" />
                 </li>
 
                 <!-- Selection -->
@@ -1328,7 +809,7 @@ defineExpose({
                             <ToolItem class="btn-pop-menu" label="Add Comment" icon="chat-left-text-fill" :action="beginCommentInput" />
                             <ToolItem class="btn-pop-menu" label="Highlight Text" shortcut="H" icon="highlighter" :action="highlightTextSelection" />
                         </template>
-                        <ToolItem class="btn-pop-menu" label="Copy" shortcut="Ctrl+D" icon="files" :action="copySelection" />
+                        <ToolItem class="btn-pop-menu" label="Copy" shortcut="Ctrl+D" icon="files" :action="copySelection" v-if="!isSelectedStrokeType('comment|highlight-rect')"/>
                     </template>
                 </div>
             </div>
