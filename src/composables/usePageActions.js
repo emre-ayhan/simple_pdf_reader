@@ -1462,7 +1462,7 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
     const popMenuPosition = ref({ x: 0, y: 0 });
     const isDragging = ref(false);
     const dragStartPos = ref(null);
-    const showPopMenu = ref(false);
+    const showPopMenu = computed(() => (!isDragging.value && !isResizing.value && !isRotating.value && (selectedStroke.value || selectedStrokes.value.length > 0) && isStrokeSelectModeActive.value) || selectedText.value);
     const isResizing = ref(false);
     const resizeHandle = ref(null); // 'nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'
     const resizeStartBounds = ref(null);
@@ -1566,6 +1566,11 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
         selectedStrokes.value = selections;
         selectedStroke.value = selections[0] || null;
     }
+
+    const deselectAllStrokes = () => {
+        selectedStrokes.value = [];
+        selectedStroke.value = null;
+    };
 
     // Insert Copied Stroke
     const insertCopiedStroke = () => {
@@ -3756,8 +3761,7 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
             activePage.value = page;
 
             if (selectedStroke.value && selectedStroke.value?.pageId !== page.id) {
-                selectedStroke.value = null;
-                selectedStrokes.value = [];
+                deselectAllStrokes();
             }
         }
 
@@ -3871,10 +3875,8 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
         isEraser.value = false;
         isStrokeHovering.value = false;
         clearHoveredCommentPreview();
-        selectedStrokes.value = [];
-        selectedStroke.value = null;
+        deselectAllStrokes();
         selectedText.value = '';
-        showPopMenu.value = false;
         isDragging.value = false;
         isResizing.value = false;
         resizeHandle.value = null;
@@ -3882,9 +3884,6 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
         handToolActive.value = false;
         showStrokeStyleMenu.value = false;
         clearPendingCommentSelection();
-
-        // Also clear any native text selection that might be lingering, which can interfere with interactions
-        window.getSelection()?.removeAllRanges();
     };
 
     const changeStrokeColor = (newColor) => {
@@ -4008,8 +4007,7 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
                 redrawAllStrokes();
             });
 
-            selectedStrokes.value = [];
-            selectedStroke.value = null;
+            deselectAllStrokes();
             return;
         }
 
@@ -4746,6 +4744,8 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
         commentAuthorDraft.value = '';
         showCommentInput.value = false;
         editingCommentStroke.value = null;
+        selectedText.value = '';
+        window.getSelection()?.removeAllRanges();
     };
 
     const getSelectionAnchorData = (selection, range) => {
@@ -4811,7 +4811,6 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
         commentAuthorDraft.value = preferredCommentAuthor.value;
         editingCommentStroke.value = null;
         showCommentInput.value = true;
-        showPopMenu.value = true;
     };
 
     const selectStrokeByRef = ({ pageId = null, pageIndex = null, strokeIndex = -1 } = {}) => {
@@ -4821,8 +4820,7 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
             : null;
 
         if (!targetPage || !Array.isArray(targetPage.strokes) || strokeIndex < 0 || strokeIndex >= targetPage.strokes.length) {
-            selectedStrokes.value = [];
-            selectedStroke.value = null;
+            deselectAllStrokes();
             if (previousPage?.drawingCanvas) {
                 redrawAllStrokes(previousPage);
             }
@@ -4868,7 +4866,6 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
         commentDraft.value = String(first.comment || '');
         commentAuthorDraft.value = String(first.author || '');
         showCommentInput.value = true;
-        showPopMenu.value = true;
         popMenuPosition.value = {
             x: first.x + (Number(first.width) || COMMENT_ICON_DEFAULT_SIZE),
             y: first.y + (Number(first.height) || COMMENT_ICON_DEFAULT_SIZE)
@@ -4910,7 +4907,7 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
             commentAuthorDraft.value = '';
             showCommentInput.value = false;
             editingCommentStroke.value = null;
-            showPopMenu.value = true;
+
             if (editTargetPage.drawingCanvas) {
                 redrawAllStrokes(editTargetPage);
             }
@@ -4954,7 +4951,6 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
         commentAuthorDraft.value = '';
         showCommentInput.value = false;
         editingCommentStroke.value = null;
-        showPopMenu.value = false;
         selectedText.value = '';
         clearPendingCommentSelection();
         window.getSelection()?.removeAllRanges();
@@ -4992,30 +4988,20 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
                 popMenuPosition.value = clientToPopMenuPosition(lastRect.right, lastRect.bottom + 5);
             }
 
-            showPopMenu.value = !!selectedText.value;
             if (showPopMenu.value) {
                 clampPopMenuPosition();
             }
         }, 10);
     };
 
-    watch(
-        () => !isDragging.value && !isResizing.value && !isRotating.value && (selectedStroke.value || selectedStrokes.value.length > 0) && isStrokeSelectModeActive.value,
-        (isSelected) => {
-            showPopMenu.value = isSelected;
-            drawSelectionBoundingBox();
-            
-            if (isSelected) {
-                clampPopMenuPosition();
-            } else {
-                showCommentInput.value = false;
-            }
+    watch(selectedStroke, (isSelected) => {
+        drawSelectionBoundingBox();
+        cancelCommentInput();
 
-            if (showCommentInput.value) {
-                cancelCommentInput();
-            }
-        },
-    )
+        if (isSelected) {
+            clampPopMenuPosition();
+        }
+    });
 
     const eraseAtPoint = (x, y) => {
         const eraserRadius = 10;
@@ -5287,5 +5273,6 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
         isSelectedStrokeType,
         copiedStrokes,
         selectStrokes,
+        deselectAllStrokes,
     };
 }

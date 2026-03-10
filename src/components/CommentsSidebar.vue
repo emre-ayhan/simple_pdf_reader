@@ -123,13 +123,13 @@ const handleCommentClick = (comment) => {
                     <div v-if="comment.author" class="comments-sidebar-author">
                         {{ comment.author }}
                         <div class="comments-sidebar-actions btn-group-sm">
-                            <button v-if="comment.canJumpToText && comment.source !== 'pdf-text-annotation'" type="button" class="btn btn-outline-warning" @click="jumpToText?.(comment)" :title="$t('Jump to text')">
+                            <button v-if="comment.canJumpToText && comment.source !== 'pdf-text-annotation'" type="button" class="btn btn-outline-warning" @click.stop="jumpToText?.(comment)" :title="$t('Jump to text')">
                                 <i class="bi bi-file-text"></i>
                             </button>
-                            <button type="button" class="btn btn-outline-warning" @click="editComment?.(comment)" :title="$t('Edit')">
+                            <button type="button" class="btn btn-outline-warning" @click.stop="editComment?.(comment)" :title="$t('Edit')">
                                 <i class="bi bi-pencil"></i>
                             </button>
-                            <button type="button" class="btn btn-outline-danger" @click="deleteComment?.(comment)" :title="$t('Delete')">
+                            <button type="button" class="btn btn-outline-danger" @click.stop="deleteComment?.(comment)" :title="$t('Delete')">
                                 <i class="bi bi-trash"></i>
                             </button>
                         </div>

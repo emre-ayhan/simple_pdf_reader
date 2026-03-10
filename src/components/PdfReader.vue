@@ -149,6 +149,7 @@ const {
     hoveredCommentPreview,
     beginCommentInput,
     cancelCommentInput,
+    deselectAllStrokes,
     commitComment,
     editCommentStroke,
     selectStrokeByRef,
@@ -530,6 +531,11 @@ const jumpToCommentText = async (commentRef) => {
 };
 
 const editCommentFromSidebar = async (commentRef) => {
+    if (isTextSelectionMode.value) {
+        isTextSelectionMode.value = false;
+        isStrokeSelectModeActive.value = true;
+    }
+
     await focusComment(commentRef);
     editCommentStroke();
 };
@@ -538,6 +544,15 @@ const deleteCommentFromSidebar = async (commentRef) => {
     await focusComment(commentRef);
     deleteSelectedStroke();
 };
+
+const cancelCommentStroke = () => {
+    if (isStrokeSelectModeActive.value) {
+        deselectAllStrokes();
+        return;
+    }
+
+    cancelCommentInput();
+}
 
 const toggleHandTool = () => {
     if (!isFileLoaded.value) return;
@@ -1306,7 +1321,7 @@ defineExpose({
                             </label>
                         </div>
                         <div class="d-flex justify-content-end gap-2 m-1">
-                            <button type="button" class="btn btn-sm btn-outline-warning" @click="cancelCommentInput">{{ $t('Cancel') }}</button>
+                            <button type="button" class="btn btn-sm btn-outline-warning" @click="cancelCommentStroke">{{ $t('Cancel') }}</button>
                             <button type="button" class="btn btn-sm btn-warning" :disabled="!commentDraft.trim()" @click="commitComment">{{ $t('Save') }}</button>
                         </div>
                     </div>
