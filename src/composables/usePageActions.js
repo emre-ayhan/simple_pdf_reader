@@ -1115,8 +1115,10 @@ const setStrokeMeta = (el, strokeIndex) => {
     el.setAttribute('data-stroke-index', String(strokeIndex));
 };
 
-export function usePageActions(pages, pagesContainer, activePage, addToHistory) {
+export function usePageActions(pages, pagesContainer, addToHistory) {
     const { get: storeGet, set: storeSet } = useStore();
+
+    const activePage = ref(null);
 
     const getPageByRef = ({ pageId = null, pageIndex = null } = {}) => {
         const pageList = Array.isArray(pages?.value) ? pages.value : [];
@@ -3747,6 +3749,25 @@ export function usePageActions(pages, pagesContainer, activePage, addToHistory) 
         };
     };
 
+    let prevActivePage;
+
+    const onPointerEnter = (e, page) => {
+        if (activePage.value?.id !== page.id) {
+            activePage.value = page;
+
+            if (selectedStroke.value && selectedStroke.value?.pageId !== page.id) {
+                selectedStroke.value = null;
+                selectedStrokes.value = [];
+            }
+        }
+
+        if (activePage.value?.id === prevActivePage?.id) return;
+        const existingOverlay = prevActivePage?.annotationSvg?.querySelector('.annotation-selection-overlay');
+        if (!existingOverlay) return;
+        existingOverlay.remove();
+
+    }
+
     const onPointerMove = (e) => {
         if (e.pointerType === 'pen') {
             isPenHovering.value = true;
@@ -3823,7 +3844,11 @@ export function usePageActions(pages, pagesContainer, activePage, addToHistory) 
         draw(e);
     };
 
-    const onPointerLeave = (e) => {
+    const onPointerLeave = (e, page) => {
+        if (prevActivePage?.id !== page.id) {
+            prevActivePage = page;
+        }
+
         if (e.pointerType === 'pen') {
             isPenHovering.value = false;
         }
@@ -4982,6 +5007,8 @@ export function usePageActions(pages, pagesContainer, activePage, addToHistory) 
             
             if (isSelected) {
                 clampPopMenuPosition();
+            } else {
+                showCommentInput.value = false;
             }
 
             if (showCommentInput.value) {
@@ -5226,6 +5253,7 @@ export function usePageActions(pages, pagesContainer, activePage, addToHistory) 
         isHandToolPanning,
         startDrawing,
         stopDrawing,
+        onPointerEnter,
         onPointerMove,
         onPointerLeave,
         editTextStroke,

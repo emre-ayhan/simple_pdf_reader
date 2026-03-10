@@ -128,6 +128,7 @@ const {
     isHandToolPanning,
     startDrawing,
     stopDrawing,
+    onPointerEnter,
     onPointerMove,
     onPointerLeave,
     editTextStroke,
@@ -161,7 +162,7 @@ const {
     isSelectedStrokeType,
     copiedStrokes,
     selectStrokes,
-} = usePageActions(activePages, pagesContainer, activePage, strokeChangeCallback);
+} = usePageActions(activePages, pagesContainer, strokeChangeCallback);
 
 // History management
 const { 
@@ -1192,7 +1193,14 @@ defineExpose({
             />
             <div class="pages-container flex-grow-1" ref="pagesContainer" :style="{ width: `${zoomPercentage}%` }">
                 <template v-for="page in pages" :key="page.id">
-                    <div class="page-container" :data-page="page.id" v-show="!page.deleted" v-if="page.visible">
+                    <div
+                        v-if="page.visible && !page.deleted"
+                        class="page-container"
+                        :data-page="page.id"
+                        @pointerenter="onPointerEnter($event, page)"
+                        @pointermove="onPointerMove"
+                        @pointerleave="onPointerLeave($event, page)"
+                    >
                         <div class="canvas-container" :class="{ 'canvas-loading': !page.rendered }">
                             <canvas class="pdf-canvas" :ref="el => page.canvas = el"></canvas>
                             <div class="text-layer" :class="{ 'text-selectable': isTextSelectionMode }" :ref="el => page.textLayer = el"></div>
@@ -1209,8 +1217,6 @@ defineExpose({
                                 class="drawing-canvas"
                                 @pointerdown="startDrawing"
                                 @pointerup="stopDrawing"
-                                @pointermove="onPointerMove"
-                                @pointerleave="onPointerLeave"
                                 @pointercancel="stopDrawing"
                                 :style="{
                                     cursor: cursorStyle,
