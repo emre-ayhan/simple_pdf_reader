@@ -186,7 +186,6 @@ startSession();
 const handleImageImport = createImageImportHandler(redrawAllStrokes, addToHistory);
 
 
-
 // Toolbar Actions
 const textActionsDisabled = computed(() => Object.values(pages.value).map(page => page.textContent?.items.length || 0).reduce((a, b) => a + b, 0) === 0);
 
@@ -496,12 +495,6 @@ const activeCommentId = computed(() => {
 watch(() => textEditorPosition.value, (position) => {
     if (position) {
         hasDismissedTextGestureHint.value = true;
-    }
-});
-
-watch(() => documentComments.value.length, (count, previousCount = 0) => {
-    if (count > 0 && previousCount === 0) {
-        isCommentsSidebarVisible.value = true;
     }
 });
 
