@@ -1366,7 +1366,7 @@ const findBestCommentTextRange = (page, commentRef) => {
     }, null);
 };
 
-export function usePageActions(pages, pagesContainer, pageIndex, addToHistory) {
+export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, scrollToPage) {
     const { get: storeGet, set: storeSet } = useStore();
 
     const activePage = ref(null);
@@ -1422,11 +1422,6 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory) {
     const textActionsDisabled = computed(() => Object.values(pages.value).map(page => page.textContent?.items.length || 0).reduce((a, b) => a + b, 0) === 0);
 
     const isStrokeSelectModeActive = ref(false);
-
-    if (textActionsDisabled.value) {
-        isStrokeSelectModeActive.value = true;
-        isTextSelectionMode.value = false;
-    }
 
     const isViewLocked = ref(false);
     const isThumbnailSidebarVisible = ref(false);

@@ -195,7 +195,7 @@ const {
     copySelection,
     hasActiveTool,
     touchAction
-} = usePageActions(activePages, pagesContainer, pageIndex, strokeChangeCallback);
+} = usePageActions(activePages, pagesContainer, pageIndex, strokeChangeCallback, scrollToPage);
 
 // History management
 const { 

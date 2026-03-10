@@ -396,7 +396,7 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
                 y,
                 width,
                 height,
-                color: 'orange',
+                color: '#664d03',
                 thickness: 2,
                 opacity: 1,
                 selectedText: readAnnotationString(annotation.subject, annotation.subjectObj, annotation.subj),
