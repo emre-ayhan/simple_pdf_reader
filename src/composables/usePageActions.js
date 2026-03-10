@@ -1271,11 +1271,6 @@ export function usePageActions(pages, pagesContainer, activePage, addToHistory) 
         drawStyle.value = normalizeDrawStyle(style);
     });
 
-    const getScaledDrawingThickness = () => {
-        const dpr = window.devicePixelRatio || 1;
-        return drawStyle.value.thickness * dpr;
-    }
-
     const updateStrokeStyle = (index, style, value) => {
         if (index < 0 || index >= strokeStyles.value.length) return;
         strokeStyles.value[index][style] = value;
@@ -2096,7 +2091,7 @@ export function usePageActions(pages, pagesContainer, activePage, addToHistory) 
                 editorWidth: editorBounds.width,
                 editorHeight: editorBounds.height,
                 color,
-                thickness: getScaledDrawingThickness(),
+                thickness: drawStyle.value.thickness,
                 type: 'text',
                 content: contentToCommit,
                 text: contentToCommit.text,
@@ -2968,7 +2963,7 @@ export function usePageActions(pages, pagesContainer, activePage, addToHistory) 
                 x: lastX,
                 y: lastY,
                 color: drawStyle.value.color,
-                thickness: getScaledDrawingThickness(),
+                thickness: drawStyle.value.thickness,
                 fill: drawStyle.value.fill,
                 opacity: drawStyle.value.opacity,
                 dash: drawStyle.value.dash,
@@ -3463,7 +3458,7 @@ export function usePageActions(pages, pagesContainer, activePage, addToHistory) 
                 x: currentX,
                 y: currentY,
                 color: drawStyle.value.color,
-                thickness: getScaledDrawingThickness(),
+                thickness: drawStyle.value.thickness,
                 fill: drawStyle.value.fill,
                 opacity: drawStyle.value.opacity,
                 dash: drawStyle.value.dash,
@@ -3476,7 +3471,7 @@ export function usePageActions(pages, pagesContainer, activePage, addToHistory) 
             drawingContext.moveTo(lastX, lastY);
             drawingContext.lineTo(currentX, currentY);
             drawingContext.strokeStyle = drawStyle.value.color;
-            drawingContext.lineWidth = getScaledDrawingThickness();
+            drawingContext.lineWidth = drawStyle.value.thickness;
             drawingContext.lineCap = 'round';
             drawingContext.lineJoin = 'round';
             drawingContext.globalAlpha = drawStyle.value.opacity;
@@ -3492,7 +3487,7 @@ export function usePageActions(pages, pagesContainer, activePage, addToHistory) 
             }
             
             drawingContext.strokeStyle = drawStyle.value.color;
-            drawingContext.lineWidth = getScaledDrawingThickness();
+            drawingContext.lineWidth = drawStyle.value.thickness;
             drawingContext.lineCap = 'round';
             drawingContext.lineJoin = 'round';
             drawingContext.globalAlpha = drawStyle.value.opacity;
@@ -3681,7 +3676,7 @@ export function usePageActions(pages, pagesContainer, activePage, addToHistory) 
                     endX: lastX,
                     endY: lastY,
                     color: drawStyle.value.color,
-                    thickness: getScaledDrawingThickness(),
+                    thickness: drawStyle.value.thickness,
                     fill: drawStyle.value.fill,
                     opacity: drawStyle.value.opacity,
                     dash: drawStyle.value.dash
@@ -4021,7 +4016,7 @@ export function usePageActions(pages, pagesContainer, activePage, addToHistory) 
             type: 'highlight-rect',
             rects: rects, // Array of {x, y, width, height}
             color: drawStyle.value.color,
-            thickness: getScaledDrawingThickness(),
+            thickness: drawStyle.value.thickness,
             fill: true,
             opacity: Math.min(drawStyle.value.opacity, 0.6),
             dash: drawStyle.value.dash
@@ -4179,7 +4174,7 @@ export function usePageActions(pages, pagesContainer, activePage, addToHistory) 
         const first = stroke[0];
         const transform = toSvgRotationTransform(stroke);
         const strokeColor = first.color || drawStyle.value.color;
-        const strokeWidth = first.thickness || getScaledDrawingThickness() || 2;
+        const strokeWidth = first.thickness || drawStyle.value.thickness || 2;
         const strokeOpacity = normalizeOpacity(first.opacity);
         const strokeDash = normalizeDash(first.dash);
         const dashArray = strokeDash === 'dashed' ? '8 6' : (strokeDash === 'dotted' ? '2 6' : null);
