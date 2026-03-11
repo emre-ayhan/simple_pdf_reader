@@ -55,6 +55,8 @@ const uuid  = () => {
     );
 }
 
+const COMMENT_ICON_DEFAULT_COLOR = '#E30A17';
+const COMMENT_ICON_DEFAULT_SIZE = 32;
 const copiedStrokes = ref([]); // For multi-selection copy
 const copiedStroke = ref(null);
 
@@ -118,6 +120,8 @@ export {
     moveToolbarBottom,
     currentLocale,
     availableLocales,
+    COMMENT_ICON_DEFAULT_COLOR,
+    COMMENT_ICON_DEFAULT_SIZE,
     copiedStrokes,
     copiedStroke,
     copyAsStroke,

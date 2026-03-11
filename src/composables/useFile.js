@@ -1,7 +1,7 @@
 import { ref, nextTick, computed, watch, toRaw, onUnmounted } from "vue";
 import { GlobalWorkerOptions, getDocument } from "pdfjs-dist";
 import { PDFDocument, rgb, degrees as pdfDegrees, PDFHexString, PDFName, PDFString } from "pdf-lib";
-import { uuid, Electron } from "./useAppSettings";
+import { uuid, Electron, COMMENT_ICON_DEFAULT_COLOR, COMMENT_ICON_DEFAULT_SIZE } from "./useAppSettings";
 import { useStore } from "./useStore";
 import { showModal } from "./usePageModal";
 import { fileDataCache, openNewTab, setCurrentTab } from "./useTabs";
@@ -690,6 +690,18 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
                 ? 'pdf-text-annotation'
                 : 'pdf-markup-annotation';
 
+            if (source === 'pdf-text-annotation') {
+                const fixed = COMMENT_ICON_DEFAULT_SIZE;
+                if (bounds) {
+                    const centerX = bounds.x + bounds.width / 2;
+                    const centerY = bounds.y + bounds.height / 2;
+                    x = centerX - fixed / 2;
+                    y = centerY - fixed / 2;
+                }
+                width = fixed;
+                height = fixed;
+            }
+
             return [{
                 id: String(annotation.id || annotation.annotationId || uuid()),
                 type: 'comment',
@@ -697,7 +709,7 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
                 y,
                 width,
                 height,
-                color: '#664d03',
+                color: COMMENT_ICON_DEFAULT_COLOR,
                 thickness: 2,
                 opacity: 1,
                 selectedText: readAnnotationString(annotation.subject, annotation.subjectObj, annotation.subj),

@@ -1,6 +1,6 @@
 import { ref, nextTick, computed, watch } from 'vue';
 import { useStore } from './useStore.js';
-import { enableTouchDrawing, uuid, copiedStrokes, copiedStroke, copyAsStroke } from './useAppSettings.js';
+import { enableTouchDrawing, uuid, copiedStrokes, copiedStroke, copyAsStroke, COMMENT_ICON_DEFAULT_COLOR, COMMENT_ICON_DEFAULT_SIZE } from './useAppSettings.js';
 
 const colorPalette = [
     '#111827', '#1f2937', '#374151', '#6b7280', '#9ca3af',
@@ -91,9 +91,7 @@ const toCursorFromAngle = (angleRad) => {
 };
 
 const BOUNDING_BOX_HANDLE_COLOR = '#2a7fff';
-const COMMENT_ICON_DEFAULT_COLOR = '#664d03';
 // const COMMENT_ICON_DETAIL_COLOR = '#ffffff';
-const COMMENT_ICON_DEFAULT_SIZE = 32;
 
 const toExactResizeCursor = (angleRad) => {
     if (!Number.isFinite(angleRad)) return null;
