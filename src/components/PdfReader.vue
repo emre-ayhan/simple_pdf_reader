@@ -126,7 +126,6 @@ const {
     isCaptureSelectionMode,
     isStrokeHovering,
     isDragging,
-    isDraggingDisabled,
     selectedStroke,
     popMenu,
     showPopMenu,

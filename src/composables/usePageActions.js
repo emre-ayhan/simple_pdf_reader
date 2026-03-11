@@ -1516,7 +1516,6 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
     const popMenu = ref(null);
     const popMenuPosition = ref({ x: 0, y: 0 });
     const isDragging = ref(false);
-    const isDraggingDisabled = ref(false);
     const dragStartPos = ref(null);
     const isResizing = ref(false);
     const resizeHandle = ref(null); // 'nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'
@@ -3430,7 +3429,6 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
                 if (Array.isArray(selectedStrokes.value) && selectedStrokes.value.length > 1) {
                     if (hasSelectOnlyStrokeInSelection(selectedStrokes.value, currentCanvasIndex)) {
                         isDragging.value = false;
-                        isDraggingDisabled.value = true;
                         stopEvent(e);
                         return;
                     }
@@ -3466,7 +3464,6 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
                 const isMultiSelection = Array.isArray(selectedStrokes.value) && selectedStrokes.value.length > 1;
                 if (isMultiSelection) {
                     if (hasSelectOnlyStrokeInSelection(selectedStrokes.value, currentCanvasIndex)) {
-                        isDraggingDisabled.value = true;
                         stopEvent(e);
                         return;
                     }
@@ -3972,7 +3969,6 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
         deselectAllStrokes();
         selectedText.value = '';
         isDragging.value = false;
-        isDraggingDisabled.value = false;
         isResizing.value = false;
         resizeHandle.value = null;
         resizeStartBounds.value = null;
@@ -5460,7 +5456,6 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
         isCaptureSelectionMode,
         isStrokeHovering,
         isDragging,
-        isDraggingDisabled,
         selectedStroke,
         popMenu,
         showPopMenu,
