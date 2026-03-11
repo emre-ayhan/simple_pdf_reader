@@ -65,11 +65,12 @@
 }
 
 .comment-input {
-    min-height: 160px;
+    min-height: 160px !important;
     box-shadow: none !important;
     resize: none !important;
     scrollbar-width: thin;
     scrollbar-color: $warning-text-emphasis $secondary-bg-subtle;
+    border-radius: $border-radius-lg;
 
     &::-webkit-scrollbar {
         width: 10px;

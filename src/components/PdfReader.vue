@@ -158,6 +158,7 @@ const {
     hoveredCommentPreview,
     beginCommentInput,
     commitComment,
+    commitCommentSidebar,
     cancelCommentStroke,
     editCommentStroke,
     handleStrokeStyleButtonClick,
@@ -721,13 +722,12 @@ defineExpose({
             <CommentsSidebar
                 v-if="isCommentsSidebarVisible"
                 :comments="documentComments"
-                :active-comment-id="activeCommentId"
+                v-model="activeCommentId"
                 :ensure-comment-page-ready="ensureCommentPageReady"
                 :reveal-comment-source-text="revealCommentSourceText"
                 :close-sidebar="toggleCommentsSidebar"
-                v-model="commentDraft"
                 @delete-comment="deleteStrokeFromPage"
-                @save-comment="commitComment"
+                @save-comment="commitCommentSidebar"
             />
 
             <div

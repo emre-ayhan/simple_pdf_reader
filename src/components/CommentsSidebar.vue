@@ -6,17 +6,16 @@ const props = defineProps({
         type: Array,
         default: () => []
     },
-    activeCommentId: {
+    modelValue: {
         type: [String, Number],
         default: null
     },
-    modelValue: String,
     ensureCommentPageReady: Function,
     revealCommentSourceText: Function,
     closeSidebar: Function,
 });
 
-const emit = defineEmits(['update:modelValue', 'save-comment', 'cancel-comment', 'delete-comment']);
+const emit = defineEmits(['save-comment', 'cancel-comment', 'delete-comment', 'update:modelValue']);
 
 const searchQuery = ref('');
 
@@ -66,23 +65,26 @@ const jumpToText = async (commentRef) => {
 };
 
 const editedCommentId = ref(null);
+const commentDraft = ref('')
 
 const editComment = (comment) => {
-    emit('update:modelValue', comment?.comment || '');
+    commentDraft.value = comment?.comment || '';
     editedCommentId.value = comment?.id || null;
 };
 
 const cancelComment = () => {
     editedCommentId.value = null;
-    emit('update:modelValue', '');
+    commentDraft.value = '';
     emit('cancel-comment');
 };
 
 const saveComment = (comment) => {
     if (!editedCommentId.value) return;
 
-    emit('save-comment', comment.stroke);
+    comment.comment = commentDraft.value;
+    emit('save-comment', comment);
     editedCommentId.value = null;
+    commentDraft.value = '';
 };
 
 const deleteComment = (comment) => {
@@ -96,6 +98,8 @@ const handleCommentClick = async (comment) => {
         await jumpToText(comment);
         return;
     }
+
+    emit('update:modelValue', comment?.id || null);
 };
 </script>
 
@@ -135,7 +139,7 @@ const handleCommentClick = async (comment) => {
                 v-for="comment in filteredComments"
                 :key="comment.id"
                 class="comments-sidebar-item"
-                :class="{ active: String(activeCommentId || '') === String(comment.id) }"
+                :class="{ active: String(modelValue || '') === String(comment.id) }"
             >
                 <button type="button" class="comments-sidebar-card" @click="handleCommentClick(comment)">
                     <div class="comments-sidebar-meta d-flex align-items-center justify-content-between gap-2">
@@ -150,9 +154,8 @@ const handleCommentClick = async (comment) => {
                     <div class="comments-sidebar-body text-light">
                         <template v-if="editedCommentId === comment.id">
                             <textarea
-                                :value="modelValue"
-                                @input="emit('update:modelValue', $event.target.value)"
-                                class="form-control form-control-sm bg-transparent comment-input text-light border-warning mb-2"
+                                v-model="commentDraft"
+                                class="form-control form-control-sm bg-transparent comment-input border text-light mb-2"
                                 rows="3"
                                 :placeholder="$t('Edit your comment')"
                             ></textarea>
@@ -160,7 +163,7 @@ const handleCommentClick = async (comment) => {
                                 <button type="button" class="btn btn-sm btn-outline-warning" @click="cancelComment">
                                     {{ $t('Cancel') }}
                                 </button>
-                                <button type="button" class="btn btn-sm btn-warning" @click="saveComment">
+                                <button type="button" class="btn btn-sm btn-warning" :class="{ disabled: !commentDraft || commentDraft.trim() === comment.comment }" @click="saveComment(comment)">
                                     {{ $t('Save') }}
                                 </button>
                             </div>
