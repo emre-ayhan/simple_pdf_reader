@@ -1,21 +1,6 @@
 import { ref, nextTick, computed, watch } from 'vue';
 import { useStore } from './useStore.js';
-import { enableTouchDrawing, uuid } from './useAppSettings.js';
-
-const copiedStroke = ref(null);
-const copiedStrokes = ref([]); // For multi-selection copy
-
-const copyAsStroke = (stroke) => {
-    if (!stroke) return;
-
-    copiedStroke.value = stroke;
-
-    if (copiedStrokes.value.length > 10) {
-        copiedStrokes.value.shift();
-    }
-
-    copiedStrokes.value.push(copiedStroke.value);
-}
+import { enableTouchDrawing, uuid, copiedStrokes, copiedStroke, copyAsStroke } from './useAppSettings.js';
 
 const colorPalette = [
     '#111827', '#1f2937', '#374151', '#6b7280', '#9ca3af',
@@ -1169,12 +1154,16 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
     // General Variables
     const isTextSelectionMode = ref(true);
     const isTextHighlightMode = ref(false);
+    const textMarkupMode = ref('highlight');
     const textModesActive = computed(() => {
         // Modes where we want the PDF.js text layer to receive pointer events.
         return isTextSelectionMode.value || isTextHighlightMode.value;
     })
 
     const textActionsDisabled = computed(() => Object.values(pages.value).map(page => page.textContent?.items.length || 0).reduce((a, b) => a + b, 0) === 0);
+    const hasTextExtractionAttempted = computed(() => {
+        return Object.values(pages.value).some(page => Array.isArray(page?.textContent?.items));
+    });
 
     const isStrokeSelectModeActive = ref(false);
 
@@ -1674,6 +1663,10 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
             const last = newSelections[newSelections.length - 1];
             selectedStroke.value = last ? { ...last, originalStroke: JSON.parse(JSON.stringify(last.stroke)) } : null;
             redrawAllStrokes();
+            if (isTextSelectionMode.value) {
+                resetToolState();
+                isStrokeSelectModeActive.value = true;
+            }
             return;
         }
 
@@ -1718,6 +1711,10 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
         };
 
         redrawAllStrokes();
+        if (isTextSelectionMode.value) {
+            resetToolState();
+            isStrokeSelectModeActive.value = true;
+        }
     };
 
 
@@ -4140,20 +4137,25 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
         }
     };
 
-    const createHighlightRectangle = (rects) => {
+    const createHighlightRectangle = (rects, markupType = 'highlight') => {
         // Check if we received an array of rects or individual values
         if (!Array.isArray(rects)) return;
         const id = uuid();
+        const normalizedMarkupType = ['highlight', 'underline', 'strikeout', 'squiggly'].includes(markupType)
+            ? markupType
+            : 'highlight';
+        const isFilledHighlight = normalizedMarkupType === 'highlight';
 
         // Multiple rectangles - create a compound highlight
         const highlightStroke = [{
             id,
             type: 'highlight-rect',
+            markupType: normalizedMarkupType,
             rects: rects, // Array of {x, y, width, height}
             color: drawStyle.value.color,
             thickness: drawStyle.value.thickness,
-            fill: true,
-            opacity: Math.min(drawStyle.value.opacity, 0.6),
+            fill: isFilledHighlight,
+            opacity: isFilledHighlight ? Math.min(drawStyle.value.opacity, 0.6) : drawStyle.value.opacity,
             dash: drawStyle.value.dash
         }];
         
@@ -4169,7 +4171,7 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
         redrawAllStrokes();
     };
 
-    const highlightTextSelection = () => {
+    const applyTextMarkupSelection = (markupType = textMarkupMode.value) => {
         const selection = window.getSelection();
         if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;
         
@@ -4249,12 +4251,17 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
             }
             merged.push(current);
             
-            createHighlightRectangle(merged);
+            createHighlightRectangle(merged, markupType);
         });
 
         // Clear the text selection
         window.getSelection()?.removeAllRanges();
     };
+
+    const highlightTextSelection = () => applyTextMarkupSelection('highlight');
+    const underlineTextSelection = () => applyTextMarkupSelection('underline');
+    const strikeoutTextSelection = () => applyTextMarkupSelection('strikeout');
+    const squigglyTextSelection = () => applyTextMarkupSelection('squiggly');
 
     const editTextStroke = () => {
         if (!selectedStroke.value) return;
@@ -4331,21 +4338,76 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
         }
 
         if (first.type === 'highlight-rect') {
-            const group = createSvgElement('g', {
-                fill: strokeColor,
-                'fill-opacity': Math.min(strokeOpacity, 0.6)
-            });
+            const markupType = first.markupType || 'highlight';
+            const group = createSvgElement('g');
             const rects = first.rects || [{ x: first.x, y: first.y, width: first.width, height: first.height }];
-            rects.forEach(rect => {
-                const childRect = createSvgElement('rect', {
-                    x: rect.x,
-                    y: rect.y,
-                    width: rect.width,
-                    height: rect.height
+
+            if (markupType === 'highlight') {
+                group.setAttribute('fill', strokeColor);
+                group.setAttribute('fill-opacity', String(Math.min(strokeOpacity, 0.6)));
+                rects.forEach(rect => {
+                    const childRect = createSvgElement('rect', {
+                        x: rect.x,
+                        y: rect.y,
+                        width: rect.width,
+                        height: rect.height
+                    });
+                    setStrokeMeta(childRect, strokeIndex);
+                    group.appendChild(childRect);
                 });
-                setStrokeMeta(childRect, strokeIndex);
-                group.appendChild(childRect);
-            });
+            } else if (markupType === 'underline' || markupType === 'strikeout') {
+                rects.forEach(rect => {
+                    const y = markupType === 'underline'
+                        ? rect.y + rect.height - Math.max(1, strokeWidth * 0.4)
+                        : rect.y + (rect.height / 2);
+                    const line = createSvgElement('line', {
+                        x1: rect.x,
+                        y1: y,
+                        x2: rect.x + rect.width,
+                        y2: y,
+                        stroke: strokeColor,
+                        'stroke-opacity': strokeOpacity,
+                        'stroke-width': Math.max(1, strokeWidth),
+                        'stroke-linecap': 'round',
+                        fill: 'none'
+                    });
+                    if (dashArray) line.setAttribute('stroke-dasharray', dashArray);
+                    setStrokeMeta(line, strokeIndex);
+                    group.appendChild(line);
+                });
+            } else if (markupType === 'squiggly') {
+                rects.forEach(rect => {
+                    const baseline = rect.y + rect.height - Math.max(1, strokeWidth * 0.3);
+                    const amplitude = Math.max(1.2, Math.min(2.8, rect.height * 0.14));
+                    const step = Math.max(6, Math.min(8, strokeWidth));
+
+                    let d = `M ${rect.x} ${baseline}`;
+                    let x = rect.x;
+                    let upward = true;
+                    while (x < rect.x + rect.width) {
+                        const nextX = Math.min(x + step, rect.x + rect.width);
+                        const controlX = x + ((nextX - x) / 2);
+                        const controlY = baseline + (upward ? -amplitude : amplitude);
+                        d += ` Q ${controlX} ${controlY} ${nextX} ${baseline}`;
+                        upward = !upward;
+                        x = nextX;
+                    }
+
+                    const squiggle = createSvgElement('path', {
+                        d,
+                        stroke: strokeColor,
+                        'stroke-opacity': strokeOpacity,
+                        'stroke-width': Math.max(1.5, strokeWidth * 1.4),
+                        'stroke-linecap': 'round',
+                        'stroke-linejoin': 'round',
+                        fill: 'none'
+                    });
+                    if (dashArray) squiggle.setAttribute('stroke-dasharray', dashArray);
+                    setStrokeMeta(squiggle, strokeIndex);
+                    group.appendChild(squiggle);
+                });
+            }
+
             if (transform) group.setAttribute('transform', transform);
             svgLayer.appendChild(group);
             return;
@@ -5087,7 +5149,7 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
             }
             
             if (isTextHighlightMode.value) {
-                highlightTextSelection();
+                applyTextMarkupSelection(textMarkupMode.value);
                 return;
             }
 
@@ -5113,6 +5175,16 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
             }
         }, 10);
     };
+
+    watch([textActionsDisabled, hasTextExtractionAttempted], ([disabled, extractionAttempted]) => {
+        if (!disabled) return;
+        if (!extractionAttempted) return;
+        if (isStrokeSelectModeActive.value) return;
+        if (!isTextSelectionMode.value && !isTextHighlightMode.value) return;
+
+        resetToolState();
+        isStrokeSelectModeActive.value = true;
+    }, { immediate: true });
 
     watch(selectedStroke, (isSelected) => {
         drawSelectionBoundingBox();
@@ -5360,10 +5432,12 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
         isViewLocked.value = !isViewLocked.value;
     };
 
-    const toggleTextHighlightMode = () => {
+    const toggleTextHighlightMode = (mode = 'highlight') => {
         const wasActive = isTextHighlightMode.value;
+        const sameMode = textMarkupMode.value === mode;
         resetToolState();
-        isTextHighlightMode.value = !wasActive;
+        textMarkupMode.value = mode;
+        isTextHighlightMode.value = !(wasActive && sameMode);
         isTextSelectionMode.value = true;
     };
 
@@ -5455,6 +5529,7 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
         isStrokeSelectModeActive,
         isTextSelectionMode,
         isTextHighlightMode,
+        textMarkupMode,
         isDrawing,
         isEraser,
         drawMode,
@@ -5511,6 +5586,9 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
         handleTextSelectionMouseUp,
         clampPopMenuPosition,
         highlightTextSelection,
+        underlineTextSelection,
+        strikeoutTextSelection,
+        squigglyTextSelection,
         copySelectedStroke,
         insertCopiedStroke,
         isSelectedStrokeType,

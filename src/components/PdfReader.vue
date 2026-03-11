@@ -115,6 +115,7 @@ const {
     isStrokeSelectModeActive,
     isTextSelectionMode,
     isTextHighlightMode,
+    textMarkupMode,
     isDrawing,
     isEraser,
     drawMode,
@@ -171,6 +172,9 @@ const {
     handleTextSelectionMouseUp,
     clampPopMenuPosition,
     highlightTextSelection,
+    underlineTextSelection,
+    strikeoutTextSelection,
+    squigglyTextSelection,
     copySelectedStroke,
     insertCopiedStroke,
     isSelectedStrokeType,
@@ -591,9 +595,6 @@ defineExpose({
                     </li>
                 </template>
                 <li class="nav-item">
-                    <ToolItem class="nav-link" label="Highlight Text" shortcut="H" icon="highlighter" :active="isTextHighlightMode" :disabled="textActionsDisabled" :action="toggleTextHighlightMode" />
-                </li>
-                <li class="nav-item">
                     <ToolItem class="nav-link" label="Add Text" shortcut="T" icon="textarea-t" :active="isTextInputMode" :action="selectText" />
                 </li>
                 <li class="nav-item">
@@ -814,6 +815,9 @@ defineExpose({
                             <template v-else-if="selectedText">
                                 <ToolItem class="btn-pop-menu" label="Add Comment" icon="chat-left-text-fill" :action="beginCommentInput" />
                                 <ToolItem class="btn-pop-menu" label="Highlight Text" shortcut="H" icon="highlighter" :action="highlightTextSelection" />
+                                <ToolItem class="btn-pop-menu" label="Underline Text" icon="type-underline" :action="underlineTextSelection" />
+                                <ToolItem class="btn-pop-menu" label="StrikeOut Text" icon="type-strikethrough" :action="strikeoutTextSelection" />
+                                <ToolItem class="btn-pop-menu" label="Squiggly Text" icon="activity" :action="squigglyTextSelection" />
                             </template>
                             <ToolItem class="btn-pop-menu" label="Copy" shortcut="Ctrl+D" icon="files" :action="copySelection" v-if="!isSelectedStrokeType('comment|highlight-rect')"/>
                         </template>
@@ -836,7 +840,7 @@ defineExpose({
                 <ToolItem class="dropdown-item" show-label label="Text Selection" shortcut="S" icon="cursor-text" :active="isTextSelectionMode && !isTextHighlightMode" :disabled="textActionsDisabled" :action="toggleTextSelection" />
                 <ToolItem class="dropdown-item" show-label label="Hand Tool" icon="hand-index-thumb-fill" :active="handToolActive" :action="toggleHandTool" />
                 <li><hr class="dropdown-divider"></li>
-                <ToolItem class="dropdown-item" show-label label="Capture Selection" shortcut="Ctrl+X" icon="scissors" :action="captureSelection" />
+                <ToolItem class="dropdown-item" show-label label="Capture Selection" shortcut="Ctrl+X" icon="scissors" :action="toggleCaptureSelectionMode" />
                 <ToolItem class="dropdown-item" show-label label="Copy" shortcut="Ctrl+C" icon="copy" :action="copySelection" />
                 <ToolItem class="dropdown-item" show-label label="Paste" shortcut="Ctrl+V" icon="clipboard" :action="insertCopiedStroke" />
                 <li><hr class="dropdown-divider"></li>
