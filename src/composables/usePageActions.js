@@ -3429,6 +3429,7 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
                 if (Array.isArray(selectedStrokes.value) && selectedStrokes.value.length > 1) {
                     if (hasSelectOnlyStrokeInSelection(selectedStrokes.value, currentCanvasIndex)) {
                         isDragging.value = false;
+                        showDragBlockedMessage();
                         stopEvent(e);
                         return;
                     }
@@ -3464,10 +3465,12 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
                 const isMultiSelection = Array.isArray(selectedStrokes.value) && selectedStrokes.value.length > 1;
                 if (isMultiSelection) {
                     if (hasSelectOnlyStrokeInSelection(selectedStrokes.value, currentCanvasIndex)) {
+                        showDragBlockedMessage();
                         stopEvent(e);
                         return;
                     }
                 } else if (isSelectOnlyStroke(first)) {
+                    showDragBlockedMessage();
                     return;
                 }
                 
@@ -5395,6 +5398,13 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
     };
 
     const textEditorAlert = ref(null);
+    const dragBlockedAlert = ref(null);
+
+    const showDragBlockedMessage = () => {
+        nextTick(() => {
+            dragBlockedAlert.value?.show();
+        });
+    };
 
     const selectText = () => {
         const wasActive = isTextInputMode.value;
@@ -5456,6 +5466,7 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
         isCaptureSelectionMode,
         isStrokeHovering,
         isDragging,
+        dragBlockedAlert,
         selectedStroke,
         popMenu,
         showPopMenu,

@@ -178,6 +178,7 @@ const {
     selectAllStrokes,
     activeCommentId,
     textEditorAlert,
+    dragBlockedAlert,
     toggleThumbnailSidebar,
     toggleCommentsSidebar,
     toggleHandTool,
@@ -768,6 +769,15 @@ defineExpose({
             >
                 <div class="text-center">
                     {{ $t('Click for simple text, select area to input advanced text') }}
+                </div>
+            </bs-toast>
+            <bs-toast
+                ref="dragBlockedAlert"
+                :id="`drag-blocked-alert-${fileId}`"
+                position="top-50 start-50 translate-middle"
+            >
+                <div class="text-center">
+                    {{ $t('Dragging is not allowed when selection includes comments or highlights') }}
                 </div>
             </bs-toast>
 
