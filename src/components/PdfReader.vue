@@ -725,8 +725,9 @@ defineExpose({
                 :ensure-comment-page-ready="ensureCommentPageReady"
                 :reveal-comment-source-text="revealCommentSourceText"
                 :close-sidebar="toggleCommentsSidebar"
-                :draft="commentDraft"
+                v-model="commentDraft"
                 @delete-comment="deleteStrokeFromPage"
+                @save-comment="commitComment"
             />
 
             <div

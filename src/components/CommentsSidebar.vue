@@ -10,13 +10,13 @@ const props = defineProps({
         type: [String, Number],
         default: null
     },
-    draft: String,
+    modelValue: String,
     ensureCommentPageReady: Function,
     revealCommentSourceText: Function,
     closeSidebar: Function,
 });
 
-const emit = defineEmits(['save-comment', 'cancel-comment', 'delete-comment']);
+const emit = defineEmits(['update:modelValue', 'save-comment', 'cancel-comment', 'delete-comment']);
 
 const searchQuery = ref('');
 
@@ -65,25 +65,23 @@ const jumpToText = async (commentRef) => {
     await props.revealCommentSourceText(commentRef);
 };
 
-const commentDraft = ref(props.draft || '');
 const editedCommentId = ref(null);
 
 const editComment = (comment) => {
-    commentDraft.value = comment?.comment || '';
+    emit('update:modelValue', comment?.comment || '');
     editedCommentId.value = comment?.id || null;
 };
 
 const cancelComment = () => {
-    commentDraft.value = '';
     editedCommentId.value = null;
+    emit('update:modelValue', '');
     emit('cancel-comment');
 };
 
-const saveComment = () => {
+const saveComment = (comment) => {
     if (!editedCommentId.value) return;
 
-    emit('save-comment', editedCommentId.value, commentDraft.value);
-    commentDraft.value = '';
+    emit('save-comment', comment.stroke);
     editedCommentId.value = null;
 };
 
@@ -152,7 +150,8 @@ const handleCommentClick = async (comment) => {
                     <div class="comments-sidebar-body text-light">
                         <template v-if="editedCommentId === comment.id">
                             <textarea
-                                v-model.trim="commentDraft"
+                                :value="modelValue"
+                                @input="emit('update:modelValue', $event.target.value)"
                                 class="form-control form-control-sm bg-transparent comment-input text-light border-warning mb-2"
                                 rows="3"
                                 :placeholder="$t('Edit your comment')"
