@@ -3,6 +3,14 @@
     z-index: 1045 !important;
     pointer-events: all;
     transform: translate(-50%, 10px);
+
+    .pop-menu-content {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        justify-content: center;
+        flex-wrap: nowrap;
+    }
     
     .pop-menu-body {
         background: $dark-bg-accent;

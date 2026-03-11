@@ -126,6 +126,7 @@ const {
     isCaptureSelectionMode,
     isStrokeHovering,
     isDragging,
+    isDraggingDisabled,
     selectedStroke,
     popMenu,
     showPopMenu,
@@ -175,7 +176,7 @@ const {
     insertCopiedStroke,
     isSelectedStrokeType,
     copiedStrokes,
-    selectStrokes,
+    selectAllStrokes,
     activeCommentId,
     textEditorAlert,
     toggleThumbnailSidebar,
@@ -248,12 +249,7 @@ useWindowEvents(fileId, {
             action: (event) => {
                 if (isStrokeSelectModeActive.value) {
                     event.preventDefault();
-                    const strokes = activePage.value.strokes?.filter(el => {
-                        const first = el[0];
-                        return !['comment', 'highlight-rect'].includes(first.type);
-                    }) || [];
-
-                    selectStrokes(strokes);
+                    selectAllStrokes();
                 }
             }
         },
@@ -778,39 +774,41 @@ defineExpose({
 
             <!-- Pop Menu -->
             <div ref="popMenu" class="pop-menu" :style="{ left: popMenuPosition.x + 'px', top: popMenuPosition.y + 'px' }" v-if="showPopMenu && (selectedStroke || selectedText)">
-                <div class="pop-menu-body">
-                    <div class="comment-editor" v-if="showCommentInput">
-                        <div class="form-floating">
-                            <input v-model="commentAuthorDraft" type="text" class="form-control comment-author-input" :placeholder="$t('Optional name')" :id="`comment-author-form-${fileId}`" @contextmenu.stop.prevent>
-                            <label :for="`comment-author-form-${fileId}`" class="comment-label">
-                                <i class="bi bi-person-badge"></i>
-                                {{ $t('Author') }}
-                            </label>
+                <div class="pop-menu-content">
+                    <div class="pop-menu-body">
+                        <div class="comment-editor" v-if="showCommentInput">
+                            <div class="form-floating">
+                                <input v-model="commentAuthorDraft" type="text" class="form-control comment-author-input" :placeholder="$t('Optional name')" :id="`comment-author-form-${fileId}`" @contextmenu.stop.prevent>
+                                <label :for="`comment-author-form-${fileId}`" class="comment-label">
+                                    <i class="bi bi-person-badge"></i>
+                                    {{ $t('Author') }}
+                                </label>
+                            </div>
+                            <div class="form-floating">
+                                <textarea v-model="commentDraft" class="form-control comment-input" :placeholder="$t('Leave a comment here')" :id="`comment-form-${fileId}`" @keydown.ctrl.enter.prevent="commitComment" @contextmenu.stop.prevent></textarea>
+                                <label :for="`comment-form-${fileId}`" class="comment-label">
+                                    <i class="bi bi-chat-right-text-fill"></i>
+                                    {{ $t('Comment') }}
+                                </label>
+                            </div>
+                            <div class="d-flex justify-content-end gap-2 m-1">
+                                <button type="button" class="btn btn-sm btn-outline-warning" @click="cancelCommentStroke">{{ $t('Cancel') }}</button>
+                                <button type="button" class="btn btn-sm btn-warning" :disabled="!commentDraft.trim()" @click="commitComment">{{ $t('Save') }}</button>
+                            </div>
                         </div>
-                        <div class="form-floating">
-                            <textarea v-model="commentDraft" class="form-control comment-input" :placeholder="$t('Leave a comment here')" :id="`comment-form-${fileId}`" @keydown.ctrl.enter.prevent="commitComment" @contextmenu.stop.prevent></textarea>
-                            <label :for="`comment-form-${fileId}`" class="comment-label">
-                                <i class="bi bi-chat-right-text-fill"></i>
-                                {{ $t('Comment') }}
-                            </label>
-                        </div>
-                        <div class="d-flex justify-content-end gap-2 m-1">
-                            <button type="button" class="btn btn-sm btn-outline-warning" @click="cancelCommentStroke">{{ $t('Cancel') }}</button>
-                            <button type="button" class="btn btn-sm btn-warning" :disabled="!commentDraft.trim()" @click="commitComment">{{ $t('Save') }}</button>
-                        </div>
+                        <template v-else>
+                            <template v-if="selectedStroke">
+                                <ToolItem class="btn-pop-menu" label="Edit" icon="pencil-square" :action="editCommentStroke" v-if="isSelectedStrokeType('comment')" />
+                                <ToolItem class="btn-pop-menu" label="Edit" icon="pencil-square" :action="editTextStroke"  v-if="isSelectedStrokeType('text')" />
+                                <ToolItem class="btn-pop-menu" label="Delete" icon="trash3" :action="deleteSelectedStroke" />
+                            </template>
+                            <template v-else-if="selectedText">
+                                <ToolItem class="btn-pop-menu" label="Add Comment" icon="chat-left-text-fill" :action="beginCommentInput" />
+                                <ToolItem class="btn-pop-menu" label="Highlight Text" shortcut="H" icon="highlighter" :action="highlightTextSelection" />
+                            </template>
+                            <ToolItem class="btn-pop-menu" label="Copy" shortcut="Ctrl+D" icon="files" :action="copySelection" v-if="!isSelectedStrokeType('comment|highlight-rect')"/>
+                        </template>
                     </div>
-                    <template v-else>
-                        <template v-if="selectedStroke">
-                            <ToolItem class="btn-pop-menu" label="Edit" icon="pencil-square" :action="editCommentStroke" v-if="isSelectedStrokeType('comment')" />
-                            <ToolItem class="btn-pop-menu" label="Edit" icon="pencil-square" :action="editTextStroke"  v-if="isSelectedStrokeType('text')" />
-                            <ToolItem class="btn-pop-menu" label="Delete" icon="trash3" :action="deleteSelectedStroke" />
-                        </template>
-                        <template v-else-if="selectedText">
-                            <ToolItem class="btn-pop-menu" label="Add Comment" icon="chat-left-text-fill" :action="beginCommentInput" />
-                            <ToolItem class="btn-pop-menu" label="Highlight Text" shortcut="H" icon="highlighter" :action="highlightTextSelection" />
-                        </template>
-                        <ToolItem class="btn-pop-menu" label="Copy" shortcut="Ctrl+D" icon="files" :action="copySelection" v-if="!isSelectedStrokeType('comment|highlight-rect')"/>
-                    </template>
                 </div>
             </div>
 

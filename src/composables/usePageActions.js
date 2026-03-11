@@ -324,6 +324,16 @@ const isSelectOnlyStroke = (first) => {
     ].includes(first.type);
 };
 
+const hasSelectOnlyStrokeInSelection = (selections, pageIndex = null) => {
+    if (!Array.isArray(selections) || selections.length === 0) return false;
+
+    return selections.some(selection => {
+        if (pageIndex !== null && selection?.pageIndex !== pageIndex) return false;
+        const first = selection?.stroke?.[0] || null;
+        return isSelectOnlyStroke(first);
+    });
+};
+
 const getCommentStrokeSize = (strokeOrFirst) => {
     const first = Array.isArray(strokeOrFirst) ? strokeOrFirst[0] : strokeOrFirst;
     const dpr = window.devicePixelRatio;
@@ -1506,6 +1516,7 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
     const popMenu = ref(null);
     const popMenuPosition = ref({ x: 0, y: 0 });
     const isDragging = ref(false);
+    const isDraggingDisabled = ref(false);
     const dragStartPos = ref(null);
     const isResizing = ref(false);
     const resizeHandle = ref(null); // 'nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w'
@@ -1593,12 +1604,10 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
         }
     };
 
-    const selectStrokes = (strokes) => {
+    const selectAllStrokes = () => {
         if (!isStrokeSelectModeActive.value) return;
-        if (!Array.isArray(strokes) || strokes.length === 0) return;
         const page = actionPage.value;
-
-        const selections = strokes.map((stroke, strokeIndex) => {
+        const selections = page.strokes.map((stroke, strokeIndex) => {
             return {
                 pageId: page.id,
                 pageIndex: page.index,
@@ -3419,6 +3428,13 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
                 const strokes = actionPage.value.strokes || [];
 
                 if (Array.isArray(selectedStrokes.value) && selectedStrokes.value.length > 1) {
+                    if (hasSelectOnlyStrokeInSelection(selectedStrokes.value, currentCanvasIndex)) {
+                        isDragging.value = false;
+                        isDraggingDisabled.value = true;
+                        stopEvent(e);
+                        return;
+                    }
+
                     selectedStrokes.value.forEach(sel => {
                         if (sel.pageIndex !== currentCanvasIndex) return;
                         const s = strokes[sel.strokeIndex];
@@ -3447,7 +3463,16 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
                 if (e.pointerId !== activePointerId.value) return;
 
                 const first = selectedStroke.value.stroke?.[0];
-                if (isSelectOnlyStroke(first)) return;
+                const isMultiSelection = Array.isArray(selectedStrokes.value) && selectedStrokes.value.length > 1;
+                if (isMultiSelection) {
+                    if (hasSelectOnlyStrokeInSelection(selectedStrokes.value, currentCanvasIndex)) {
+                        isDraggingDisabled.value = true;
+                        stopEvent(e);
+                        return;
+                    }
+                } else if (isSelectOnlyStroke(first)) {
+                    return;
+                }
                 
                 const canvas = actionPage.value.drawingCanvas || null;
                 const pt = getCanvasPointFromEvent(canvas, e);
@@ -3947,6 +3972,7 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
         deselectAllStrokes();
         selectedText.value = '';
         isDragging.value = false;
+        isDraggingDisabled.value = false;
         isResizing.value = false;
         resizeHandle.value = null;
         resizeStartBounds.value = null;
@@ -5434,6 +5460,7 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
         isCaptureSelectionMode,
         isStrokeHovering,
         isDragging,
+        isDraggingDisabled,
         selectedStroke,
         popMenu,
         showPopMenu,
@@ -5482,7 +5509,7 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
         insertCopiedStroke,
         isSelectedStrokeType,
         copiedStrokes,
-        selectStrokes,
+        selectAllStrokes,
         activeCommentId,
         cancelCommentStroke,
         toggleHandTool,
