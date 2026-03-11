@@ -155,7 +155,7 @@ const handleCommentClick = async (comment) => {
                         <template v-if="editedCommentId === comment.id">
                             <textarea
                                 v-model="commentDraft"
-                                class="form-control form-control-sm bg-transparent comment-input border text-light mb-2"
+                                class="form-control bg-transparent comment-input border text-light mb-2"
                                 rows="3"
                                 :placeholder="$t('Edit your comment')"
                             ></textarea>

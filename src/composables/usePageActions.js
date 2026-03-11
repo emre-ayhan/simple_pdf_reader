@@ -3789,13 +3789,37 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
             return;
         }
 
-        const position = clientToPopMenuPosition(pt.clientX + 18, pt.clientY + 18);
+        const position = clampHoveredCommentPreviewPosition(pt.clientX + 18, pt.clientY + 18);
         hoveredCommentPreview.value = {
             x: position.x,
             y: position.y,
             comment: String(first.comment || ''),
             author: String(first.author || ''),
             selectedText: String(first.selectedText || '')
+        };
+    };
+
+    const clampHoveredCommentPreviewPosition = (clientX, clientY) => {
+        const base = clientToPopMenuPosition(clientX, clientY);
+        const {
+            scrollLeft,
+            scrollTop,
+            viewportWidth,
+            viewportHeight,
+        } = getPopMenuViewportMetrics();
+
+        const margin = 12;
+        const estimatedWidth = 320;
+        const estimatedHeight = 220;
+
+        const minX = scrollLeft + margin;
+        const minY = scrollTop + margin;
+        const maxX = scrollLeft + Math.max(0, viewportWidth - estimatedWidth - margin);
+        const maxY = scrollTop + Math.max(0, viewportHeight - estimatedHeight - margin);
+
+        return {
+            x: Math.min(Math.max(base.x, minX), Math.max(minX, maxX)),
+            y: Math.min(Math.max(base.y, minY), Math.max(minY, maxY)),
         };
     };
 
