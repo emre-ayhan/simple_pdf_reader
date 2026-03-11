@@ -99,6 +99,10 @@ const {
     zoomLevels,
     onZoomLevelChange,
     zoom,
+    documentComments,
+    previewCommentSelection,
+    ensureCommentPageReady,
+    revealCommentSourceText
 } = useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback);
 
 // Drawing Management
@@ -144,6 +148,7 @@ const {
     resetToolState,
     redrawAllStrokes,
     deleteSelectedStroke,
+    deleteStrokeFromPage,
     strokeStyles,
     activeStrokeStyle,
     updateStrokeStyle,
@@ -153,6 +158,7 @@ const {
     hoveredCommentPreview,
     beginCommentInput,
     commitComment,
+    cancelCommentStroke,
     editCommentStroke,
     handleStrokeStyleButtonClick,
     selectedText,
@@ -169,17 +175,10 @@ const {
     isSelectedStrokeType,
     copiedStrokes,
     selectStrokes,
-    previewCommentSelection,
-    documentComments,
     activeCommentId,
     textEditorAlert,
     toggleThumbnailSidebar,
     toggleCommentsSidebar,
-    focusComment,
-    jumpToCommentText,
-    editCommentFromSidebar,
-    deleteCommentFromSidebar,
-    cancelCommentStroke,
     toggleHandTool,
     lockView,
     toggleTextHighlightMode,
@@ -195,7 +194,7 @@ const {
     copySelection,
     hasActiveTool,
     touchAction
-} = usePageActions(activePages, pagesContainer, pageIndex, strokeChangeCallback, scrollToPage);
+} = usePageActions(activePages, pagesContainer, strokeChangeCallback);
 
 // History management
 const { 
@@ -723,11 +722,11 @@ defineExpose({
                 v-if="isCommentsSidebarVisible"
                 :comments="documentComments"
                 :active-comment-id="activeCommentId"
-                :select-comment="focusComment"
-                :jump-to-text="jumpToCommentText"
-                :edit-comment="editCommentFromSidebar"
-                :delete-comment="deleteCommentFromSidebar"
+                :ensure-comment-page-ready="ensureCommentPageReady"
+                :reveal-comment-source-text="revealCommentSourceText"
                 :close-sidebar="toggleCommentsSidebar"
+                :draft="commentDraft"
+                @delete-comment="deleteStrokeFromPage"
             />
 
             <div

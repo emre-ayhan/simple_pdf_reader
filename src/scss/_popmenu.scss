@@ -21,26 +21,6 @@
         .comment-editor {
             min-width: 320px;
             padding: 8px;
-
-            * {
-                scrollbar-width: thin;
-                scrollbar-color: $warning-text-emphasis $secondary-bg-subtle;
-            }
-            
-            *::-webkit-scrollbar {
-                width: 10px;
-                background: $warning-text-emphasis;
-            }
-
-            *::-webkit-scrollbar-thumb {
-                background: $secondary;
-                border-radius: 8px;
-            }
-
-            *::-webkit-scrollbar-track {
-                background: $secondary-bg-subtle;
-            }
-            
         }
 
         .comment-author-input,
@@ -51,11 +31,6 @@
             box-shadow: none !important;
             min-width: 280px;
             padding-top: 2rem;
-        }
-
-        .comment-input {
-            min-height: 160px;
-            resize: none !important;
         }
 
         .comment-label {
@@ -86,5 +61,27 @@
             background-color: rgba(255, 255, 255, 0.1) !important;
             color: $light !important;
         }
+    }
+}
+
+.comment-input {
+    min-height: 160px;
+    box-shadow: none !important;
+    resize: none !important;
+    scrollbar-width: thin;
+    scrollbar-color: $warning-text-emphasis $secondary-bg-subtle;
+
+    &::-webkit-scrollbar {
+        width: 10px;
+        background: $warning-text-emphasis;
+    }
+
+    &::-webkit-scrollbar-thumb {
+        background: $secondary;
+        border-radius: 8px;
+    }
+
+    &::-webkit-scrollbar-track {
+        background: $secondary-bg-subtle;
     }
 }

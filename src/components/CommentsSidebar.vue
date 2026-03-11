@@ -10,12 +10,13 @@ const props = defineProps({
         type: [String, Number],
         default: null
     },
-    selectComment: Function,
-    jumpToText: Function,
-    editComment: Function,
-    deleteComment: Function,
+    draft: String,
+    ensureCommentPageReady: Function,
+    revealCommentSourceText: Function,
     closeSidebar: Function,
 });
+
+const emit = defineEmits(['save-comment', 'cancel-comment', 'delete-comment']);
 
 const searchQuery = ref('');
 
@@ -59,13 +60,44 @@ const filteredComments = computed(() => {
     });
 });
 
-const handleCommentClick = (comment) => {
-    if (comment?.source === 'pdf-text-annotation' && comment?.canJumpToText && typeof props.jumpToText === 'function') {
-        props.jumpToText(comment);
+const jumpToText = async (commentRef) => {
+    if (!commentRef?.canJumpToText) return;
+    await props.revealCommentSourceText(commentRef);
+};
+
+const commentDraft = ref(props.draft || '');
+const editedCommentId = ref(null);
+
+const editComment = (comment) => {
+    commentDraft.value = comment?.comment || '';
+    editedCommentId.value = comment?.id || null;
+};
+
+const cancelComment = () => {
+    commentDraft.value = '';
+    editedCommentId.value = null;
+    emit('cancel-comment');
+};
+
+const saveComment = () => {
+    if (!editedCommentId.value) return;
+
+    emit('save-comment', editedCommentId.value, commentDraft.value);
+    commentDraft.value = '';
+    editedCommentId.value = null;
+};
+
+const deleteComment = (comment) => {
+    emit('delete-comment', comment?.pageId, comment?.strokeIndex);
+};
+
+const handleCommentClick = async (comment) => {
+    await props.ensureCommentPageReady(comment);
+
+    if (comment?.source === 'pdf-text-annotation' && comment?.canJumpToText) {
+        await jumpToText(comment);
         return;
     }
-
-    props.selectComment?.(comment);
 };
 </script>
 
@@ -118,18 +150,36 @@ const handleCommentClick = (comment) => {
                         "{{ previewSelection(comment.selectedText) }}"
                     </div>
                     <div class="comments-sidebar-body text-light">
-                        {{ comment.comment }}
+                        <template v-if="editedCommentId === comment.id">
+                            <textarea
+                                v-model.trim="commentDraft"
+                                class="form-control form-control-sm bg-transparent comment-input text-light border-warning mb-2"
+                                rows="3"
+                                :placeholder="$t('Edit your comment')"
+                            ></textarea>
+                            <div class="d-flex justify-content-end gap-2">
+                                <button type="button" class="btn btn-sm btn-outline-warning" @click="cancelComment">
+                                    {{ $t('Cancel') }}
+                                </button>
+                                <button type="button" class="btn btn-sm btn-warning" @click="saveComment">
+                                    {{ $t('Save') }}
+                                </button>
+                            </div>
+                        </template>
+                        <template v-else>
+                            {{ comment.comment }}
+                        </template>
                     </div>
                     <div v-if="comment.author" class="comments-sidebar-author">
                         {{ comment.author }}
                         <div class="comments-sidebar-actions btn-group-sm">
-                            <button v-if="comment.canJumpToText && comment.source !== 'pdf-text-annotation'" type="button" class="btn btn-outline-warning" @click.stop="jumpToText?.(comment)" :title="$t('Jump to text')">
+                            <button v-if="comment.canJumpToText && comment.source !== 'pdf-text-annotation'" type="button" class="btn btn-outline-warning" @click.stop="jumpToText(comment)" :title="$t('Jump to text')">
                                 <i class="bi bi-file-text"></i>
                             </button>
-                            <button type="button" class="btn btn-outline-warning" @click.stop="editComment?.(comment)" :title="$t('Edit')">
+                            <button type="button" class="btn btn-outline-warning" @click.stop="editComment(comment)" :title="$t('Edit')">
                                 <i class="bi bi-pencil"></i>
                             </button>
-                            <button type="button" class="btn btn-outline-danger" @click.stop="deleteComment?.(comment)" :title="$t('Delete')">
+                            <button type="button" class="btn btn-outline-danger" @click.stop="deleteComment(comment)" :title="$t('Delete')">
                                 <i class="bi bi-trash"></i>
                             </button>
                         </div>

@@ -69,6 +69,230 @@ const readAnnotationString = (...values) => {
     return '';
 };
 
+// Comment Sidebar Helpers
+const collapseWhitespace = (value = '') => String(value || '').replace(/\s+/g, ' ').trim();
+
+const previewCommentSelection = (value = '') => {
+    const text = collapseWhitespace(value);
+    return text.length > 160 ? `${text.slice(0, 157)}...` : text;
+};
+
+const getTextLocationAtRawIndex = (nodes, rawIndex) => {
+    if (!Array.isArray(nodes) || nodes.length === 0) return null;
+
+    for (const entry of nodes) {
+        if (rawIndex < entry.end) {
+            return {
+                node: entry.node,
+                element: entry.element,
+                offset: Math.max(0, rawIndex - entry.start)
+            };
+        }
+    }
+
+    const last = nodes[nodes.length - 1];
+    const lastLength = last?.node?.nodeValue?.length || 0;
+    return {
+        node: last.node,
+        element: last.element,
+        offset: lastLength
+    };
+};
+
+const collectTextLayerNodes = (textLayer) => {
+    if (!textLayer) {
+        return { rawText: '', nodes: [] };
+    }
+
+    const walker = document.createTreeWalker(textLayer, NodeFilter.SHOW_TEXT, {
+        acceptNode(node) {
+            if (!node?.nodeValue?.trim()) {
+                return NodeFilter.FILTER_REJECT;
+            }
+            return NodeFilter.FILTER_ACCEPT;
+        }
+    });
+
+    const nodes = [];
+    let rawText = '';
+    let currentNode = walker.nextNode();
+
+    while (currentNode) {
+        const text = currentNode.nodeValue || '';
+        const start = rawText.length;
+        rawText += text;
+        nodes.push({
+            node: currentNode,
+            element: currentNode.parentElement || textLayer,
+            start,
+            end: rawText.length
+        });
+        currentNode = walker.nextNode();
+    }
+
+    return { rawText, nodes };
+};
+
+const buildNormalizedTextIndex = (value = '') => {
+    let normalized = '';
+    const rawByNormalized = [];
+    let pendingWhitespaceIndex = -1;
+    let hasVisibleCharacter = false;
+
+    for (let index = 0; index < value.length; index++) {
+        const char = value[index];
+        if (/\s/.test(char)) {
+            if (hasVisibleCharacter && pendingWhitespaceIndex === -1) {
+                pendingWhitespaceIndex = index;
+            }
+            continue;
+        }
+
+        if (pendingWhitespaceIndex !== -1) {
+            normalized += ' ';
+            rawByNormalized.push(pendingWhitespaceIndex);
+            pendingWhitespaceIndex = -1;
+        }
+
+        normalized += char;
+        rawByNormalized.push(index);
+        hasVisibleCharacter = true;
+    }
+
+    return { text: normalized, rawByNormalized };
+};
+
+const buildTextRangeCandidate = (nodes, normalizedIndex, needleLength, normalizedLookup) => {
+    const startRaw = normalizedLookup.rawByNormalized[normalizedIndex];
+    const endRawInclusive = normalizedLookup.rawByNormalized[normalizedIndex + needleLength - 1];
+    if (!Number.isFinite(startRaw) || !Number.isFinite(endRawInclusive)) return null;
+
+    const startLocation = getTextLocationAtRawIndex(nodes, startRaw);
+    const endLocation = getTextLocationAtRawIndex(nodes, endRawInclusive + 1);
+    if (!startLocation || !endLocation) return null;
+
+    const range = document.createRange();
+    range.setStart(startLocation.node, startLocation.offset);
+    range.setEnd(endLocation.node, endLocation.offset);
+
+    return {
+        range,
+        element: startLocation.element || endLocation.element || null,
+        rect: range.getBoundingClientRect(),
+        rawStart: startRaw,
+        rawEnd: endRawInclusive + 1
+    };
+};
+
+const getCommentAnchorClientPoint = (page, commentRef) => {
+    const first = commentRef?.stroke?.[0] || null;
+    const canvas = page?.drawingCanvas || null;
+    if (!first || !canvas) return null;
+
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height || !canvas.width || !canvas.height) return null;
+
+    const scaleX = rect.width / canvas.width;
+    const scaleY = rect.height / canvas.height;
+    const width = Number(first.width) || 0;
+    const height = Number(first.height) || 0;
+
+    return {
+        x: rect.left + ((Number(first.x) || 0) + width / 2) * scaleX,
+        y: rect.top + ((Number(first.y) || 0) + height / 2) * scaleY
+    };
+};
+
+const getCommentTextAnchor = (commentRef) => commentRef?.stroke?.[0]?.selectionAnchor || null;
+
+const scoreCommentTextCandidate = (candidate, rawText, commentRef, anchorPoint) => {
+    let score = 0;
+    const totalLength = Math.max(1, rawText.length);
+    const selectionAnchor = getCommentTextAnchor(commentRef);
+
+    if (selectionAnchor) {
+        if (Number.isFinite(selectionAnchor.startRatio)) {
+            const candidateRatio = candidate.rawStart / totalLength;
+            score += Math.max(0, 4 - Math.abs(candidateRatio - selectionAnchor.startRatio) * 20);
+        }
+
+        const beforeHint = collapseWhitespace(selectionAnchor.beforeText || '').toLowerCase();
+        if (beforeHint) {
+            const beforeWindow = collapseWhitespace(
+                rawText.slice(Math.max(0, candidate.rawStart - Math.max(96, beforeHint.length * 2)), candidate.rawStart)
+            ).toLowerCase();
+            if (beforeWindow.endsWith(beforeHint)) {
+                score += 5;
+            } else if (beforeWindow.includes(beforeHint)) {
+                score += 2;
+            }
+        }
+
+        const afterHint = collapseWhitespace(selectionAnchor.afterText || '').toLowerCase();
+        if (afterHint) {
+            const afterWindow = collapseWhitespace(
+                rawText.slice(candidate.rawEnd, Math.min(rawText.length, candidate.rawEnd + Math.max(96, afterHint.length * 2)))
+            ).toLowerCase();
+            if (afterWindow.startsWith(afterHint)) {
+                score += 5;
+            } else if (afterWindow.includes(afterHint)) {
+                score += 2;
+            }
+        }
+    }
+
+    if (anchorPoint && candidate.rect) {
+        const centerX = candidate.rect.left + candidate.rect.width / 2;
+        const centerY = candidate.rect.top + candidate.rect.height / 2;
+        const distance = Math.hypot(centerX - anchorPoint.x, centerY - anchorPoint.y);
+        score += Math.max(0, 2 - (distance / 320));
+    }
+
+    return score;
+};
+
+const findBestCommentTextRange = (page, commentRef) => {
+    const textLayer = page?.textLayer || null;
+    const needle = collapseWhitespace(commentRef?.selectedText || '');
+    if (!textLayer || !needle) return null;
+
+    const { rawText, nodes } = collectTextLayerNodes(textLayer);
+    if (!rawText || nodes.length === 0) return null;
+
+    const normalizedLookup = buildNormalizedTextIndex(rawText);
+    const normalizedNeedle = buildNormalizedTextIndex(needle).text;
+    if (!normalizedLookup.text || !normalizedNeedle) return null;
+
+    const candidates = [];
+    let searchFrom = 0;
+    const normalizedHaystack = normalizedLookup.text.toLowerCase();
+    const normalizedTarget = normalizedNeedle.toLowerCase();
+
+    while (searchFrom < normalizedHaystack.length) {
+        const matchIndex = normalizedHaystack.indexOf(normalizedTarget, searchFrom);
+        if (matchIndex === -1) break;
+
+        const candidate = buildTextRangeCandidate(nodes, matchIndex, normalizedTarget.length, normalizedLookup);
+        if (candidate) {
+            candidates.push(candidate);
+        }
+
+        searchFrom = matchIndex + Math.max(1, normalizedTarget.length);
+    }
+
+    if (candidates.length === 0) return null;
+    if (candidates.length === 1) return candidates[0];
+
+    const anchor = getCommentAnchorClientPoint(page, commentRef);
+    return candidates.reduce((best, candidate) => {
+        const score = scoreCommentTextCandidate(candidate, rawText, commentRef, anchor);
+        if (!best || score > best.score) {
+            return { ...candidate, score };
+        }
+        return best;
+    }, null);
+};
+
 export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
     const fileId = uuid();
 
@@ -2017,6 +2241,71 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
         printModal.value?.printPage();
     };
 
+    // Comment Sidebar
+    const documentComments = computed(() => {
+        return pages.value
+            .flatMap((page) => (page.strokes || []).map((stroke, strokeIndex) => {
+                const first = stroke?.[0] || null;
+                if (!first || first.type !== 'comment') return null;
+                return {
+                    id: String(first.id || `${page.id}-${strokeIndex}`),
+                    pageId: page.id,
+                    pageIndex: page.index,
+                    strokeIndex,
+                    stroke,
+                    selectedText: String(first.selectedText || ''),
+                    comment: String(first.comment || ''),
+                    author: String(first.author || ''),
+                    source: String(first.source || ''),
+                    canJumpToText: Boolean(collapseWhitespace(first.selectedText || '')),
+                    updatedAt: first.updatedAt || first.createdAt || null,
+                };
+            }))
+            .filter(Boolean)
+            .sort((left, right) => {
+                if (left.pageIndex !== right.pageIndex) return left.pageIndex - right.pageIndex;
+                const leftTime = left.updatedAt ? new Date(left.updatedAt).getTime() : 0;
+                const rightTime = right.updatedAt ? new Date(right.updatedAt).getTime() : 0;
+                return rightTime - leftTime;
+            });
+    });
+
+    const ensureCommentPageReady = async (commentRef) => {
+        if (!commentRef) return null;
+        const page = pages.value.find(entry => entry.id === commentRef?.pageId)
+            || pages.value.find(entry => entry.index === commentRef?.pageIndex)
+            || null;
+
+        if (!page) return null;
+
+        if (pageIndex.value !== page.index) {
+            scrollToPage(page.index);
+            await nextTick();
+        }
+
+        if (!page.rendered) {
+            await renderPdfPage(page.id);
+            await nextTick();
+        }
+
+        return page;
+    };
+
+    const revealCommentSourceText = async (commentRef) => {
+        const page = await ensureCommentPageReady(commentRef);
+        if (!page) return false;
+
+        const match = findBestCommentTextRange(page, commentRef);
+        if (!match?.range) return false;
+
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(match.range);
+
+        match.element?.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+        return true;
+    };
+
     return {
         fileId,
         pages,
@@ -2063,5 +2352,9 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
         zoomLevels,
         onZoomLevelChange,
         zoom,
+        documentComments,
+        previewCommentSelection,
+        revealCommentSourceText,
+        ensureCommentPageReady,
     }
 }

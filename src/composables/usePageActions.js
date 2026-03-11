@@ -1142,262 +1142,10 @@ const setStrokeMeta = (el, strokeIndex) => {
     el.setAttribute('data-stroke-index', String(strokeIndex));
 };
 
-// Comment Helpers
-const collapseWhitespace = (value = '') => String(value || '').replace(/\s+/g, ' ').trim();
-
-const previewCommentSelection = (value = '') => {
-    const text = collapseWhitespace(value);
-    return text.length > 160 ? `${text.slice(0, 157)}...` : text;
-};
-
-const buildNormalizedTextIndex = (value = '') => {
-    let normalized = '';
-    const rawByNormalized = [];
-    let pendingWhitespaceIndex = -1;
-    let hasVisibleCharacter = false;
-
-    for (let index = 0; index < value.length; index++) {
-        const char = value[index];
-        if (/\s/.test(char)) {
-            if (hasVisibleCharacter && pendingWhitespaceIndex === -1) {
-                pendingWhitespaceIndex = index;
-            }
-            continue;
-        }
-
-        if (pendingWhitespaceIndex !== -1) {
-            normalized += ' ';
-            rawByNormalized.push(pendingWhitespaceIndex);
-            pendingWhitespaceIndex = -1;
-        }
-
-        normalized += char;
-        rawByNormalized.push(index);
-        hasVisibleCharacter = true;
-    }
-
-    return { text: normalized, rawByNormalized };
-};
-
-const collectTextLayerNodes = (textLayer) => {
-    if (!textLayer) {
-        return { rawText: '', nodes: [] };
-    }
-
-    const walker = document.createTreeWalker(textLayer, NodeFilter.SHOW_TEXT, {
-        acceptNode(node) {
-            if (!node?.nodeValue?.trim()) {
-                return NodeFilter.FILTER_REJECT;
-            }
-            return NodeFilter.FILTER_ACCEPT;
-        }
-    });
-
-    const nodes = [];
-    let rawText = '';
-    let currentNode = walker.nextNode();
-
-    while (currentNode) {
-        const text = currentNode.nodeValue || '';
-        const start = rawText.length;
-        rawText += text;
-        nodes.push({
-            node: currentNode,
-            element: currentNode.parentElement || textLayer,
-            start,
-            end: rawText.length
-        });
-        currentNode = walker.nextNode();
-    }
-
-    return { rawText, nodes };
-};
-
-const getTextLocationAtRawIndex = (nodes, rawIndex) => {
-    if (!Array.isArray(nodes) || nodes.length === 0) return null;
-
-    for (const entry of nodes) {
-        if (rawIndex < entry.end) {
-            return {
-                node: entry.node,
-                element: entry.element,
-                offset: Math.max(0, rawIndex - entry.start)
-            };
-        }
-    }
-
-    const last = nodes[nodes.length - 1];
-    const lastLength = last?.node?.nodeValue?.length || 0;
-    return {
-        node: last.node,
-        element: last.element,
-        offset: lastLength
-    };
-};
-
-const getCommentAnchorClientPoint = (page, commentRef) => {
-    const first = commentRef?.stroke?.[0] || null;
-    const canvas = page?.drawingCanvas || null;
-    if (!first || !canvas) return null;
-
-    const rect = canvas.getBoundingClientRect();
-    if (!rect.width || !rect.height || !canvas.width || !canvas.height) return null;
-
-    const scaleX = rect.width / canvas.width;
-    const scaleY = rect.height / canvas.height;
-    const width = Number(first.width) || 0;
-    const height = Number(first.height) || 0;
-
-    return {
-        x: rect.left + ((Number(first.x) || 0) + width / 2) * scaleX,
-        y: rect.top + ((Number(first.y) || 0) + height / 2) * scaleY
-    };
-};
-
-const buildTextRangeCandidate = (nodes, normalizedIndex, needleLength, normalizedLookup) => {
-    const startRaw = normalizedLookup.rawByNormalized[normalizedIndex];
-    const endRawInclusive = normalizedLookup.rawByNormalized[normalizedIndex + needleLength - 1];
-    if (!Number.isFinite(startRaw) || !Number.isFinite(endRawInclusive)) return null;
-
-    const startLocation = getTextLocationAtRawIndex(nodes, startRaw);
-    const endLocation = getTextLocationAtRawIndex(nodes, endRawInclusive + 1);
-    if (!startLocation || !endLocation) return null;
-
-    const range = document.createRange();
-    range.setStart(startLocation.node, startLocation.offset);
-    range.setEnd(endLocation.node, endLocation.offset);
-
-    return {
-        range,
-        element: startLocation.element || endLocation.element || null,
-        rect: range.getBoundingClientRect(),
-        rawStart: startRaw,
-        rawEnd: endRawInclusive + 1
-    };
-};
-
-const getCommentTextAnchor = (commentRef) => commentRef?.stroke?.[0]?.selectionAnchor || null;
-
-const scoreCommentTextCandidate = (candidate, rawText, commentRef, anchorPoint) => {
-    let score = 0;
-    const totalLength = Math.max(1, rawText.length);
-    const selectionAnchor = getCommentTextAnchor(commentRef);
-
-    if (selectionAnchor) {
-        if (Number.isFinite(selectionAnchor.startRatio)) {
-            const candidateRatio = candidate.rawStart / totalLength;
-            score += Math.max(0, 4 - Math.abs(candidateRatio - selectionAnchor.startRatio) * 20);
-        }
-
-        const beforeHint = collapseWhitespace(selectionAnchor.beforeText || '').toLowerCase();
-        if (beforeHint) {
-            const beforeWindow = collapseWhitespace(
-                rawText.slice(Math.max(0, candidate.rawStart - Math.max(96, beforeHint.length * 2)), candidate.rawStart)
-            ).toLowerCase();
-            if (beforeWindow.endsWith(beforeHint)) {
-                score += 5;
-            } else if (beforeWindow.includes(beforeHint)) {
-                score += 2;
-            }
-        }
-
-        const afterHint = collapseWhitespace(selectionAnchor.afterText || '').toLowerCase();
-        if (afterHint) {
-            const afterWindow = collapseWhitespace(
-                rawText.slice(candidate.rawEnd, Math.min(rawText.length, candidate.rawEnd + Math.max(96, afterHint.length * 2)))
-            ).toLowerCase();
-            if (afterWindow.startsWith(afterHint)) {
-                score += 5;
-            } else if (afterWindow.includes(afterHint)) {
-                score += 2;
-            }
-        }
-    }
-
-    if (anchorPoint && candidate.rect) {
-        const centerX = candidate.rect.left + candidate.rect.width / 2;
-        const centerY = candidate.rect.top + candidate.rect.height / 2;
-        const distance = Math.hypot(centerX - anchorPoint.x, centerY - anchorPoint.y);
-        score += Math.max(0, 2 - (distance / 320));
-    }
-
-    return score;
-};
-
-const findBestCommentTextRange = (page, commentRef) => {
-    const textLayer = page?.textLayer || null;
-    const needle = collapseWhitespace(commentRef?.selectedText || '');
-    if (!textLayer || !needle) return null;
-
-    const { rawText, nodes } = collectTextLayerNodes(textLayer);
-    if (!rawText || nodes.length === 0) return null;
-
-    const normalizedLookup = buildNormalizedTextIndex(rawText);
-    const normalizedNeedle = buildNormalizedTextIndex(needle).text;
-    if (!normalizedLookup.text || !normalizedNeedle) return null;
-
-    const candidates = [];
-    let searchFrom = 0;
-    const normalizedHaystack = normalizedLookup.text.toLowerCase();
-    const normalizedTarget = normalizedNeedle.toLowerCase();
-
-    while (searchFrom < normalizedHaystack.length) {
-        const matchIndex = normalizedHaystack.indexOf(normalizedTarget, searchFrom);
-        if (matchIndex === -1) break;
-
-        const candidate = buildTextRangeCandidate(nodes, matchIndex, normalizedTarget.length, normalizedLookup);
-        if (candidate) {
-            candidates.push(candidate);
-        }
-
-        searchFrom = matchIndex + Math.max(1, normalizedTarget.length);
-    }
-
-    if (candidates.length === 0) return null;
-    if (candidates.length === 1) return candidates[0];
-
-    const anchor = getCommentAnchorClientPoint(page, commentRef);
-    return candidates.reduce((best, candidate) => {
-        const score = scoreCommentTextCandidate(candidate, rawText, commentRef, anchor);
-        if (!best || score > best.score) {
-            return { ...candidate, score };
-        }
-        return best;
-    }, null);
-};
-
-export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, scrollToPage) {
+export function usePageActions(pages, pagesContainer, addToHistory) {
     const { get: storeGet, set: storeSet } = useStore();
 
-    const activePage = ref(null);
-
-    const documentComments = computed(() => {
-        return pages.value
-            .flatMap((page) => (page.strokes || []).map((stroke, strokeIndex) => {
-                const first = stroke?.[0] || null;
-                if (!first || first.type !== 'comment') return null;
-                return {
-                    id: String(first.id || `${page.id}-${strokeIndex}`),
-                    pageId: page.id,
-                    pageIndex: page.index,
-                    strokeIndex,
-                    stroke,
-                    selectedText: String(first.selectedText || ''),
-                    comment: String(first.comment || ''),
-                    author: String(first.author || ''),
-                    source: String(first.source || ''),
-                    canJumpToText: Boolean(collapseWhitespace(first.selectedText || '')),
-                    updatedAt: first.updatedAt || first.createdAt || null,
-                };
-            }))
-            .filter(Boolean)
-            .sort((left, right) => {
-                if (left.pageIndex !== right.pageIndex) return left.pageIndex - right.pageIndex;
-                const leftTime = left.updatedAt ? new Date(left.updatedAt).getTime() : 0;
-                const rightTime = right.updatedAt ? new Date(right.updatedAt).getTime() : 0;
-                return rightTime - leftTime;
-            });
-    });
+    const actionPage = ref(null);
 
     const activeCommentId = computed(() => {
         const first = selectedStroke.value?.stroke?.[0] || null;
@@ -1640,7 +1388,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
         const rect = e.target.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
-        selectionStart.value = { x, y, canvasIndex: getCanvasIndexFromEvent(activePage.value, e) };
+        selectionStart.value = { x, y, canvasIndex: getCanvasIndexFromEvent(actionPage.value, e) };
         selectionEnd.value = { x, y };
         isSelecting.value = true;
         stopEvent(e);
@@ -1653,7 +1401,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
         selectionEnd.value = { x, y };
         
         // Draw selection rectangle
-        const page = activePage.value;
+        const page = actionPage.value;
         const canvas = page.drawingCanvas;
         const ctx = page.drawingContext;
         if (canvas && ctx) {
@@ -1683,7 +1431,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
         } else if (isStrokeSelectModeActive.value) {
             selectStrokesInSelectionBox();
         } else if (isTextInputMode.value) {
-            const page = activePage.value;
+            const page = actionPage.value;
             const canvas = page?.drawingCanvas || null;
             if (canvas && selectionStart.value && selectionEnd.value) {
                 const rect = canvas.getBoundingClientRect();
@@ -1851,7 +1599,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
     const selectStrokes = (strokes) => {
         if (!isStrokeSelectModeActive.value) return;
         if (!Array.isArray(strokes) || strokes.length === 0) return;
-        const page = activePage.value;
+        const page = actionPage.value;
 
         const selections = strokes.map((stroke, strokeIndex) => {
             return {
@@ -1876,7 +1624,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
     const insertCopiedStroke = () => {
         if (!copiedStroke.value) return;
 
-        const page = activePage.value;
+        const page = actionPage.value;
 
         const { cx: visibleCX, cy: visibleCY } = getVisibleCenterOnCanvas(page.drawingCanvas);
 
@@ -1984,7 +1732,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
     const getFittedTextStrokeBounds = ({ content, color, fontSize, bounds }) => {
         const minSize = getTextEditorMinSize();
         const safeBounds = bounds || { x: 0, y: 0, width: minSize.width, height: minSize.height };
-        const ctx = activePage.value.drawingContext;
+        const ctx = actionPage.value.drawingContext;
 
         if (!ctx) {
             return {
@@ -2025,7 +1773,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
         const first = stroke?.[0];
         if (!first || first.type !== 'text') return null;
 
-        const ctx = activePage.value.drawingContext;
+        const ctx = actionPage.value.drawingContext;
         if (!ctx) return null;
 
         const content = getTextStrokeContent(first);
@@ -2074,7 +1822,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
     };
 
     const canvasBoundsToViewport = (bounds) => {
-        const canvas = activePage.value.drawingCanvas || null;
+        const canvas = actionPage.value.drawingCanvas || null;
         if (!canvas || !bounds) return null;
 
         const rect = canvas.getBoundingClientRect();
@@ -2188,7 +1936,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
         const requestedHeight = Math.max(minSize.height, Number(height) || 0);
         if (!requestedWidth || !requestedHeight) return;
 
-        const canvas = activePage.value.drawingCanvas || null;
+        const canvas = actionPage.value.drawingCanvas || null;
         if (!canvas) return;
 
         const rect = canvas.getBoundingClientRect();
@@ -2288,7 +2036,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
             return;
         }
 
-        const canvas = activePage.value.drawingCanvas || null;
+        const canvas = actionPage.value.drawingCanvas || null;
         let scale = 1;
         if (canvas) {
             const rect = canvas.getBoundingClientRect();
@@ -2299,7 +2047,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
 
         if (editingTextStroke.value) {
             const strokeIndex = editingTextStroke.value.strokeIndex;
-            const stroke = activePage.value.strokes?.[strokeIndex];
+            const stroke = actionPage.value.strokes?.[strokeIndex];
             if (stroke?.[0]?.type === 'text') {
                 const originalStroke = JSON.parse(JSON.stringify(stroke));
                 const editorBounds = {
@@ -2354,7 +2102,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
                 addToHistory({
                     id: stroke[0].id,
                     type: 'text-change',
-                    page: activePage.value,
+                    page: actionPage.value,
                     strokeIndex,
                     stroke: JSON.parse(JSON.stringify(stroke)),
                     previousStroke: originalStroke
@@ -2413,11 +2161,11 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
                 textStroke[0].rotationBoxHeight = textStroke[0].height;
             }
 
-            activePage.value.strokes.push(textStroke);
+            actionPage.value.strokes.push(textStroke);
             addToHistory({
                 id,
                 type: 'add',
-                page: activePage.value,
+                page: actionPage.value,
                 stroke: textStroke
             });
         }
@@ -2571,7 +2319,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
     };
 
     const pickStrokeAtPoint = (x, y) => {
-        const page = activePage.value;
+        const page = actionPage.value;
         const strokes = page.strokes || [];
 
         const svgLayer = page?.annotationSvg || null;
@@ -2937,7 +2685,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
     const selectStrokesInSelectionBox = () => {
         if (!selectionStart.value || !selectionEnd.value) return;
 
-        const page = activePage.value;
+        const page = actionPage.value;
         const strokes = page.strokes || [];
 
         // Convert selection box from screen (CSS) coords to canvas coords
@@ -3000,7 +2748,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
             const scrollEl = getScrollContainer();
             if (!scrollEl) return;
 
-            const canvas = activePage.value?.drawingCanvas || null;
+            const canvas = actionPage.value?.drawingCanvas || null;
 
             isHandToolPanning.value = true;
             handPanPointerId.value = e.pointerId;
@@ -3036,7 +2784,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
         if (isStrokeSelectModeActive.value) {
             textEditorPosition.value = null;
 
-            const page = activePage.value;
+            const page = actionPage.value;
             const canvasIndex = page.index;
             if (canvasIndex === -1) return;
 
@@ -3216,9 +2964,9 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
         if (isTextInputMode.value) {
             if (isSecondaryPointerAction(e)) return;
 
-            const canvasIndex = getCanvasIndexFromEvent(activePage.value, e);
+            const canvasIndex = getCanvasIndexFromEvent(actionPage.value, e);
             if (canvasIndex === -1) return;
-            const canvas = activePage.value.drawingCanvas || null;
+            const canvas = actionPage.value.drawingCanvas || null;
             handleSelectionStart(e);
             isMouseDown.value = true;
             currentCanvasIndex = canvasIndex;
@@ -3238,11 +2986,11 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
         stopEvent(e);
         
         // Determine which canvas this event is for
-        currentCanvasIndex = getCanvasIndexFromEvent(activePage.value, e);
+        currentCanvasIndex = getCanvasIndexFromEvent(actionPage.value, e);
         if (currentCanvasIndex === -1) return;
 
-        const canvas = activePage.value.drawingCanvas || null;
-        const drawingContext = activePage.value.drawingContext || null;
+        const canvas = actionPage.value.drawingCanvas || null;
+        const drawingContext = actionPage.value.drawingContext || null;
         
         if (!canvas || !drawingContext) return;
         
@@ -3308,12 +3056,12 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
             // Handle rotation
             if (isRotating.value && selectedStroke.value && resizeHandle.value === 'rotate') {
                 if (e.pointerId !== activePointerId.value) return;
-                const canvas = activePage.value.drawingCanvas || null;
+                const canvas = actionPage.value.drawingCanvas || null;
                 const pt = getCanvasPointFromEvent(canvas, e);
                 if (!pt) return;
                 const currentX = pt.x;
                 const currentY = pt.y;
-                const strokes = activePage.value.strokes || [];
+                const strokes = actionPage.value.strokes || [];
                 const stroke = strokes[selectedStroke.value.strokeIndex];
                 const first = stroke[0];
                 const origFirst = selectedStroke.value.originalStroke[0];
@@ -3334,7 +3082,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
             if (isResizing.value && selectedStroke.value && resizeHandle.value) {
                 if (e.pointerId !== activePointerId.value) return;
                 
-                const canvas = activePage.value?.drawingCanvas || null;
+                const canvas = actionPage.value?.drawingCanvas || null;
                 const pt = getCanvasPointFromEvent(canvas, e);
                 if (!pt) return;
                 const currentX = pt.x;
@@ -3343,7 +3091,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
                 let dx = currentX - dragStartPos.value.x;
                 let dy = currentY - dragStartPos.value.y;
                 
-                const strokes = activePage.value.strokes || [];
+                const strokes = actionPage.value.strokes || [];
                 const stroke = strokes[selectedStroke.value.strokeIndex];
                 
                 if (stroke && resizeStartBounds.value) {
@@ -3662,7 +3410,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
                 // Only continue with the same pointer that started
                 if (e.pointerId !== activePointerId.value) return;
                 
-                const canvas = activePage.value.drawingCanvas || null;
+                const canvas = actionPage.value.drawingCanvas || null;
                 const pt = getCanvasPointFromEvent(canvas, e);
                 if (!pt) return;
                 const currentX = pt.x;
@@ -3671,7 +3419,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
                 const dx = currentX - lastX;
                 const dy = currentY - lastY;
                 
-                const strokes = activePage.value.strokes || [];
+                const strokes = actionPage.value.strokes || [];
 
                 if (Array.isArray(selectedStrokes.value) && selectedStrokes.value.length > 1) {
                     selectedStrokes.value.forEach(sel => {
@@ -3704,7 +3452,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
                 const first = selectedStroke.value.stroke?.[0];
                 if (isSelectOnlyStroke(first)) return;
                 
-                const canvas = activePage.value.drawingCanvas || null;
+                const canvas = actionPage.value.drawingCanvas || null;
                 const pt = getCanvasPointFromEvent(canvas, e);
                 if (!pt) return;
                 const currentX = pt.x;
@@ -3747,8 +3495,8 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
         
         if (currentCanvasIndex === -1) return;
         
-        const canvas = activePage.value.drawingCanvas || null;
-        const drawingContext = activePage.value.drawingContext || null;
+        const canvas = actionPage.value.drawingCanvas || null;
+        const drawingContext = actionPage.value.drawingContext || null;
         
         if (!canvas || !drawingContext) return;
         
@@ -3839,7 +3587,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
         if (isStrokeSelectModeActive.value && (isStrokeHovering.value || isDragging.value || isResizing.value || isRotating.value) && isMouseDown.value && selectedStroke.value) {
             // Only stop if it's the same pointer
             if (e && e.pointerId !== activePointerId.value) return;
-            const canvas = activePage.value.drawingCanvas || null;
+            const canvas = actionPage.value.drawingCanvas || null;
             
             if (canvas && e && e.pointerId !== undefined) {
                 try {
@@ -3849,7 +3597,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
                 }
             }
             
-            const stroke = activePage.value.strokes[selectedStroke.value.strokeIndex];
+            const stroke = actionPage.value.strokes[selectedStroke.value.strokeIndex];
             const didTransformStroke = isDragging.value || isResizing.value || isRotating.value;
             
             // Redraw without highlight after drag/resize
@@ -3868,12 +3616,12 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
                         // Emit history for each moved stroke on this canvas
                         selectedStrokes.value.forEach(sel => {
                             if (sel.pageIndex !== currentCanvasIndex) return;
-                            const s = activePage.value.strokes[sel.strokeIndex];
+                            const s = actionPage.value.strokes[sel.strokeIndex];
                             if (!s) return;
                             addToHistory({
                                 id: s[0].id,
                                 type: 'move',
-                                page: activePage.value,
+                                page: actionPage.value,
                                 strokeIndex: sel.strokeIndex,
                                 stroke: JSON.parse(JSON.stringify(s)),
                                 previousStroke: sel.originalStroke || JSON.parse(JSON.stringify(s))
@@ -3884,7 +3632,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
                         addToHistory({
                             id: stroke[0].id,
                             type: changeType,
-                            page: activePage.value,
+                            page: actionPage.value,
                             strokeIndex: selectedStroke.value.strokeIndex,
                             stroke: JSON.parse(JSON.stringify(stroke)),
                             previousStroke: selectedStroke.value.originalStroke
@@ -3900,7 +3648,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
                         // Update originals for all selections on this canvas
                         selectedStrokes.value.forEach(sel => {
                             if (sel.pageIndex !== currentCanvasIndex) return;
-                            const s = activePage.value.strokes[sel.strokeIndex];
+                            const s = actionPage.value.strokes[sel.strokeIndex];
                             if (s) {
                                 // Keep live reference for stroke, snapshot original for future operations
                                 sel.stroke = s;
@@ -3935,7 +3683,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
         if ((isCaptureSelectionMode.value || isStrokeSelectModeActive.value || isTextInputMode.value) && isSelecting.value && selectionStart.value && selectionEnd.value) {
             handleSelectionEnd(e);
 
-            const canvas = activePage.value.drawingCanvas || null;
+            const canvas = actionPage.value.drawingCanvas || null;
             if (canvas && e && e.pointerId !== undefined) {
                 try {
                     canvas.releasePointerCapture(e.pointerId);
@@ -3957,7 +3705,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
         if (currentCanvasIndex === -1) return;
         
         // Release pointer capture
-        const canvas = activePage.value.drawingCanvas || null;
+        const canvas = actionPage.value.drawingCanvas || null;
         if (canvas && e && e.pointerId !== undefined) {
             try {
                 canvas.releasePointerCapture(e.pointerId);
@@ -3989,15 +3737,15 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
                     dash: drawStyle.value.dash
                 };
                 newStroke = [shape];
-                activePage.value.strokes.push(newStroke);
+                actionPage.value.strokes.push(newStroke);
             } else {
-                const ctx = activePage.value?.drawingContext || null;
+                const ctx = actionPage.value?.drawingContext || null;
                 if (ctx) ctx.putImageData(canvasSnapshot, 0, 0);
             }
             canvasSnapshot = null;
         } else if (isDrawing.value && currentStroke.value.length > 1) {
             newStroke = [...currentStroke.value];
-            activePage.value.strokes.push(newStroke);
+            actionPage.value.strokes.push(newStroke);
             currentStroke.value = [];
         } else {
             // Discard single point pen strokes or empty shapes
@@ -4008,14 +3756,14 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
             addToHistory({
                 id: currentStrokeId.value,
                 type: 'add',
-                page: activePage.value,
+                page: actionPage.value,
                 stroke: newStroke
             });
 
             currentStrokeId.value = null;
         }
         
-        const drawingContext = activePage.value?.drawingContext || null;
+        const drawingContext = actionPage.value?.drawingContext || null;
         if (drawingContext) {
             drawingContext.closePath();
         }
@@ -4030,7 +3778,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
             return;
         }
 
-        const canvas = activePage.value?.drawingCanvas || null;
+        const canvas = actionPage.value?.drawingCanvas || null;
         const pt = getCanvasPointFromEvent(canvas, e);
         if (!pt) {
             clearHoveredCommentPreview();
@@ -4057,15 +3805,15 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
     let prevActivePage;
 
     const onPointerEnter = (e, page) => {
-        if (activePage.value?.id !== page.id) {
-            activePage.value = page;
+        if (actionPage.value?.id !== page.id) {
+            actionPage.value = page;
 
             if (selectedStroke.value && selectedStroke.value?.pageId !== page.id) {
                 deselectAllStrokes();
             }
         }
 
-        if (activePage.value?.id === prevActivePage?.id) return;
+        if (actionPage.value?.id === prevActivePage?.id) return;
         const existingOverlay = prevActivePage?.annotationSvg?.querySelector('.annotation-selection-overlay');
         if (!existingOverlay) return;
         existingOverlay.remove();
@@ -4086,9 +3834,9 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
     
             // Perform hit detection only when mouse is not down (hovering)
             if (!isMouseDown.value) {
-                const canvasIndex = activePage.value.index;
+                const canvasIndex = actionPage.value.index;
                 if (canvasIndex !== -1) {
-                    const canvas = activePage.value.drawingCanvas || null;
+                    const canvas = actionPage.value.drawingCanvas || null;
                     const pt = getCanvasPointFromEvent(canvas, e);
                     
                     if (pt) {
@@ -4098,7 +3846,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
                         newStrokeHovering = isAnyStrokeAtPoint(x, y, canvasIndex);
     
                         // 2. Check bounding box & resize handle hover (only if selected stroke is on this page)
-                        if (selectedStroke.value && selectedStroke.value.pageId === activePage.value.id) {
+                        if (selectedStroke.value && selectedStroke.value.pageId === actionPage.value.id) {
                             const bounds = getStrokeBounds(selectedStroke.value.stroke, 5);
                             if (bounds) {
                                 newResizeHandle = getResizeHandle(x, y, bounds, selectedStroke.value.stroke, 5);
@@ -4189,7 +3937,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
     const changeStrokeColor = (newColor) => {
         if (!selectedStroke.value) return;
         const pageId = selectedStroke.value.pageId;
-        const strokes = activePage.value.strokes || [];
+        const strokes = actionPage.value.strokes || [];
 
         const isMulti = Array.isArray(selectedStrokes.value) && selectedStrokes.value.length > 1;
         if (isMulti) {
@@ -4205,7 +3953,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
                 addToHistory({
                     id: s[0].id,
                     type: 'color-change',
-                    page: activePage.value,
+                    page: actionPage.value,
                     strokeIndex: sel.strokeIndex,
                     stroke: JSON.parse(JSON.stringify(s)),
                     previousStroke: originalStroke
@@ -4221,7 +3969,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
                 addToHistory({
                     id: stroke[0].id,
                     type: 'color-change',
-                    page: activePage.value,
+                    page: actionPage.value,
                     strokeIndex: selectedStroke.value.strokeIndex,
                     stroke: JSON.parse(JSON.stringify(stroke)),
                     previousStroke: originalStroke
@@ -4236,7 +3984,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
     const changeStrokeThickness = (newThickness) => {
         if (!selectedStroke.value) return;
         const pageId = selectedStroke.value.pageId;
-        const strokes = activePage.value.strokes || [];
+        const strokes = actionPage.value.strokes || [];
         const thicknessVal = parseInt(newThickness, 10);
 
         const isMulti = Array.isArray(selectedStrokes.value) && selectedStrokes.value.length > 1;
@@ -4252,7 +4000,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
                 addToHistory({
                     id: s[0].id,
                     type: 'thickness-change',
-                    page: activePage.value,
+                    page: actionPage.value,
                     strokeIndex: sel.strokeIndex,
                     stroke: JSON.parse(JSON.stringify(s)),
                     previousStroke: originalStroke
@@ -4268,7 +4016,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
                 addToHistory({
                     id: stroke[0].id,
                     type: 'thickness-change',
-                    page: activePage.value,
+                    page: actionPage.value,
                     strokeIndex: selectedStroke.value.strokeIndex,
                     stroke: JSON.parse(JSON.stringify(stroke)),
                     previousStroke: originalStroke
@@ -4293,7 +4041,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
             });
 
             pages.forEach((indices, pageIdx) => {
-                const strokes = activePage.value.strokes || [];
+                const strokes = actionPage.value.strokes || [];
                 const sorted = [...indices].sort((a, b) => b - a);
                 const removals = sorted.map(index => ({ index, data: strokes[index] }));
                 // Splice descending to avoid reindexing issues
@@ -4301,7 +4049,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
                 addToHistory({
                     id: removals[0]?.data?.[0]?.id,
                     type: 'erase',
-                    page: activePage.value,
+                    page: actionPage.value,
                     strokes: removals
                 });
                 redrawAllStrokes();
@@ -4312,20 +4060,38 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
         }
 
         // Single deletion
-        const strokes = activePage.value.strokes || [];
+        const strokes = actionPage.value.strokes || [];
         const stroke = strokes[selectedStroke.value.strokeIndex];
         if (stroke) {
             strokes.splice(selectedStroke.value.strokeIndex, 1);
             addToHistory({
                 id: stroke[0].id,
                 type: 'erase',
-                page: activePage.value,
+                page: actionPage.value,
                 strokes: [{ index: selectedStroke.value.strokeIndex, data: stroke }]
             });
             redrawAllStrokes();
         }
     
         selectedStroke.value = null;
+    };
+
+    const deleteStrokeFromPage = (pageId, strokeIndex) => {
+        const page = getPageByRef({ pageId });
+        if (!page) return;
+
+        const strokes = page.strokes || [];
+        const stroke = strokes[strokeIndex];
+        if (stroke) {
+            strokes.splice(strokeIndex, 1);
+            addToHistory({
+                id: stroke[0].id,
+                type: 'erase',
+                page,
+                strokes: [{ index: strokeIndex, data: stroke }]
+            });
+            redrawAllStrokes();
+        }
     };
 
     const createHighlightRectangle = (rects) => {
@@ -4345,12 +4111,12 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
             dash: drawStyle.value.dash
         }];
         
-        activePage.value.strokes.push(highlightStroke);
+        actionPage.value.strokes.push(highlightStroke);
         
         addToHistory({
             id,
             type: 'add',
-            page: activePage.value,
+            page: actionPage.value,
             stroke: highlightStroke
         });
         
@@ -4369,7 +4135,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
         // Group rects by page and store all rectangles for each page
         const rectsByPage = new Map();
         
-        const page = activePage.value;
+        const page = actionPage.value;
 
         Array.from(rects).forEach(rect => {
             // Skip very small rects (often artifacts)
@@ -4734,7 +4500,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
     };
 
     const drawSelectionBoundingBox = () => {
-        const page = activePage?.value;
+        const page = actionPage?.value;
         const svgLayer = page?.annotationSvg || null;
         if (!svgLayer) return;
 
@@ -4912,7 +4678,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
         let preferredY = popMenuPosition.value.y;
 
         if (selectedStroke?.value) {
-            const canvas = activePage.value.drawingCanvas || null;
+            const canvas = actionPage.value.drawingCanvas || null;
             if (canvas) {
                 const cRect = canvas.getBoundingClientRect();
                 const scaleXToClient = cRect.width / canvas.width;
@@ -5049,7 +4815,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
     };
 
     const getSelectionAnchorData = (selection, range) => {
-        const page = activePage.value;
+        const page = actionPage.value;
         const canvas = page?.drawingCanvas || null;
         if (!selection || !range || !canvas || !page) return null;
 
@@ -5171,20 +4937,22 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
             y: first.y + (Number(first.height) || COMMENT_ICON_DEFAULT_SIZE)
         };
 
-        if (baseSelection.pageId === activePage.value?.id) {
+        if (baseSelection.pageId === actionPage.value?.id) {
             clampPopMenuPosition();
         }
     };
 
-    const commitComment = () => {
+    const commitComment = (stroke) => {
         const comment = String(commentDraft.value || '').trim();
         const author = String(commentAuthorDraft.value || '').trim();
         const selection = pendingCommentSelection.value;
-        const page = activePage.value;
+        const page = actionPage.value;
 
-        if (editingCommentStroke.value) {
-            const editTargetPage = getPageByRef(editingCommentStroke.value);
-            const targetStroke = editTargetPage?.strokes?.[editingCommentStroke.value.strokeIndex] || null;
+        const editingStrokeRef = stroke || editingCommentStroke.value;
+
+        if (editingStrokeRef) {
+            const editTargetPage = getPageByRef(editingStrokeRef);
+            const targetStroke = editTargetPage?.strokes?.[editingStrokeRef.strokeIndex] || null;
             const first = targetStroke?.[0] || null;
 
             if (!comment || !editTargetPage || !first || first.type !== 'comment') return;
@@ -5198,7 +4966,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
                 id: first.id,
                 type: 'comment-edit',
                 page: editTargetPage,
-                strokeIndex: editingCommentStroke.value.strokeIndex,
+                strokeIndex: editingStrokeRef.strokeIndex,
                 stroke: JSON.parse(JSON.stringify(targetStroke)),
                 previousStroke
             });
@@ -5305,7 +5073,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
 
     const eraseAtPoint = (x, y) => {
         const eraserRadius = 10;
-        const strokes = activePage.value.strokes || [];
+        const strokes = actionPage.value.strokes || [];
         
         const strokesToRemove = [];
         const keptStrokes = [];
@@ -5331,11 +5099,11 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
         });
         
         if (strokesToRemove.length > 0) {
-            activePage.value.strokes = keptStrokes;
+            actionPage.value.strokes = keptStrokes;
             addToHistory({
                 id: strokeId,
                 type: 'erase',
-                page: activePage.value,
+                page: actionPage.value,
                 strokes: strokesToRemove
             });
             redrawAllStrokes();
@@ -5343,7 +5111,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
     };
 
     const redrawAllStrokes = (targetPage) => {
-        const page = (targetPage && typeof targetPage === 'object') ? targetPage : activePage.value;
+        const page = (targetPage && typeof targetPage === 'object') ? targetPage : actionPage.value;
         const canvas = page?.drawingCanvas || null;
         const drawingContext = page?.drawingContext || null;
         const svgLayer = page?.annotationSvg || null;
@@ -5377,9 +5145,9 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
         if (!selectionStart.value || !selectionEnd.value) return;
         
         const canvasIndex = selectionStart.value.canvasIndex;
-        const pdfCanvas = activePage.value.canvas;
-        const drawCanvas = activePage.value.drawingCanvas;
-        const annotationSvg = activePage.value.annotationSvg;
+        const pdfCanvas = actionPage.value.canvas;
+        const drawCanvas = actionPage.value.drawingCanvas;
+        const annotationSvg = actionPage.value.annotationSvg;
         
         if (!pdfCanvas || !drawCanvas) return;
         
@@ -5470,9 +5238,9 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
 
      const drawImageCanvas = async (src) => {
         await nextTick();
-        const canvas = activePage.value.canvas;
-        const drawCanvas = activePage.value.drawingCanvas;
-          const annotationSvg = activePage.value.annotationSvg;
+        const canvas = actionPage.value.canvas;
+        const drawCanvas = actionPage.value.drawingCanvas;
+          const annotationSvg = actionPage.value.annotationSvg;
           if (canvas && drawCanvas) {
             const img = new Image();
             img.onload = () => {
@@ -5504,49 +5272,23 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
                 ctx.clearRect(0, 0, canvasWidth * pixelRatio, canvasHeight * pixelRatio);
                 ctx.drawImage(img, 0, 0, canvasWidth * pixelRatio, canvasHeight * pixelRatio);
 
-                activePage.value.drawingContext = drawCanvas.getContext('2d', { willReadFrequently: true });
+                actionPage.value.drawingContext = drawCanvas.getContext('2d', { willReadFrequently: true });
                 redrawAllStrokes();
-                activePage.value.rendered = true;
+                actionPage.value.rendered = true;
             };
             img.src = src;
         }
     }
 
     // Page Tool Actions
-    const ensureCommentPageReady = async (commentRef) => {
-        const page = pages.value.find(entry => entry.id === commentRef?.pageId)
-            || pages.value.find(entry => entry.index === commentRef?.pageIndex)
-            || null;
-
-        if (!page) return null;
-
-        if (pageIndex.value !== page.index) {
-            scrollToPage(page.index);
-            await nextTick();
+    const cancelCommentStroke = () => {
+        if (isStrokeSelectModeActive.value) {
+            deselectAllStrokes();
+            return;
         }
 
-        if (!page.rendered) {
-            await renderPdfPage(page.id);
-            await nextTick();
-        }
-
-        return page;
-    };
-
-    const revealCommentSourceText = async (commentRef) => {
-        const page = await ensureCommentPageReady(commentRef);
-        if (!page) return false;
-
-        const match = findBestCommentTextRange(page, commentRef);
-        if (!match?.range) return false;
-
-        const selection = window.getSelection();
-        selection?.removeAllRanges();
-        selection?.addRange(match.range);
-
-        match.element?.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
-        return true;
-    };
+        cancelCommentInput();
+    }
 
     const toggleThumbnailSidebar = () => {
         isThumbnailSidebarVisible.value = !isThumbnailSidebarVisible.value;
@@ -5556,45 +5298,6 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
         
         isCommentsSidebarVisible.value = !isCommentsSidebarVisible.value;
     };
-
-    const focusComment = async (commentRef) => {
-        if (!commentRef) return;
-
-        await ensureCommentPageReady(commentRef);
-
-        selectStrokeByRef(commentRef);
-    };
-
-    const jumpToCommentText = async (commentRef) => {
-        if (!commentRef?.canJumpToText) return;
-
-        await focusComment(commentRef);
-        await revealCommentSourceText(commentRef);
-    };
-
-    const editCommentFromSidebar = async (commentRef) => {
-        if (isTextSelectionMode.value) {
-            isTextSelectionMode.value = false;
-            isStrokeSelectModeActive.value = true;
-        }
-
-        await focusComment(commentRef);
-        editCommentStroke();
-    };
-
-    const deleteCommentFromSidebar = async (commentRef) => {
-        await focusComment(commentRef);
-        deleteSelectedStroke();
-    };
-
-    const cancelCommentStroke = () => {
-        if (isStrokeSelectModeActive.value) {
-            deselectAllStrokes();
-            return;
-        }
-
-        cancelCommentInput();
-    }
 
     const toggleHandTool = () => {
         resetToolState();
@@ -5726,6 +5429,7 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
         resetToolState,
         redrawAllStrokes,
         deleteSelectedStroke,
+        deleteStrokeFromPage,
         strokeStyles,
         activeStrokeStyle,
         updateStrokeStyle,
@@ -5751,17 +5455,11 @@ export function usePageActions(pages, pagesContainer, pageIndex, addToHistory, s
         isSelectedStrokeType,
         copiedStrokes,
         selectStrokes,
-        previewCommentSelection,
-        documentComments,
         activeCommentId,
-        toggleThumbnailSidebar,
-        toggleCommentsSidebar,
-        focusComment,
-        jumpToCommentText,
-        editCommentFromSidebar,
-        deleteCommentFromSidebar,
         cancelCommentStroke,
         toggleHandTool,
+        toggleThumbnailSidebar,
+        toggleCommentsSidebar,
         lockView,
         toggleTextHighlightMode,
         toggleTextSelection,
