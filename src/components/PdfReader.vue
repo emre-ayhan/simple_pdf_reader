@@ -809,6 +809,7 @@ defineExpose({
                         <template v-else>
                             <template v-if="selectedStroke">
                                 <ToolItem class="btn-pop-menu" label="Edit" icon="pencil-square" :action="editCommentStroke" v-if="isSelectedStrokeType('comment')" />
+                                <ToolItem class="btn-pop-menu" label="Add Comment" icon="chat-left-text-fill" :action="beginCommentInput" v-else-if="!isSelectedStrokeType('text')" />
                                 <ToolItem class="btn-pop-menu" label="Edit" icon="pencil-square" :action="editTextStroke"  v-if="isSelectedStrokeType('text')" />
                                 <ToolItem class="btn-pop-menu" label="Delete" icon="trash3" :action="deleteSelectedStroke" />
                             </template>

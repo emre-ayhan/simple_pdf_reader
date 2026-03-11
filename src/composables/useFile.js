@@ -2246,18 +2246,24 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
         return pages.value
             .flatMap((page) => (page.strokes || []).map((stroke, strokeIndex) => {
                 const first = stroke?.[0] || null;
-                if (!first || first.type !== 'comment') return null;
+                if (!first) return null;
+                const commentText = String(first.comment || '').trim();
+                if (!commentText) return null;
+                const isCommentIcon = first.type === 'comment';
+
                 return {
-                    id: String(first.id || `${page.id}-${strokeIndex}`),
+                    id: isCommentIcon
+                        ? String(first.id || `${page.id}-${strokeIndex}`)
+                        : String(first.commentId || `${first.id || `${page.id}-${strokeIndex}`}-comment`),
                     pageId: page.id,
                     pageIndex: page.index,
                     strokeIndex,
                     stroke,
-                    selectedText: String(first.selectedText || ''),
-                    comment: String(first.comment || ''),
+                    selectedText: isCommentIcon ? String(first.selectedText || '') : '',
+                    comment: commentText,
                     author: String(first.author || ''),
-                    source: String(first.source || ''),
-                    canJumpToText: Boolean(collapseWhitespace(first.selectedText || '')),
+                    source: String(first.source || first.commentSource || ''),
+                    canJumpToText: isCommentIcon && Boolean(collapseWhitespace(first.selectedText || '')),
                     updatedAt: first.updatedAt || first.createdAt || null,
                 };
             }))

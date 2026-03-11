@@ -3806,7 +3806,7 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
 
         const hoveredStroke = pickStrokeAtPoint(pt.x, pt.y);
         const first = hoveredStroke?.stroke?.[0] || null;
-        if (!first || first.type !== 'comment' || (!first.comment && !first.selectedText)) {
+        if (!first || (!first.comment && !first.selectedText)) {
             clearHoveredCommentPreview();
             return;
         }
@@ -4126,6 +4126,24 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
         const strokes = page.strokes || [];
         const stroke = strokes[strokeIndex];
         if (stroke) {
+            const first = stroke[0] || null;
+            if (first && first.type !== 'comment') {
+                const previousStroke = JSON.parse(JSON.stringify(stroke));
+                first.comment = '';
+                first.author = '';
+                first.updatedAt = new Date().toISOString();
+                addToHistory({
+                    id: first.id,
+                    type: 'comment-edit',
+                    page,
+                    strokeIndex,
+                    stroke: JSON.parse(JSON.stringify(stroke)),
+                    previousStroke
+                });
+                redrawAllStrokes();
+                return;
+            }
+
             strokes.splice(strokeIndex, 1);
             addToHistory({
                 id: stroke[0].id,
@@ -4980,6 +4998,21 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
     };
 
     const beginCommentInput = () => {
+        const selected = selectedStroke.value?.stroke?.[0] || null;
+        if (selected && selected.type !== 'comment' && selected.type !== 'text') {
+            commentDraft.value = String(selected.comment || '');
+            commentAuthorDraft.value = String(selected.author || preferredCommentAuthor.value);
+            pendingCommentSelection.value = null;
+            selectedText.value = '';
+            editingCommentStroke.value = {
+                pageId: selectedStroke.value.pageId,
+                pageIndex: selectedStroke.value.pageIndex,
+                strokeIndex: selectedStroke.value.strokeIndex
+            };
+            showCommentInput.value = true;
+            return;
+        }
+
         if (!selectedText.value || !pendingCommentSelection.value) return;
         commentDraft.value = '';
         commentAuthorDraft.value = preferredCommentAuthor.value;
@@ -5029,9 +5062,10 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
             ? selectStrokeByRef(strokeRef)
             : selectedStroke.value;
 
-        if (!baseSelection?.stroke?.[0] || baseSelection.stroke[0].type !== 'comment') return;
+        const first = baseSelection?.stroke?.[0] || null;
+        if (!first) return;
+        if (first.type !== 'comment' && !String(first.comment || '').trim()) return;
 
-        const first = baseSelection.stroke[0];
         editingCommentStroke.value = {
             pageId: baseSelection.pageId,
             pageIndex: baseSelection.pageIndex,
@@ -5040,10 +5074,12 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
         commentDraft.value = String(first.comment || '');
         commentAuthorDraft.value = String(first.author || '');
         showCommentInput.value = true;
-        popMenuPosition.value = {
-            x: first.x + (Number(first.width) || COMMENT_ICON_DEFAULT_SIZE),
-            y: first.y + (Number(first.height) || COMMENT_ICON_DEFAULT_SIZE)
-        };
+        if (first.type === 'comment') {
+            popMenuPosition.value = {
+                x: first.x + (Number(first.width) || COMMENT_ICON_DEFAULT_SIZE),
+                y: first.y + (Number(first.height) || COMMENT_ICON_DEFAULT_SIZE)
+            };
+        }
 
         if (baseSelection.pageId === actionPage.value?.id) {
             clampPopMenuPosition();
@@ -5061,12 +5097,15 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
             const targetStroke = editTargetPage?.strokes?.[editingCommentStroke.value.strokeIndex] || null;
             const first = targetStroke?.[0] || null;
 
-            if (!comment || !editTargetPage || !first || first.type !== 'comment') return;
+            if (!comment || !editTargetPage || !first) return;
 
             const previousStroke = JSON.parse(JSON.stringify(targetStroke));
             first.comment = comment;
             first.author = author;
             first.updatedAt = new Date().toISOString();
+            if (first.type !== 'comment') {
+                first.commentSource = 'app-stroke-comment';
+            }
 
             addToHistory({
                 id: first.id,
@@ -5134,8 +5173,12 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
     const commitCommentSidebar = (comment) => {
         commentDraft.value = comment.comment || '';
         commentAuthorDraft.value = comment.author || '';
-        pendingCommentSelection.value = comment.selectedText;
-        editingCommentStroke.value = comment;
+        pendingCommentSelection.value = null;
+        editingCommentStroke.value = {
+            pageId: comment.pageId,
+            pageIndex: comment.pageIndex,
+            strokeIndex: comment.strokeIndex
+        };
         commitComment();
     }
 
