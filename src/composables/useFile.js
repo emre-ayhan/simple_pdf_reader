@@ -69,6 +69,70 @@ const readAnnotationString = (...values) => {
     return '';
 };
 
+const PDF_MARKUP_SUBTYPES = new Set([
+    'Highlight',
+    'Underline',
+    'StrikeOut',
+    'Squiggly',
+    'FreeText'
+]);
+
+const PDF_MARKUP_ANNOTATION_TYPES = new Set([3, 9, 10, 11, 12]);
+
+const getAnnotationViewportBounds = (annotation, viewport) => {
+    if (!annotation || !viewport) return null;
+
+    const rect = Array.isArray(annotation.rect) ? annotation.rect : null;
+    if (rect && rect.length >= 4) {
+        try {
+            const [vx1, vy1, vx2, vy2] = viewport.convertToViewportRectangle(rect);
+            return {
+                x: Math.min(vx1, vx2),
+                y: Math.min(vy1, vy2),
+                width: Math.abs(vx2 - vx1),
+                height: Math.abs(vy2 - vy1)
+            };
+        } catch (err) {
+            // Fallback to quad points when rect conversion fails.
+        }
+    }
+
+    const quadPoints = Array.isArray(annotation.quadPoints) ? annotation.quadPoints : null;
+    if (!quadPoints || quadPoints.length < 8 || typeof viewport.convertToViewportPoint !== 'function') {
+        return null;
+    }
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    for (let i = 0; i + 1 < quadPoints.length; i += 2) {
+        const rawX = Number(quadPoints[i]);
+        const rawY = Number(quadPoints[i + 1]);
+        if (!Number.isFinite(rawX) || !Number.isFinite(rawY)) continue;
+
+        const [vx, vy] = viewport.convertToViewportPoint(rawX, rawY);
+        if (!Number.isFinite(vx) || !Number.isFinite(vy)) continue;
+
+        minX = Math.min(minX, vx);
+        minY = Math.min(minY, vy);
+        maxX = Math.max(maxX, vx);
+        maxY = Math.max(maxY, vy);
+    }
+
+    if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) {
+        return null;
+    }
+
+    return {
+        x: minX,
+        y: minY,
+        width: Math.max(1, maxX - minX),
+        height: Math.max(1, maxY - minY)
+    };
+};
+
 // Comment Sidebar Helpers
 const collapseWhitespace = (value = '') => String(value || '').replace(/\s+/g, ' ').trim();
 
@@ -591,27 +655,40 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
         if (!page || !viewport || !Array.isArray(page.strokes)) return;
 
         const commentAnnotations = annotations.filter(annotation => {
-            return annotation?.subtype === 'Text' || annotation?.annotationType === 1;
+            const subtype = String(annotation?.subtype || '');
+            const annotationType = Number(annotation?.annotationType);
+            const isTextNote = subtype === 'Text' || annotationType === 1;
+            const isMarkup = PDF_MARKUP_SUBTYPES.has(subtype) || PDF_MARKUP_ANNOTATION_TYPES.has(annotationType);
+            if (!isTextNote && !isMarkup) return false;
+
+            const commentText = readAnnotationString(
+                annotation?.contents,
+                annotation?.contentsObj,
+                annotation?.richText,
+                annotation?.popupRef?.contents,
+                annotation?.popup?.contents
+            );
+            return Boolean(commentText);
         });
 
         const importedCommentStrokes = commentAnnotations.map((annotation) => {
-            const rect = Array.isArray(annotation?.rect) ? annotation.rect : null;
+            const bounds = getAnnotationViewportBounds(annotation, viewport);
             let x = 0;
             let y = 0;
             let width = 28;
             let height = 28;
 
-            if (rect && rect.length >= 4) {
-                try {
-                    const [vx1, vy1, vx2, vy2] = viewport.convertToViewportRectangle(rect);
-                    x = Math.min(vx1, vx2);
-                    y = Math.min(vy1, vy2);
-                    width = Math.max(18, Math.abs(vx2 - vx1) || 28);
-                    height = Math.max(18, Math.abs(vy2 - vy1) || 28);
-                } catch (err) {
-                    // Fall back to a default icon size if viewport conversion fails.
-                }
+            if (bounds) {
+                x = bounds.x;
+                y = bounds.y;
+                width = Math.max(18, bounds.width || 28);
+                height = Math.max(18, bounds.height || 28);
             }
+
+            const subtype = String(annotation?.subtype || '');
+            const source = subtype === 'Text' || Number(annotation?.annotationType) === 1
+                ? 'pdf-text-annotation'
+                : 'pdf-markup-annotation';
 
             return [{
                 id: String(annotation.id || annotation.annotationId || uuid()),
@@ -624,18 +701,25 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
                 thickness: 2,
                 opacity: 1,
                 selectedText: readAnnotationString(annotation.subject, annotation.subjectObj, annotation.subj),
-                comment: readAnnotationString(annotation.contents, annotation.contentsObj, annotation.richText),
+                comment: readAnnotationString(
+                    annotation.contents,
+                    annotation.contentsObj,
+                    annotation.richText,
+                    annotation.popupRef?.contents,
+                    annotation.popup?.contents
+                ),
                 author: readAnnotationString(annotation.title, annotation.titleObj, annotation.userName),
                 createdAt: annotation.creationDate || null,
                 updatedAt: annotation.modificationDate || annotation.modDate || null,
-                source: 'pdf-text-annotation',
+                source,
                 pdfAnnotationId: String(annotation.id || annotation.annotationId || ''),
             }];
         });
 
         const nonImportedStrokes = page.strokes.filter(stroke => {
             const first = stroke?.[0] || null;
-            return first?.type !== 'comment' || first.source !== 'pdf-text-annotation';
+            return first?.type !== 'comment'
+                || (first.source !== 'pdf-text-annotation' && first.source !== 'pdf-markup-annotation');
         });
 
         page.strokes = [...nonImportedStrokes, ...importedCommentStrokes];

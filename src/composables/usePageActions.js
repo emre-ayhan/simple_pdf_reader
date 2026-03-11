@@ -4579,6 +4579,11 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
         }
 
         if (first.type === 'comment') {
+            if (first.source === 'pdf-markup-annotation') {
+                // Imported markup comments are hover-only; the PDF already shows the visual markup.
+                return;
+            }
+
             const box = getCommentStrokeSize(first);
             const group = createSvgElement('g', { class: 'comment-group' });
             const iconGroup = createSvgElement('g', {
