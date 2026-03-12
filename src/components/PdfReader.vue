@@ -782,7 +782,7 @@ defineExpose({
                                 </label>
                             </div>
                             <div class="form-floating">
-                                <textarea v-model="commentDraft" class="form-control comment-input" :placeholder="$t('Leave a comment here')" :id="`comment-form-${fileId}`" @keydown.ctrl.enter.prevent="commitComment" @contextmenu.stop.prevent></textarea>
+                                <textarea v-model="commentDraft" class="form-control comment-input editor-input" :placeholder="$t('Leave a comment here')" :id="`comment-form-${fileId}`" @keydown.ctrl.enter.prevent="commitComment" @contextmenu.stop.prevent></textarea>
                                 <label :for="`comment-form-${fileId}`" class="comment-label">
                                     <i class="bi bi-chat-right-text-fill"></i>
                                     {{ $t('Comment') }}
@@ -795,24 +795,21 @@ defineExpose({
                         </div>
                         <template v-else>
                             <template v-if="selectedStroke">
-                                <ToolItem
-                                    class="btn-pop-menu"
-                                    :label="isAspectRatioLocked ? 'Unlock Aspect Ratio' : 'Lock Aspect Ratio'"
-                                    :icon="isAspectRatioLocked ? 'lock-fill' : 'unlock2'"
-                                    :action="toggleAspectRatioLock"
-                                    v-if="!isSelectedStrokeType('comment|highlight-rect|attachment')"
-                                />
                                 <ToolItem class="btn-pop-menu" label="Edit" icon="pencil-square" :action="editCommentStroke" v-if="isSelectedStrokeType('comment')" />
                                 <ToolItem class="btn-pop-menu" label="Add Comment" icon="chat-left-text-fill" :action="beginCommentInput" v-else-if="!isSelectedStrokeType('text|attachment')" />
+                                <div class="vr text-light"></div>
                                 <ToolItem class="btn-pop-menu" label="Edit" icon="pencil-square" :action="editTextStroke"  v-if="isSelectedStrokeType('text')" />
+                                <ToolItem class="btn-pop-menu" :label="isAspectRatioLocked ? 'Unlock Aspect Ratio' : 'Lock Aspect Ratio'" :icon="isAspectRatioLocked ? 'lock-fill' : 'unlock2'" :action="toggleAspectRatioLock" v-if="!isSelectedStrokeType('comment|highlight-rect|attachment')" />
                                 <ToolItem class="btn-pop-menu" label="Delete" icon="trash3" :action="deleteSelectedStroke" />
                             </template>
                             <template v-else-if="selectedText">
-                                <ToolItem class="btn-pop-menu" label="Add Comment" icon="chat-left-text-fill" :action="beginCommentInput" />
-                                <ToolItem class="btn-pop-menu" label="Highlight" shortcut="H" icon="highlighter" :action="highlightTextSelection" />
                                 <ToolItem class="btn-pop-menu" label="Underline" icon="type-underline" :action="underlineTextSelection" />
                                 <ToolItem class="btn-pop-menu" label="StrikeOut" icon="type-strikethrough" :action="strikeoutTextSelection" />
                                 <ToolItem class="btn-pop-menu" label="Squiggly" icon="type-squiggly" :action="squigglyTextSelection" />
+                                <ToolItem class="btn-pop-menu" label="Highlight" shortcut="H" icon="highlighter" :action="highlightTextSelection" />
+                                <div class="vr text-light"></div>
+                                <ToolItem class="btn-pop-menu" label="Add to Bookmarks" icon="bookmark" />
+                                <ToolItem class="btn-pop-menu" label="Add Comment" icon="chat-left-text-fill" :action="beginCommentInput" />
                             </template>
                             <ToolItem class="btn-pop-menu" label="Copy" shortcut="Ctrl+D" icon="files" :action="copySelection" v-if="!isSelectedStrokeType('comment|highlight-rect|attachment')"/>
                         </template>
