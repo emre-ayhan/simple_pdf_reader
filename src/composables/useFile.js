@@ -696,9 +696,11 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
         if (!page || !viewport || !Array.isArray(page.strokes)) return;
 
         const commentAnnotations = annotations.filter(annotation => {
-            const subtype = String(annotation?.subtype || '');
+            const subtype = String(annotation?.subtype || '').trim();
+            const subtypeLower = subtype.toLowerCase();
             const annotationType = Number(annotation?.annotationType);
-            const isTextNote = subtype === 'Text' || annotationType === 1;
+            // Only true PDF text notes should become sticky-note icon comments.
+            const isTextNote = subtypeLower === 'text';
             const isMarkup = PDF_MARKUP_SUBTYPES.has(subtype) || PDF_MARKUP_ANNOTATION_TYPES.has(annotationType);
             if (!isTextNote && !isMarkup) return false;
 
@@ -726,8 +728,8 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
                 height = Math.max(18, bounds.height || 28);
             }
 
-            const subtype = String(annotation?.subtype || '');
-            const source = subtype === 'Text' || Number(annotation?.annotationType) === 1
+            const subtype = String(annotation?.subtype || '').trim();
+            const source = subtype.toLowerCase() === 'text'
                 ? 'pdf-text-annotation'
                 : 'pdf-markup-annotation';
 
@@ -794,6 +796,7 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
 
     const addNativeCommentAnnotation = (pdfLibDoc, pdfPage, first, scaleX, scaleY, pageHeight) => {
         if (!first?.comment) return;
+        if (first?.source === 'pdf-markup-annotation') return;
 
         const width = Math.max(18, Number(first.width) || 28) * scaleX;
         const height = Math.max(18, Number(first.height) || 28) * scaleY;

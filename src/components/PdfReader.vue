@@ -721,16 +721,6 @@ defineExpose({
                     </div>
                 </template>
             </div>
-            <CommentsSidebar
-                v-if="isCommentsSidebarVisible"
-                :comments="documentComments"
-                v-model="activeCommentId"
-                :ensure-comment-page-ready="ensureCommentPageReady"
-                :reveal-comment-source-text="revealCommentSourceText"
-                :close-sidebar="toggleCommentsSidebar"
-                @delete-comment="deleteStrokeFromPage"
-                @save-comment="commitCommentSidebar"
-            />
 
             <div
                 v-if="hoveredCommentPreview && !showCommentInput"
@@ -860,24 +850,35 @@ defineExpose({
                 <ToolItem class="dropdown-item" show-label label="Properties" shortcut="Ctrl+I" icon="info-circle" :action="showDocumentProperties" />
             </context-menu>
         </div>
-        
+
+        <CommentsSidebar
+            v-if="isCommentsSidebarVisible"
+            :comments="documentComments"
+            v-model="activeCommentId"
+            :ensure-comment-page-ready="ensureCommentPageReady"
+            :reveal-comment-source-text="revealCommentSourceText"
+            :close-sidebar="toggleCommentsSidebar"
+            @delete-comment="deleteStrokeFromPage"
+            @save-comment="commitCommentSidebar"
+        />
+
+        <PageNumber
+            :page-num="pageNum"
+            :total="activePages.length"
+            :position="reverseToolbarPosition"
+        />
+
+        <AnnotationHydrationProgress
+            :progress="annotationHydrationProgress"
+            :position="reverseToolbarPosition"
+        />
+
         <!-- Custom Print Modal (Electron silent printing) -->
         <PrintModal
             ref="printModal"
             :pageCount="pageCount"
             :pages="pages"
             :renderPdfPage="renderPdfPage"
-        />
-        
-        <PageNumber
-            :page-num="pageNum"
-            :total="activePages.length"
-            :position="reverseToolbarPosition"
-        />
-        
-        <AnnotationHydrationProgress
-            :progress="annotationHydrationProgress"
-            :position="reverseToolbarPosition"
         />
 
         <input ref="imageInput" type="file" accept="image/*" class="d-none" @change="handleImageImport" />
