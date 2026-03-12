@@ -1,10 +1,9 @@
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, onBeforeUnmount, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, onBeforeUnmount } from "vue";
 import { Electron, toolbarPosition, reverseToolbarPosition } from "../composables/useAppSettings";
 import { useFile } from "../composables/useFile";
 import { usePageActions } from "../composables/usePageActions";
 import { useHistory } from "../composables/useHistory";
-import { fileDataCache } from "../composables/useTabs";
 import { useWindowEvents } from "../composables/useWindowEvents";
 import PrintModal from "./PrintModal.vue";
 import PageSearch from "./PageSearch.vue";
@@ -438,19 +437,6 @@ useWindowEvents(fileId, {
 let unsubscribeFileOpen = null;
 
 onMounted(() => {
-    const cache = fileDataCache.value;
-    fileDataCache.value = null;
-
-    if (cache) {
-        if (cache.type === 'blank') {
-            openNewBlankPage(cache.data);
-            return;
-        }
-
-        processFileOpenResult(cache.data);
-        return;
-    }
-
     if (Electron.value?.onFileOpened) {
         unsubscribeFileOpen = Electron.value.onFileOpened((fileData) => {
             if (!fileData || isFileLoaded.value) return;
@@ -483,6 +469,7 @@ onUnmounted(() => {
 
 defineExpose({
     openNewBlankPage,
+    loadFile,
     openFile: handleFileOpen,
     showDocumentProperties
 })

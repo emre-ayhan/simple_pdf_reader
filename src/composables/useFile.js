@@ -1922,7 +1922,7 @@ export function useFile(settings = {
 
     const processFileOpenResult =  async (result) => {
         if (!result) return;
-
+        fileDataCache.value = null;
         filepath.value = result.filepath;
         
         // Handle PDF files
@@ -2585,6 +2585,7 @@ export function useFile(settings = {
 
     // Open a blank page
     const openNewBlankPage = (imageData) => {
+        fileDataCache.value = null;
         if (isFileLoaded.value) {
             openNewTab();
             fileDataCache.value = {
@@ -2597,6 +2598,20 @@ export function useFile(settings = {
             createImage(imageData);
         });
     };
+
+    watch(fileDataCache, (cache) => {
+        if (cache) {
+            console.log(cache);
+            
+            if (cache.type === 'blank') {
+                openNewBlankPage(cache.data);
+                return;
+            }
+
+            processFileOpenResult(cache.data);
+            return;
+        }
+    })
 
     // Keep the PDF.js text layer aligned with the canvas after zoom/resize.
     // Pages are rendered once and then CSS size changes; we must update the text-layer scale.
