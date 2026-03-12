@@ -10,6 +10,7 @@ const store = useStore();
 const enableTouchDrawing = ref(false);
 const moveToolbarBottom = ref(false);
 const toolbarPosition = ref('top');
+const reverseToolbarPosition = computed(() => toolbarPosition.value === 'top' ? 'bottom' : 'top');
 const currentLocale = ref('en');
 const availableLocales = ref([{
     text: 'English',
@@ -116,6 +117,7 @@ const retrieveClipboardData = async () => {
 export {
     Electron,
     toolbarPosition,
+    reverseToolbarPosition,
     enableTouchDrawing,
     moveToolbarBottom,
     currentLocale,

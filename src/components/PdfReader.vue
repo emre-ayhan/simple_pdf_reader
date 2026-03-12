@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, onBeforeUnmount } from "vue";
-import { Electron, toolbarPosition } from "../composables/useAppSettings";
+import { Electron, toolbarPosition, reverseToolbarPosition } from "../composables/useAppSettings";
 import { useFile } from "../composables/useFile";
 import { usePageActions } from "../composables/usePageActions";
 import { useHistory } from "../composables/useHistory";
@@ -17,6 +17,7 @@ import QuillEditor from "./QuillEditor.vue";
 import SimpleTextEditor from "./SimpleTextEditor.vue";
 import BsToast from "./BsToast.vue";
 import CommentsSidebar from "./CommentsSidebar.vue";
+import AnnotationHydrationProgress from "./AnnotationHydrationProgress.vue";
 
 // Cursor Style
 const cursorStyle = computed(() => {
@@ -838,16 +839,6 @@ defineExpose({
                 </div>
             </div>
 
-            <!-- Custom Print Modal (Electron silent printing) -->
-            <PrintModal
-                ref="printModal"
-                :pageCount="pageCount"
-                :pages="pages"
-                :renderPdfPage="renderPdfPage"
-            />
-
-            <PageNumber :page-num="pageNum" :total="activePages.length"/>
-            
             <context-menu :parent="`#pdf-reader-${fileId}`">
                 <ToolItem class="dropdown-item" show-label label="Stroke Selection" shortcut="P" icon="cursor-fill" :active="isStrokeSelectModeActive" :action="toggleStrokeSelectionMode" />
                 <ToolItem class="dropdown-item" show-label label="Text Selection" shortcut="S" icon="cursor-text" :active="isTextSelectionMode && !isTextHighlightMode" :disabled="textActionsDisabled" :action="toggleTextSelection" />
@@ -869,23 +860,27 @@ defineExpose({
                 <ToolItem class="dropdown-item" show-label label="Properties" shortcut="Ctrl+I" icon="info-circle" :action="showDocumentProperties" />
             </context-menu>
         </div>
+        
+        <!-- Custom Print Modal (Electron silent printing) -->
+        <PrintModal
+            ref="printModal"
+            :pageCount="pageCount"
+            :pages="pages"
+            :renderPdfPage="renderPdfPage"
+        />
+        
+        <PageNumber
+            :page-num="pageNum"
+            :total="activePages.length"
+            :position="reverseToolbarPosition"
+        />
+        
+        <AnnotationHydrationProgress
+            :progress="annotationHydrationProgress"
+            :position="reverseToolbarPosition"
+        />
 
         <input ref="imageInput" type="file" accept="image/*" class="d-none" @change="handleImageImport" />
-
-        <div
-            v-if="annotationHydrationProgress.active && annotationHydrationProgress.totalPages > 0"
-            class="position-fixed start-0 bottom-0 m-3 annotation-hydration-status"
-            :title="`${$t('Loading annotations')} ${annotationHydrationProgress.hydratedPages}/${annotationHydrationProgress.totalPages}`"
-        >
-            <div class="annotation-hydration-pill">
-                <i class="bi bi-chat-right-text-fill"></i>
-                <span class="annotation-hydration-label">{{ $t('Loading annotations') }}</span>
-                <span class="annotation-hydration-count">{{ annotationHydrationProgress.hydratedPages }}/{{ annotationHydrationProgress.totalPages }}</span>
-                <div class="annotation-hydration-track">
-                    <div class="annotation-hydration-fill" :style="{ width: `${annotationHydrationProgress.percent}%` }"></div>
-                </div>
-            </div>
-        </div>
     </div>
 
     <input ref="fileInput" type="file"  accept="application/pdf" class="d-none" @change="loadFile" />
