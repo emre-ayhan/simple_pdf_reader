@@ -224,7 +224,8 @@ const handleAttachmentClick = (attachment) => {
             :class="{ active: activePage === page }" 
             :data-page="page"
             :ref="(el) => setItemRef(el, page)"
-            @click="goTo(page)">
+            @click="goTo(page)"
+        >
             <div class="thumb-page-number">{{ page }}</div>
             <div class="thumb-image-wrapper">
             <img v-if="thumbs.get(page)" :src="thumbs.get(page)" class="thumb-image" alt="Page thumbnail" />
@@ -238,11 +239,11 @@ const handleAttachmentClick = (attachment) => {
 
     <div v-else-if="activeMode === 'bookmarks'" class="sidebar-list-panel">
         <button
-        v-for="bookmark in bookmarkItems"
-        :key="bookmark.id"
-        type="button"
-        class="sidebar-list-item"
-        @click="goTo(bookmark)"
+            v-for="bookmark in bookmarkItems"
+            :key="bookmark.id"
+            type="button"
+            class="sidebar-list-item"
+            @click="goTo(bookmark)"
         >
         <span class="sidebar-list-label">{{ bookmark.title }}</span>
         <span class="sidebar-list-kicker">{{ $t('page') }} {{ bookmark.page }}</span>
@@ -252,15 +253,19 @@ const handleAttachmentClick = (attachment) => {
 
     <div v-else-if="activeMode === 'attachments'" class="sidebar-list-panel">
         <button
-        v-for="file in attachmentItems"
-        :key="file.id"
-        type="button"
-        class="sidebar-list-item"
-        @click="handleAttachmentClick(file)"
+            v-for="file in attachmentItems"
+            :key="file.id"
+            type="button"
+            class="sidebar-list-item"
+            @click="handleAttachmentClick(file)"
         >
-        <i class="bi bi-download me-2" aria-hidden="true"></i>
-        <span class="sidebar-list-label">{{ file.name }}</span>
-        <small v-if="file.size" class="sidebar-list-meta">{{ file.size }}</small>
+            <div class="d-flex align-items-start gap-2">
+                <i class="bi bi-download d-flex" aria-hidden="true"></i>
+                <div>
+                    <div class="sidebar-list-label">{{ file.name }}</div>
+                    <div class="sidebar-list-meta" v-if="file.size">{{ file.size }}</div>
+                </div>
+            </div>
         </button>
         <div v-if="attachmentItems.length === 0" class="sidebar-list-empty">{{ $t('No attachments found') }}</div>
     </div>

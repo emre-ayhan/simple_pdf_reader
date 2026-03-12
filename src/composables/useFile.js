@@ -2736,9 +2736,16 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
         const flatComments = pages.value
             .flatMap((page) => (page.strokes || []).map((stroke, strokeIndex) => {
                 const first = stroke?.[0] || null;
-                if (!first) return null;
-                const commentText = String(first.comment || '').trim();
-                if (!commentText) return null;
+                    if (!first) return null;
+
+                    // Exclude attachment strokes (these are shown in the Attachments/Thumbnails
+                    // UI) from the comments sidebar even if they carry a comment string.
+                    if (String(first.type || '').toLowerCase() === 'attachment' || String(first.source || '').toLowerCase() === 'pdf-attachment-annotation') {
+                        return null;
+                    }
+
+                    const commentText = String(first.comment || '').trim();
+                    if (!commentText) return null;
                 const isCommentIcon = first.type === 'comment';
 
                 return {
