@@ -825,7 +825,7 @@ defineExpose({
                 position="top-50 start-50 translate-middle"
             >
                 <div class="text-center">
-                    {{ $t('Dragging is not allowed when selection includes text annotations') }}
+                    {{ $t('Dragging is not allowed when selection includes static annotations') }}
                 </div>
             </bs-toast>
 
