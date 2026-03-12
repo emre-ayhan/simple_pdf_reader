@@ -1,14 +1,25 @@
 .thumbnail-sidebar {
     background-color: $dark-bg-accent;
     position: fixed;
+    left: 0;
+    top: $navtabsHeight;
+    bottom: 0;
     width: 260px;
     min-width: 260px;
-    height: 100%;
+    height: auto;
     overflow: hidden;
     z-index: 1000;
     color: $primary;
     display: grid;
     grid-template-columns: 48px minmax(0, 1fr);
+}
+
+.pdf-reader.toolbar-top .thumbnail-sidebar {
+    top: $navtabsHeight + $toolbarHeight;
+}
+
+.pdf-reader.toolbar-bottom .thumbnail-sidebar {
+    bottom: $toolbarHeight;
 }
 
 .thumbnail-sidebar-rail {
@@ -33,9 +44,8 @@
 
     &:hover,
     &.active {
-        color: $primary;
-        background: rgba(255, 255, 255, 0.08);
-        border-color: rgba(255, 193, 7, 0.35);
+        color: $warning;
+        background: $bg-sidebar-item-active;
     }
 }
 
@@ -44,6 +54,8 @@
     flex-direction: column;
     min-width: 0;
     height: 100%;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .thumbnail-sidebar-title {
@@ -53,9 +65,11 @@
 
 .thumbs-list {
     display: flex;
+    flex: 1 1 auto;
     flex-direction: column;
     gap: 10px;
     padding: 8px;
+    overflow-x: hidden;
     overflow-y: auto;
     min-height: 0;
 }
@@ -63,22 +77,27 @@
 .thumbnail-item {
     cursor: pointer;
     border-radius: $border-radius-xl;
-    outline: 1px solid $secondary;
+    background: $bg-sidebar-item;
+    border: 1px solid transparent;
     padding: 8px;
 
     &:hover,
     &.active {
-        background: $darkLighter;
+        background: $bg-sidebar-item-active;
+        .thumb-page-number {
+            color: $warning;
+        }
     }
 
-    &.active {
-        outline: 2px solid $primary;
+    &:hover {
+        border: 1px solid $border-sidebar-hover;
     }
 }
 
 .thumb-page-number {
     font-size: 0.8rem;
-    color: $primary;
+    font-weight: bold;
+    color: $light;
 }
 
 .thumb-image-wrapper {
@@ -102,9 +121,11 @@
 
 .sidebar-list-panel {
     display: flex;
+    flex: 1 1 auto;
     flex-direction: column;
     gap: 8px;
     padding: 10px 8px;
+    overflow-x: hidden;
     overflow-y: auto;
     min-height: 0;
 }
@@ -132,9 +153,10 @@
 
 .sidebar-list-kicker {
     font-size: 11px;
-    text-transform: uppercase;
+    text-transform: capitalize;
     letter-spacing: 0.06em;
-    color: $warning;
+    color: $secondary;
+    margin-left: auto;
 }
 
 .sidebar-list-label {

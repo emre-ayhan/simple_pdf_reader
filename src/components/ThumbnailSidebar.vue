@@ -227,8 +227,8 @@ const handleAttachmentClick = (attachment) => {
           class="sidebar-list-item"
           @click="goTo(bookmark.page)"
         >
-          <span class="sidebar-list-kicker">{{ $t('Page') }} {{ bookmark.page }}</span>
           <span class="sidebar-list-label">{{ bookmark.title }}</span>
+          <span class="sidebar-list-kicker">{{ $t('page') }} {{ bookmark.page }}</span>
         </button>
         <div v-if="bookmarkItems.length === 0" class="sidebar-list-empty">{{ $t('No bookmarks found') }}</div>
       </div>

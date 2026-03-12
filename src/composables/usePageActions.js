@@ -3875,6 +3875,9 @@ export function usePageActions(pages, pagesContainer, addToHistory, options = {}
         redrawAllStrokes();
     };
 
+    let hoveredCommentPreviewAnchor = null;
+    let hoveredCommentPreviewSize = { width: 320, height: 220 };
+
     const updateHoveredCommentPreview = (e) => {
         if (isMouseDown.value || showCommentInput.value) {
             clearHoveredCommentPreview();
@@ -3896,8 +3899,12 @@ export function usePageActions(pages, pagesContainer, addToHistory, options = {}
         }
 
         const isAttachment = first.type === 'attachment';
+        hoveredCommentPreviewAnchor = {
+            clientX: pt.clientX,
+            clientY: pt.clientY
+        };
 
-        const position = clampHoveredCommentPreviewPosition(pt.clientX + 18, pt.clientY + 18);
+        const position = clampHoveredCommentPreviewPosition(pt.clientX, pt.clientY);
         hoveredCommentPreview.value = {
             x: position.x,
             y: position.y,
@@ -3910,7 +3917,6 @@ export function usePageActions(pages, pagesContainer, addToHistory, options = {}
     };
 
     const clampHoveredCommentPreviewPosition = (clientX, clientY) => {
-        const base = clientToPopMenuPosition(clientX, clientY);
         const {
             scrollLeft,
             scrollTop,
@@ -3919,17 +3925,40 @@ export function usePageActions(pages, pagesContainer, addToHistory, options = {}
         } = getPopMenuViewportMetrics();
 
         const margin = 12;
-        const estimatedWidth = 320;
-        const estimatedHeight = 220;
+        const horizontalOffset = 18;
+        const verticalOffset = 18;
+        const estimatedWidth = Math.max(120, Number(hoveredCommentPreviewSize.width) || 320);
+        const estimatedHeight = Math.max(80, Number(hoveredCommentPreviewSize.height) || 220);
 
         const minX = scrollLeft + margin;
         const minY = scrollTop + margin;
         const maxX = scrollLeft + Math.max(0, viewportWidth - estimatedWidth - margin);
         const maxY = scrollTop + Math.max(0, viewportHeight - estimatedHeight - margin);
 
+        const baseX = clientToPopMenuPosition(clientX + horizontalOffset, clientY).x;
+        const preferredBelowY = clientToPopMenuPosition(clientX, clientY + verticalOffset).y;
+        const preferredAboveY = clientToPopMenuPosition(clientX, clientY - estimatedHeight - verticalOffset).y;
+
+        const hasSpaceBelow = preferredBelowY <= maxY;
+        const hasSpaceAbove = preferredAboveY >= minY;
+
+        const clampedBelowY = clampNumber(preferredBelowY, minY, Math.max(minY, maxY));
+        const clampedAboveY = clampNumber(preferredAboveY, minY, Math.max(minY, maxY));
+
+        let finalY = clampedBelowY;
+        if (hasSpaceBelow) {
+            finalY = clampedBelowY;
+        } else if (hasSpaceAbove) {
+            finalY = clampedAboveY;
+        } else {
+            const belowDelta = Math.abs(clampedBelowY - preferredBelowY);
+            const aboveDelta = Math.abs(clampedAboveY - preferredAboveY);
+            finalY = aboveDelta < belowDelta ? clampedAboveY : clampedBelowY;
+        }
+
         return {
-            x: Math.min(Math.max(base.x, minX), Math.max(minX, maxX)),
-            y: Math.min(Math.max(base.y, minY), Math.max(minY, maxY)),
+            x: clampNumber(baseX, minX, Math.max(minX, maxX)),
+            y: finalY,
         };
     };
 
@@ -5048,6 +5077,32 @@ export function usePageActions(pages, pagesContainer, addToHistory, options = {}
 
     const clearHoveredCommentPreview = () => {
         hoveredCommentPreview.value = null;
+        hoveredCommentPreviewAnchor = null;
+    };
+
+    const setHoveredCommentPreviewSize = (width = null, height = null) => {
+        const parsedWidth = Number(width);
+        const parsedHeight = Number(height);
+        const hasValidWidth = Number.isFinite(parsedWidth) && parsedWidth > 0;
+        const hasValidHeight = Number.isFinite(parsedHeight) && parsedHeight > 0;
+
+        hoveredCommentPreviewSize = {
+            width: hasValidWidth ? parsedWidth : 320,
+            height: hasValidHeight ? parsedHeight : 220
+        };
+
+        if (!hoveredCommentPreview.value || !hoveredCommentPreviewAnchor) return;
+
+        const nextPosition = clampHoveredCommentPreviewPosition(
+            hoveredCommentPreviewAnchor.clientX,
+            hoveredCommentPreviewAnchor.clientY
+        );
+
+        hoveredCommentPreview.value = {
+            ...hoveredCommentPreview.value,
+            x: nextPosition.x,
+            y: nextPosition.y,
+        };
     };
 
     const cancelCommentInput = () => {
@@ -5744,6 +5799,7 @@ export function usePageActions(pages, pagesContainer, addToHistory, options = {}
         commentDraft,
         commentAuthorDraft,
         hoveredCommentPreview,
+        setHoveredCommentPreviewSize,
         beginCommentInput,
         commitComment,
         commitCommentSidebar,

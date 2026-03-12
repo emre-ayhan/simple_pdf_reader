@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, onBeforeUnmount } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, onBeforeUnmount, ref, watch } from "vue";
 import { Electron, toolbarPosition, reverseToolbarPosition } from "../composables/useAppSettings";
 import { useFile } from "../composables/useFile";
 import { usePageActions } from "../composables/usePageActions";
@@ -163,6 +163,7 @@ const {
     commentDraft,
     commentAuthorDraft,
     hoveredCommentPreview,
+    setHoveredCommentPreviewSize,
     beginCommentInput,
     commitComment,
     commitCommentSidebar,
@@ -212,6 +213,38 @@ const {
 } = usePageActions(activePages, pagesContainer, strokeChangeCallback, {
     onAttachmentStrokeClick: downloadAttachment,
 });
+
+const hoveredCommentPreviewEl = ref(null);
+
+watch(
+    () => {
+        const preview = hoveredCommentPreview.value;
+        if (!preview) return '';
+        return [
+            preview.strokeType,
+            preview.author,
+            preview.comment,
+            preview.selectedText,
+            preview.downloadHint,
+        ].join('|');
+    },
+    async (key) => {
+        if (!key) {
+            setHoveredCommentPreviewSize();
+            return;
+        }
+
+        await nextTick();
+        const el = hoveredCommentPreviewEl.value;
+        if (!el) return;
+
+        const rect = el.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+            setHoveredCommentPreviewSize(rect.width, rect.height);
+        }
+    },
+    { immediate: true }
+);
 
 // History management
 const { 
@@ -738,6 +771,7 @@ defineExpose({
 
             <div
                 v-if="hoveredCommentPreview && !showCommentInput"
+                ref="hoveredCommentPreviewEl"
                 class="comment-hover-tooltip"
                 :style="{ left: `${hoveredCommentPreview.x}px`, top: `${hoveredCommentPreview.y}px` }"
             >
