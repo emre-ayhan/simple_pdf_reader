@@ -1260,7 +1260,25 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
         sidebarLayers.value = [];
     }
 
-    const resolvePageIndexFromDest = async (dest) => {
+    const clampRatio = (value) => {
+        if (!Number.isFinite(value)) return null;
+        return Math.min(1, Math.max(0, value));
+    };
+
+    const toPdfTopRatio = (pdfY, view) => {
+        if (!Array.isArray(view) || view.length < 4) return null;
+        if (!Number.isFinite(pdfY)) return null;
+
+        const yMin = Number(view[1]) || 0;
+        const yMax = Number(view[3]) || 0;
+        const height = yMax - yMin;
+        if (!Number.isFinite(height) || height <= 0) return null;
+
+        const normalized = 1 - ((pdfY - yMin) / height);
+        return clampRatio(normalized);
+    };
+
+    const resolveOutlineDestination = async (dest) => {
         if (!pdfDoc || !dest) return null;
 
         let resolvedDest = dest;
@@ -1278,7 +1296,23 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
 
         try {
             const pageIdx = await pdfDoc.getPageIndex(pageRef);
-            return Number.isInteger(pageIdx) ? pageIdx : null;
+            if (!Number.isInteger(pageIdx)) return null;
+
+            let offsetRatio = null;
+            const destType = resolvedDest[1]?.name;
+
+            if (destType === 'XYZ') {
+                offsetRatio = toPdfTopRatio(Number(resolvedDest[3]), (await pdfDoc.getPage(pageIdx + 1))?.view);
+            } else if (destType === 'FitH' || destType === 'FitBH') {
+                offsetRatio = toPdfTopRatio(Number(resolvedDest[2]), (await pdfDoc.getPage(pageIdx + 1))?.view);
+            } else if (destType === 'FitR') {
+                offsetRatio = toPdfTopRatio(Number(resolvedDest[5]), (await pdfDoc.getPage(pageIdx + 1))?.view);
+            }
+
+            return {
+                pageIndex: pageIdx,
+                offsetRatio,
+            };
         } catch {
             return null;
         }
@@ -1288,11 +1322,12 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
         if (!Array.isArray(items) || items.length === 0) return collector;
 
         for (const item of items) {
-            const pageIndex = await resolvePageIndexFromDest(item?.dest || item?.url || null);
+            const destination = await resolveOutlineDestination(item?.dest || null);
             collector.push({
                 id: String(item?.title || uuid()),
                 title: String(item?.title || 'Untitled'),
-                page: Number.isInteger(pageIndex) ? pageIndex + 1 : null,
+                page: Number.isInteger(destination?.pageIndex) ? destination.pageIndex + 1 : null,
+                offsetRatio: clampRatio(destination?.offsetRatio),
                 level,
             });
 
@@ -1532,7 +1567,7 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
         return 0;
     }
     
-    const scrollToPage = (targetPageIndex) => {
+    const scrollToPage = (targetPageIndex, options = {}) => {
         if (isNaN(targetPageIndex)) return;
         const maxIndex = Math.max(0, activePages.value.length - 1);
         const normalizedIndex = Math.min(Math.max(0, targetPageIndex), maxIndex);
@@ -1551,7 +1586,21 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
         const scrollToTarget = () => {
             const container = pagesContainer.value?.querySelector(`.page-container[data-page="${targetPage.id}"]`);
             if (!container) return;
-            container.scrollIntoView({ block: 'start' });
+
+            const rawOffsetRatio = Number(options?.offsetRatio);
+            const hasOffsetRatio = Number.isFinite(rawOffsetRatio);
+
+            if (!hasOffsetRatio || !pdfReader.value) {
+                container.scrollIntoView({ block: 'start' });
+                return;
+            }
+
+            const ratio = Math.min(Math.max(rawOffsetRatio, 0), 1);
+            const readerRect = pdfReader.value.getBoundingClientRect();
+            const containerRect = container.getBoundingClientRect();
+            const containerTopInReader = (containerRect.top - readerRect.top) + pdfReader.value.scrollTop;
+            const targetTop = Math.max(0, containerTopInReader + (container.clientHeight * ratio) - 12);
+            pdfReader.value.scrollTo({ top: targetTop, behavior: 'auto' });
         };
 
         if (windowChanged) {

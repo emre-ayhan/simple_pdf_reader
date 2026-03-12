@@ -122,6 +122,7 @@ const bookmarkItems = computed(() => {
         id: item?.id || `bookmark-${index}`,
         title: String(item?.title || item?.label || `Page ${Number(item?.page) || index + 1}`),
         page: Number(item?.page) || index + 1,
+        offsetRatio: Number.isFinite(Number(item?.offsetRatio)) ? Number(item.offsetRatio) : null,
       }))
       .filter(item => item.page > 0 && item.page <= props.pageCount);
   }
@@ -170,7 +171,20 @@ const toggleLayerVisibility = (layer) => {
   }
 };
 
-const goTo = (page) => {
+const goTo = (target) => {
+  if (typeof target === 'number') {
+    props.scrollToPage(target - 1);
+    return;
+  }
+
+  const page = Number(target?.page);
+  if (!Number.isFinite(page)) return;
+
+  if (Number.isFinite(Number(target?.offsetRatio))) {
+    props.scrollToPage(page - 1, { offsetRatio: Number(target.offsetRatio) });
+    return;
+  }
+
   props.scrollToPage(page - 1);
 };
 
@@ -225,7 +239,7 @@ const handleAttachmentClick = (attachment) => {
           :key="bookmark.id"
           type="button"
           class="sidebar-list-item"
-          @click="goTo(bookmark.page)"
+          @click="goTo(bookmark)"
         >
           <span class="sidebar-list-label">{{ bookmark.title }}</span>
           <span class="sidebar-list-kicker">{{ $t('page') }} {{ bookmark.page }}</span>

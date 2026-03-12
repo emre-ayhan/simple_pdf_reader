@@ -869,10 +869,10 @@ defineExpose({
                             </template>
                             <template v-else-if="selectedText">
                                 <ToolItem class="btn-pop-menu" label="Add Comment" icon="chat-left-text-fill" :action="beginCommentInput" />
-                                <ToolItem class="btn-pop-menu" label="Highlight Text" shortcut="H" icon="highlighter" :action="highlightTextSelection" />
-                                <ToolItem class="btn-pop-menu" label="Underline Text" icon="type-underline" :action="underlineTextSelection" />
-                                <ToolItem class="btn-pop-menu" label="StrikeOut Text" icon="type-strikethrough" :action="strikeoutTextSelection" />
-                                <ToolItem class="btn-pop-menu" label="Squiggly Text" icon="type-squiggly" :action="squigglyTextSelection" />
+                                <ToolItem class="btn-pop-menu" label="Highlight" shortcut="H" icon="highlighter" :action="highlightTextSelection" />
+                                <ToolItem class="btn-pop-menu" label="Underline" icon="type-underline" :action="underlineTextSelection" />
+                                <ToolItem class="btn-pop-menu" label="StrikeOut" icon="type-strikethrough" :action="strikeoutTextSelection" />
+                                <ToolItem class="btn-pop-menu" label="Squiggly" icon="type-squiggly" :action="squigglyTextSelection" />
                             </template>
                             <ToolItem class="btn-pop-menu" label="Copy" shortcut="Ctrl+D" icon="files" :action="copySelection" v-if="!isSelectedStrokeType('comment|highlight-rect|attachment')"/>
                         </template>
