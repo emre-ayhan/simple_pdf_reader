@@ -1433,17 +1433,21 @@ export function usePageActions(pages, pagesContainer, addToHistory, options = {}
             const scaleY = canvas.height / rect.height;
             
             redrawAllStrokes();
+            // Solid border and semi-opaque fill for selection rectangle
             ctx.strokeStyle = BOUNDING_BOX_HANDLE_COLOR;
             ctx.lineWidth = 1;
-            ctx.setLineDash([5, 5]);
+            ctx.setLineDash([]);
+            // use a subtle fill with alpha; convert known hex #2a7fff -> rgba(42,127,255,0.12)
+            ctx.fillStyle = 'rgba(42,127,255,0.12)';
             
             const startX = selectionStart.value.x * scaleX;
             const startY = selectionStart.value.y * scaleY;
             const width = (x - selectionStart.value.x) * scaleX;
             const height = (y - selectionStart.value.y) * scaleY;
             
+            // Fill first, then stroke so the border remains visible
+            ctx.fillRect(startX, startY, width, height);
             ctx.strokeRect(startX, startY, width, height);
-            ctx.setLineDash([]);
         }
         stopEvent(e);
     }
