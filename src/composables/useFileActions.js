@@ -415,7 +415,7 @@ const findBestCommentTextRange = (page, commentRef) => {
     }, null);
 };
 
-export function useFile(settings = {
+export function useFileActions(settings = {
         onFileLoad() {},
         onPageLoad() {},
         onFileSave() {},
@@ -2848,6 +2848,41 @@ export function useFile(settings = {
         return true;
     };
 
+    const addSelectedTextBookmark = ({ text = '', targetPageIndex = pageIndex.value, offsetRatio = null } = {}) => {
+        const normalizedText = collapseWhitespace(text);
+        if (!normalizedText) return false;
+
+        const maxPageIndex = Math.max(0, activePages.value.length - 1);
+        const safePageIndex = Math.min(Math.max(0, Number(targetPageIndex) || 0), maxPageIndex);
+        const page = safePageIndex + 1;
+        const title = normalizedText.length > 120 ? `${normalizedText.slice(0, 117)}...` : normalizedText;
+        const normalizedTitle = title.toLowerCase();
+
+        const duplicateExists = sidebarBookmarks.value.some((item) => {
+            const itemPage = Number(item?.page);
+            const itemTitle = collapseWhitespace(item?.title || '').toLowerCase();
+            return itemPage === page && itemTitle === normalizedTitle;
+        });
+
+        if (duplicateExists) return false;
+
+        const normalizedOffsetRatio = Number.isFinite(Number(offsetRatio))
+            ? clampRatio(Number(offsetRatio))
+            : null;
+
+        sidebarBookmarks.value = [
+            {
+                id: `selection-bookmark-${uuid()}`,
+                title,
+                page,
+                offsetRatio: normalizedOffsetRatio,
+            },
+            ...sidebarBookmarks.value,
+        ];
+
+        return true;
+    };
+
     return {
         fileId,
         pages,
@@ -2900,6 +2935,7 @@ export function useFile(settings = {
         sidebarAttachments,
         sidebarLayers,
         downloadAttachment,
+        addSelectedTextBookmark,
         previewCommentSelection,
         revealCommentSourceText,
         ensureCommentPageReady,

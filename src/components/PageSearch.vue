@@ -127,7 +127,7 @@ const highlightCurrentMatch = () => {
     const match = allMatches.value[currentMatchIndex.value - 1];
     
     // 1. Scroll to the page containing the match
-    // This will trigger lazy loading in useFile.js if the page isn't rendered
+    // This will trigger lazy loading in useFileActions.js if the page isn't rendered
     if (props.scrollToPage) {
         props.scrollToPage(match.pageIndex);
     }

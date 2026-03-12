@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, onBeforeUnmount } from "vue";
 import { Electron, toolbarPosition, reverseToolbarPosition } from "../composables/useAppSettings";
-import { useFile } from "../composables/useFile";
+import { useFileActions } from "../composables/useFileActions";
 import { usePageActions } from "../composables/usePageActions";
 import { useHistory } from "../composables/useHistory";
 import { useWindowEvents } from "../composables/useWindowEvents";
@@ -89,10 +89,11 @@ const {
     sidebarAttachments,
     sidebarLayers,
     downloadAttachment,
+    addSelectedTextBookmark,
     previewCommentSelection,
     ensureCommentPageReady,
     revealCommentSourceText
-} = useFile({
+} = useFileActions({
     onFileLoad: () => resetHistory(),
     onPageLoad: (page) => redrawAllStrokes(page),
     onFileSave: () => saveCurrentHistoryStep(),
@@ -217,6 +218,21 @@ const {
 } = useHistory(fileId, redrawAllStrokes);
 
 startSession();
+
+const addCurrentSelectionToBookmarks = () => {
+    const text = String(selectedText.value || '').trim();
+    if (!text) return;
+
+    const added = addSelectedTextBookmark({
+        text,
+        targetPageIndex: pageIndex.value,
+    });
+
+    if (added) {
+        selectedText.value = '';
+        window.getSelection()?.removeAllRanges();
+    }
+};
 
 let resizeTimeout = null;
 
@@ -808,7 +824,7 @@ defineExpose({
                                 <ToolItem class="btn-pop-menu" label="Squiggly" icon="type-squiggly" :action="squigglyTextSelection" />
                                 <ToolItem class="btn-pop-menu" label="Highlight" shortcut="H" icon="highlighter" :action="highlightTextSelection" />
                                 <div class="vr text-light"></div>
-                                <ToolItem class="btn-pop-menu" label="Add to Bookmarks" icon="bookmark" />
+                                <ToolItem class="btn-pop-menu" label="Add to Bookmarks" icon="bookmark" :action="addCurrentSelectionToBookmarks" />
                                 <ToolItem class="btn-pop-menu" label="Add Comment" icon="chat-left-text-fill" :action="beginCommentInput" />
                             </template>
                             <ToolItem class="btn-pop-menu" label="Copy" shortcut="Ctrl+D" icon="files" :action="copySelection" v-if="!isSelectedStrokeType('comment|highlight-rect|attachment')"/>
