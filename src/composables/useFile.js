@@ -28,6 +28,7 @@ const getPages = (length) => {
         visible: false,
         strokes: [],
         annotations: [],
+        annotationsHydrated: false,
         calculationRules: [],
         form: {
             original: {}, // fieldName → original value at extraction time
@@ -379,12 +380,47 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
     let programmaticNavigationTimer = null;
     let programmaticTargetPageId = null;
     let textExtractionRunId = 0;
+    let annotationExtractionRunId = 0;
     let extractTextTimeout = null;
+    let extractAnnotationsTimeout = null;
     let highQualityUpgradeTimeout = null;
     let searchRequestId = 0;
 
     const indexedTextPages = new Set();
     const pendingSearchRequests = new Map();
+    const annotationHydrationStatus = ref({
+        active: false,
+        hydratedPages: 0,
+        totalPages: 0,
+    });
+
+    const updateAnnotationHydrationStatus = (active = annotationHydrationStatus.value.active) => {
+        const totalPages = pages.value.length;
+        const hydratedPages = pages.value.reduce((count, page) => {
+            return count + (page?.annotationsHydrated ? 1 : 0);
+        }, 0);
+
+        annotationHydrationStatus.value = {
+            active: Boolean(active),
+            hydratedPages,
+            totalPages,
+        };
+    };
+
+    const annotationHydrationProgress = computed(() => {
+        const total = Math.max(0, Number(annotationHydrationStatus.value.totalPages) || 0);
+        const hydrated = Math.min(total, Math.max(0, Number(annotationHydrationStatus.value.hydratedPages) || 0));
+        const percent = total > 0 ? Math.min(100, Math.round((hydrated / total) * 100)) : 0;
+
+        return {
+            active: Boolean(annotationHydrationStatus.value.active),
+            hydratedPages: hydrated,
+            totalPages: total,
+            percent,
+            complete: total > 0 && hydrated >= total,
+        };
+    });
+
     const hasWorkerSupport = typeof Worker !== 'undefined';
     const searchWorker = hasWorkerSupport
         ? new Worker(new URL('../workers/pdfSearchWorker.js', import.meta.url), { type: 'module' })
@@ -449,6 +485,11 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
         if (extractTextTimeout) {
             clearTimeout(extractTextTimeout);
             extractTextTimeout = null;
+        }
+
+        if (extractAnnotationsTimeout) {
+            clearTimeout(extractAnnotationsTimeout);
+            extractAnnotationsTimeout = null;
         }
 
         if (programmaticNavigationTimer) {
@@ -952,6 +993,8 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
                 const rawAnnotations = await pdfPage.getAnnotations();
                 setPageAnnotations(page, rawAnnotations, viewport);
                 syncCommentStrokesFromAnnotations(page, rawAnnotations, viewport);
+                page.annotationsHydrated = true;
+                updateAnnotationHydrationStatus();
             } catch (e) {
                 console.warn('Form annotation re-extraction failed for page', pageId, e);
             }
@@ -1059,14 +1102,24 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
 
     const setPages = (length) => {
         textExtractionRunId += 1;
+        annotationExtractionRunId += 1;
         if (extractTextTimeout) {
             clearTimeout(extractTextTimeout);
             extractTextTimeout = null;
+        }
+        if (extractAnnotationsTimeout) {
+            clearTimeout(extractAnnotationsTimeout);
+            extractAnnotationsTimeout = null;
         }
         visibleWindowStart = -1;
         resetSearchIndex(length);
         pageCount.value = length;
         pages.value = getPages(length);
+        annotationHydrationStatus.value = {
+            active: false,
+            hydratedPages: 0,
+            totalPages: length,
+        };
     }
 
     const reloadPage = (pageId) => {
@@ -1378,6 +1431,64 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
         }
     };
 
+    const ensureAnnotationsForAllPages = async (priorityIndex = pageIndex.value) => {
+        if (!pdfDoc) return;
+
+        annotationExtractionRunId += 1;
+        const runId = annotationExtractionRunId;
+
+        if (extractAnnotationsTimeout) {
+            clearTimeout(extractAnnotationsTimeout);
+            extractAnnotationsTimeout = null;
+        }
+
+        const orderedIndices = getTextExtractionOrder(priorityIndex);
+        let processedSinceYield = 0;
+        updateAnnotationHydrationStatus(true);
+
+        try {
+            for (const index of orderedIndices) {
+                if (runId !== annotationExtractionRunId || !pdfDoc) return;
+
+                const pageState = pages.value[index];
+                if (!pageState) continue;
+
+                if (pageState.annotationsHydrated) {
+                    updateAnnotationHydrationStatus(true);
+                    continue;
+                }
+
+                try {
+                    const page = await pdfDoc.getPage(index + 1);
+                    if (runId !== annotationExtractionRunId || !pdfDoc) return;
+
+                    const viewport = page.getViewport({ scale: 1 });
+                    const rawAnnotations = await page.getAnnotations();
+
+                    const latestPageState = pages.value[index];
+                    if (latestPageState) {
+                        setPageAnnotations(latestPageState, rawAnnotations, viewport);
+                        syncCommentStrokesFromAnnotations(latestPageState, rawAnnotations, viewport);
+                        latestPageState.annotationsHydrated = true;
+                        updateAnnotationHydrationStatus(true);
+                    }
+
+                    processedSinceYield += 1;
+                    if (processedSinceYield >= 2) {
+                        processedSinceYield = 0;
+                        await yieldToUI();
+                    }
+                } catch (error) {
+                    console.warn(`Error extracting annotations from page ${index + 1}:`, error);
+                }
+            }
+        } finally {
+            if (runId === annotationExtractionRunId) {
+                updateAnnotationHydrationStatus(false);
+            }
+        }
+    };
+
     const searchTextIndexFallback = (term, options = {}) => {
         const { caseSensitive = false, wholeWords = false } = options;
         const escaped = String(term || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -1494,6 +1605,13 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
 
         const storedPageIndex = await getStoredPageIndex();
         scrollToPage(storedPageIndex);
+
+        // Hydrate annotations for all pages in the background, similar to search text indexing.
+        extractAnnotationsTimeout = setTimeout(() => {
+            ensureAnnotationsForAllPages(storedPageIndex).catch((error) => {
+                console.warn('Background annotation extraction failed:', error);
+            });
+        }, 0);
     }
 
     const loadFile = async (event) => {
@@ -2455,6 +2573,7 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
         onZoomLevelChange,
         zoom,
         documentComments,
+        annotationHydrationProgress,
         previewCommentSelection,
         revealCommentSourceText,
         ensureCommentPageReady,

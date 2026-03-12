@@ -56,7 +56,6 @@ onBeforeUnmount(() => {
     <ul :class="`nav nav-tabs d-print-none fixed-${toolbarPosition} ${activeTab.emptyState ? 'empty-state' : ''}`" id="appTabs" role="tablist">
         <template v-for="(tab, index) in tabs" :key="tab">
             <template v-if="!tab.closed">
-                <li class="vr bg-secondary" v-if="showDivider(index)"></li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" :class="{ active: index === activeTabIndex }" type="button" role="tab" @click="onTabClick(tab, index)">
                         <div class="d-flex align-items-center">

@@ -100,6 +100,7 @@ const {
     onZoomLevelChange,
     zoom,
     documentComments,
+    annotationHydrationProgress,
     previewCommentSelection,
     ensureCommentPageReady,
     revealCommentSourceText
@@ -870,6 +871,21 @@ defineExpose({
         </div>
 
         <input ref="imageInput" type="file" accept="image/*" class="d-none" @change="handleImageImport" />
+
+        <div
+            v-if="annotationHydrationProgress.active && annotationHydrationProgress.totalPages > 0"
+            class="position-fixed start-0 bottom-0 m-3 annotation-hydration-status"
+            :title="`${$t('Loading annotations')} ${annotationHydrationProgress.hydratedPages}/${annotationHydrationProgress.totalPages}`"
+        >
+            <div class="annotation-hydration-pill">
+                <i class="bi bi-chat-right-text-fill"></i>
+                <span class="annotation-hydration-label">{{ $t('Loading annotations') }}</span>
+                <span class="annotation-hydration-count">{{ annotationHydrationProgress.hydratedPages }}/{{ annotationHydrationProgress.totalPages }}</span>
+                <div class="annotation-hydration-track">
+                    <div class="annotation-hydration-fill" :style="{ width: `${annotationHydrationProgress.percent}%` }"></div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <input ref="fileInput" type="file"  accept="application/pdf" class="d-none" @change="loadFile" />
