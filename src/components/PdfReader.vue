@@ -818,7 +818,7 @@ defineExpose({
                                 <ToolItem class="btn-pop-menu" label="Highlight Text" shortcut="H" icon="highlighter" :action="highlightTextSelection" />
                                 <ToolItem class="btn-pop-menu" label="Underline Text" icon="type-underline" :action="underlineTextSelection" />
                                 <ToolItem class="btn-pop-menu" label="StrikeOut Text" icon="type-strikethrough" :action="strikeoutTextSelection" />
-                                <ToolItem class="btn-pop-menu" label="Squiggly Text" icon="activity" :action="squigglyTextSelection" />
+                                <ToolItem class="btn-pop-menu" label="Squiggly Text" icon="type-squiggly" :action="squigglyTextSelection" />
                             </template>
                             <ToolItem class="btn-pop-menu" label="Copy" shortcut="Ctrl+D" icon="files" :action="copySelection" v-if="!isSelectedStrokeType('comment|highlight-rect')"/>
                         </template>
