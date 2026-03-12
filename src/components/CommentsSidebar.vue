@@ -109,9 +109,9 @@ const handleCommentClick = async (comment) => {
             <div class="d-flex align-items-center justify-content-between gap-3">
                 <div>
                     <div class="comments-sidebar-kicker text-uppercase">{{ $t('Annotations') }}</div>
-                    <h5 class="mb-0 text-light">{{ $t('Comments') }}</h5>
+                    <h5 class="mb-0 text-light">{{ $t('Comments') }} ({{ comments.length }})</h5>
                 </div>
-                <button type="button" class="btn btn-sm btn-outline-light" @click="closeSidebar?.()">
+                <button type="button" class="btn btn-sm btn-outline-light rounded-3" @click="closeSidebar?.()">
                     <i class="bi bi-x-lg"></i>
                 </button>
             </div>
