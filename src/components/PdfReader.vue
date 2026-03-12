@@ -39,22 +39,6 @@ const cursorStyle = computed(() => {
 });
 
 // File Management
-const loadFileCallback = () => {
-    resetHistory();
-}
-
-const lazyLoadCallback = (page) => {
-    redrawAllStrokes(page);
-}
-
-const fileSavedCallback = () => {
-    saveCurrentHistoryStep();
-}
-
-const createNewBlankPage = (imageData) => {
-    openNewBlankPage(redrawAllStrokes, addToHistory, imageData);
-};
-
 const {
     fileId,
     pages,
@@ -109,19 +93,22 @@ const {
     previewCommentSelection,
     ensureCommentPageReady,
     revealCommentSourceText
-} = useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback);
+} = useFile({
+    onFileLoad: () => resetHistory(),
+    onPageLoad: (page) => redrawAllStrokes(page),
+    onFileSave: () => saveCurrentHistoryStep(),
+    onImageCreated: (page, action) => {
+        redrawAllStrokes(page);
+        addToHistory(action);
+    }
+});
 
 // Drawing Management
-const strokeChangeCallback = (action) => {
-    addToHistory(action);
-};
-
 const {
     colorPalette,
     isStrokeSelectModeActive,
     isTextSelectionMode,
     isTextHighlightMode,
-    textMarkupMode,
     isDrawing,
     isEraser,
     drawMode,
@@ -163,7 +150,7 @@ const {
     commentDraft,
     commentAuthorDraft,
     hoveredCommentPreview,
-    setHoveredCommentPreviewSize,
+    hoveredCommentPreviewEl,
     beginCommentInput,
     commitComment,
     commitCommentSidebar,
@@ -210,41 +197,10 @@ const {
     copySelection,
     hasActiveTool,
     touchAction
-} = usePageActions(activePages, pagesContainer, strokeChangeCallback, {
+} = usePageActions(activePages, pagesContainer, {
+    onStrokeChanged: (action) => addToHistory(action),
     onAttachmentStrokeClick: downloadAttachment,
 });
-
-const hoveredCommentPreviewEl = ref(null);
-
-watch(
-    () => {
-        const preview = hoveredCommentPreview.value;
-        if (!preview) return '';
-        return [
-            preview.strokeType,
-            preview.author,
-            preview.comment,
-            preview.selectedText,
-            preview.downloadHint,
-        ].join('|');
-    },
-    async (key) => {
-        if (!key) {
-            setHoveredCommentPreviewSize();
-            return;
-        }
-
-        await nextTick();
-        const el = hoveredCommentPreviewEl.value;
-        if (!el) return;
-
-        const rect = el.getBoundingClientRect();
-        if (rect.width > 0 && rect.height > 0) {
-            setHoveredCommentPreviewSize(rect.width, rect.height);
-        }
-    },
-    { immediate: true }
-);
 
 // History management
 const { 
@@ -262,9 +218,6 @@ const {
 } = useHistory(fileId, redrawAllStrokes);
 
 startSession();
-
-// Create handleImageImport handler with the callbacks
-const handleImageImport = createImageImportHandler(redrawAllStrokes, addToHistory);
 
 let resizeTimeout = null;
 
@@ -362,7 +315,7 @@ useWindowEvents(fileId, {
             actionAll: (event, ctrl) => {
                 if (ctrl && event.shiftKey) {
                     event.preventDefault();
-                    createNewBlankPage();
+                    openNewBlankPage();
                 }
             }
         },
@@ -490,7 +443,7 @@ onMounted(() => {
 
     if (cache) {
         if (cache.type === 'blank') {
-            createNewBlankPage(cache.data);
+            openNewBlankPage(cache.data);
             return;
         }
 
@@ -529,7 +482,7 @@ onUnmounted(() => {
 
 
 defineExpose({
-    openNewBlankPage: createNewBlankPage,
+    openNewBlankPage,
     openFile: handleFileOpen,
     showDocumentProperties
 })
@@ -932,7 +885,7 @@ defineExpose({
             :renderPdfPage="renderPdfPage"
         />
 
-        <input ref="imageInput" type="file" accept="image/*" class="d-none" @change="handleImageImport" />
+        <input ref="imageInput" type="file" accept="image/*" class="d-none" @change="createImageImportHandler" />
     </div>
 
     <input ref="fileInput" type="file"  accept="application/pdf" class="d-none" @change="loadFile" />

@@ -415,7 +415,13 @@ const findBestCommentTextRange = (page, commentRef) => {
     }, null);
 };
 
-export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
+export function useFile(settings = {
+        onFileLoad() {},
+        onPageLoad() {},
+        onFileSave() {},
+        onImageCreated() {}
+    })
+{
     const fileId = uuid();
 
     var pdfDoc = null;
@@ -1131,7 +1137,7 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
                 console.warn('Form annotation re-extraction failed for page', pageId, e);
             }
 
-            lazyLoadCallback(page);
+            settings.onPageLoad(page);
         })();
 
         pageRenderPromises.set(pageId, { quality: requestedQuality, promise });
@@ -1873,7 +1879,7 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
     };
 
     const getDocumentCallback = async (pdfDoc_) => {
-        loadFileCallback();
+        settings.onFileLoad();
         pdfDoc = pdfDoc_;
         handleFileLoadEvent('pdf');
         await renderAllPages();
@@ -2206,7 +2212,7 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
                     
                     if (result.success) {
                         console.log('PDF saved successfully to:', result.filepath);
-                        fileSavedCallback();
+                        settings.onFileSave();
                         fileRecentlySaved.value = true;
                         clearTimeout(saveFileTimeout);
                         saveFileTimeout = setTimeout(() => {
@@ -2247,7 +2253,7 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
                     await writable.write(pdfBytes);
                     await writable.close();
                     console.log('PDF saved successfully with annotations to:', handle.name);
-                    fileSavedCallback();
+                    settings.onFileSave();
                     return;
                 } catch (err) {
                     if (err.name === 'AbortError') {
@@ -2268,7 +2274,7 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
             console.log('PDF downloaded with annotations');
-            fileSavedCallback();
+            settings.onFileSave();
         } catch (error) {
             console.error('Error saving PDF:', error);
             console.error('Error details:', {
@@ -2322,7 +2328,7 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
         getDocument({ data: pdfBytes }).promise.then(async (pdfDoc_) => {
             filename.value = `Document_${Date.now()}.pdf`;
             filepath.value = null;
-            loadFileCallback();
+            settings.onFileLoad();
             pdfDoc = pdfDoc_;
             handleFileLoadEvent('pdf');
             
@@ -2488,7 +2494,7 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
         });
     };
 
-    const createImage = (imageData, redrawAllStrokesCallback, addToHistoryCallback) => {
+    const createImage = (imageData) => {
         if(!imageData) return;
         const img = new Image();
         img.onload = () => {
@@ -2557,33 +2563,28 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
             }
 
             page.strokes.push(imageStroke);
-            
-            redrawAllStrokesCallback(canvasIndex);
-            // Use unified history action shape
-            addToHistoryCallback({ type: 'add', id: strokeId, page: page, stroke: imageStroke });
+            settings.onImageCreated(page, { type: 'add', id: strokeId, page: page, stroke: imageStroke });
         };
 
         img.src = imageData;
     }
 
-    const createImageImportHandler = (redrawAllStrokesCallback, addToHistoryCallback) => {
-        return async (event) => {
-            const file = event.target.files?.[0];
-            if (!file || !file.type.startsWith('image/')) return;
-            
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                createImage(e.target.result, redrawAllStrokesCallback, addToHistoryCallback);
-            };
-            reader.readAsDataURL(file);
-            
-            // Reset input
-            event.target.value = '';
+    const createImageImportHandler = (event) => {
+        const file = event.target.files?.[0];
+        if (!file || !file.type.startsWith('image/')) return;
+        
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            createImage(e.target.result);
         };
+        reader.readAsDataURL(file);
+        
+        // Reset input
+        event.target.value = '';
     };
 
     // Open a blank page
-    const openNewBlankPage = (redrawAllStrokes, addToHistory, imageData) => {
+    const openNewBlankPage = (imageData) => {
         if (isFileLoaded.value) {
             openNewTab();
             fileDataCache.value = {
@@ -2593,7 +2594,7 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
         }
         
         createBlankPage(() => {
-            createImage(imageData, redrawAllStrokes, addToHistory);
+            createImage(imageData);
         });
     };
 

@@ -17,7 +17,7 @@ const activeSessionId = computed(() => {
     return Object.values(sessions.value).find(session => session.active)?.id || null;
 });
 
-export function useHistory(fileId, redrawAllStrokes) {
+export function useHistory(fileId, historyUpdateCallback) {
     // Allow global-only access when called without args
     if (fileId === undefined || fileId === null) {
         return {
@@ -98,21 +98,21 @@ export function useHistory(fileId, redrawAllStrokes) {
                     strokes.splice(index, 1);
                 }
             }
-            if (page != null) redrawAllStrokes(page);
+            if (page != null) historyUpdateCallback(page);
         } else if (action.type === 'erase') {
             const strokes = page.strokes;
             if (strokes) {
                 const toRestore = [...action.strokes].sort((a, b) => a.index - b.index);
                 toRestore.forEach(item => { strokes.splice(item.index, 0, item.data); });
             }
-            if (page != null) redrawAllStrokes(page);
+            if (page != null) historyUpdateCallback(page);
         } else if (action.type === 'move') {
             if (action.previousStroke) {
                 const strokes = page.strokes;
                 if (strokes && strokes[action.strokeIndex]) {
                     strokes[action.strokeIndex] = JSON.parse(JSON.stringify(action.previousStroke));
                 }
-                if (page != null) redrawAllStrokes(page);
+                if (page != null) historyUpdateCallback(page);
             }
         } else if (action.type === 'comment-edit') {
             if (action.previousStroke) {
@@ -120,7 +120,7 @@ export function useHistory(fileId, redrawAllStrokes) {
                 if (strokes && strokes[action.strokeIndex]) {
                     strokes[action.strokeIndex] = JSON.parse(JSON.stringify(action.previousStroke));
                 }
-                if (page != null) redrawAllStrokes(page);
+                if (page != null) historyUpdateCallback(page);
             }
         } else if (action.type === 'rotate') {
             if (action.previousStroke) {
@@ -135,7 +135,7 @@ export function useHistory(fileId, redrawAllStrokes) {
                         strokes[idx] = JSON.parse(JSON.stringify(action.previousStroke));
                     }
                 }
-                if (page != null) redrawAllStrokes(page);
+                if (page != null) historyUpdateCallback(page);
             }
         } else if (action.type === 'color-change') {
             if (action.previousStroke) {
@@ -143,7 +143,7 @@ export function useHistory(fileId, redrawAllStrokes) {
                 if (strokes && strokes[action.strokeIndex]) {
                     strokes[action.strokeIndex] = JSON.parse(JSON.stringify(action.previousStroke));
                 }
-                if (page != null) redrawAllStrokes(page);
+                if (page != null) historyUpdateCallback(page);
             }
         } else if (action.type === 'resize') {
             if (action.previousStroke) {
@@ -151,7 +151,7 @@ export function useHistory(fileId, redrawAllStrokes) {
                 if (strokes && strokes[action.strokeIndex]) {
                     strokes[action.strokeIndex] = JSON.parse(JSON.stringify(action.previousStroke));
                 }
-                if (page != null) redrawAllStrokes(page);
+                if (page != null) historyUpdateCallback(page);
             }
         } else if (action.type === 'delete-page') {
             action.page.deleted = false;
@@ -172,7 +172,7 @@ export function useHistory(fileId, redrawAllStrokes) {
             if (page == null) return;
             if (!page.strokes) page.strokes = [];
             page.strokes.push(action.stroke);
-            redrawAllStrokes(page);
+            historyUpdateCallback(page);
         } else if (action.type === 'erase') {
             const strokes = page.strokes;
             if (strokes) {
@@ -181,19 +181,19 @@ export function useHistory(fileId, redrawAllStrokes) {
                     if (index > -1) { strokes.splice(index, 1); }
                 });
             }
-            if (page != null) redrawAllStrokes(page);
+            if (page != null) historyUpdateCallback(page);
         } else if (action.type === 'move') {
             const strokes = page.strokes;
             if (strokes && strokes[action.strokeIndex]) {
                 strokes[action.strokeIndex] = JSON.parse(JSON.stringify(action.stroke));
             }
-            if (page != null) redrawAllStrokes(page);
+            if (page != null) historyUpdateCallback(page);
         } else if (action.type === 'comment-edit') {
             const strokes = page.strokes;
             if (strokes && strokes[action.strokeIndex]) {
                 strokes[action.strokeIndex] = JSON.parse(JSON.stringify(action.stroke));
             }
-            if (page != null) redrawAllStrokes(page);
+            if (page != null) historyUpdateCallback(page);
         } else if (action.type === 'rotate') {
             const strokes = page.strokes;
             if (strokes) {
@@ -206,19 +206,19 @@ export function useHistory(fileId, redrawAllStrokes) {
                     strokes[idx] = JSON.parse(JSON.stringify(action.stroke));
                 }
             }
-            if (page != null) redrawAllStrokes(page);
+            if (page != null) historyUpdateCallback(page);
         } else if (action.type === 'color-change') {
             const strokes = page.strokes;
             if (strokes && strokes[action.strokeIndex]) {
                 strokes[action.strokeIndex] = JSON.parse(JSON.stringify(action.stroke));
             }
-            if (page != null) redrawAllStrokes(page);
+            if (page != null) historyUpdateCallback(page);
         } else if (action.type === 'resize') {
             const strokes = page.strokes;
             if (strokes && strokes[action.strokeIndex]) {
                 strokes[action.strokeIndex] = JSON.parse(JSON.stringify(action.stroke));
             }
-            if (page != null) redrawAllStrokes(page);
+            if (page != null) historyUpdateCallback(page);
         }  else if (action.type === 'delete-page') {
             action.page.deleted = true;
         }

@@ -1160,12 +1160,14 @@ const setStrokeMeta = (el, strokeIndex) => {
     el.setAttribute('data-stroke-index', String(strokeIndex));
 };
 
-export function usePageActions(pages, pagesContainer, addToHistory, options = {}) {
+export function usePageActions(pages, pagesContainer, options = {
+    onStrokeChanged() {},
+    onAttachmentStrokeClick: null
+}) {
     const { get: storeGet, set: storeSet } = useStore();
     const onAttachmentStrokeClick = typeof options?.onAttachmentStrokeClick === 'function'
         ? options.onAttachmentStrokeClick
         : null;
-
     const actionPage = ref(null);
 
     const activeCommentId = ref(null)
@@ -1685,7 +1687,7 @@ export function usePageActions(pages, pagesContainer, addToHistory, options = {}
                 translateStrokeBy(newStroke, baseDX, baseDY);
 
                 page.strokes.push(newStroke);
-                addToHistory({ id: newId, type: 'add', page: page, stroke: newStroke });
+                options.onStrokeChanged({ id: newId, type: 'add', page: page, stroke: newStroke });
                 const strokeIndex = page.strokes.length - 1;
                 newSelections.push({ pageIndex: page.index, pageId: page.id, strokeIndex, stroke: newStroke });
             });
@@ -1724,7 +1726,7 @@ export function usePageActions(pages, pagesContainer, addToHistory, options = {}
         }
 
         page.strokes.push(newStroke);
-        addToHistory({
+        options.onStrokeChanged({
             id: newId,
             type: 'add',
             page,
@@ -2132,7 +2134,7 @@ export function usePageActions(pages, pagesContainer, addToHistory, options = {}
                     stroke[0].rotationBoxHeight = stroke[0].height;
                 }
 
-                addToHistory({
+                options.onStrokeChanged({
                     id: stroke[0].id,
                     type: 'text-change',
                     page: actionPage.value,
@@ -2195,7 +2197,7 @@ export function usePageActions(pages, pagesContainer, addToHistory, options = {}
             }
 
             actionPage.value.strokes.push(textStroke);
-            addToHistory({
+            options.onStrokeChanged({
                 id,
                 type: 'add',
                 page: actionPage.value,
@@ -3725,7 +3727,7 @@ export function usePageActions(pages, pagesContainer, addToHistory, options = {}
                             if (sel.pageIndex !== currentCanvasIndex) return;
                             const s = actionPage.value.strokes[sel.strokeIndex];
                             if (!s) return;
-                            addToHistory({
+                            options.onStrokeChanged({
                                 id: s[0].id,
                                 type: 'move',
                                 page: actionPage.value,
@@ -3736,7 +3738,7 @@ export function usePageActions(pages, pagesContainer, addToHistory, options = {}
                         });
                     } else {
                         const changeType = isRotating.value ? 'rotate' : (isResizing.value ? 'resize' : 'move');
-                        addToHistory({
+                        options.onStrokeChanged({
                             id: stroke[0].id,
                             type: changeType,
                             page: actionPage.value,
@@ -3860,7 +3862,7 @@ export function usePageActions(pages, pagesContainer, addToHistory, options = {}
         }
 
         if (newStroke) {
-            addToHistory({
+            options.onStrokeChanged({
                 id: currentStrokeId.value,
                 type: 'add',
                 page: actionPage.value,
@@ -4114,7 +4116,7 @@ export function usePageActions(pages, pagesContainer, addToHistory, options = {}
                 for (let point of s) {
                     point.color = newColor;
                 }
-                addToHistory({
+                options.onStrokeChanged({
                     id: s[0].id,
                     type: 'color-change',
                     page: actionPage.value,
@@ -4130,7 +4132,7 @@ export function usePageActions(pages, pagesContainer, addToHistory, options = {}
                 for (let point of stroke) {
                     point.color = newColor;
                 }
-                addToHistory({
+                options.onStrokeChanged({
                     id: stroke[0].id,
                     type: 'color-change',
                     page: actionPage.value,
@@ -4161,7 +4163,7 @@ export function usePageActions(pages, pagesContainer, addToHistory, options = {}
                 for (let point of s) {
                     point.thickness = thicknessVal;
                 }
-                addToHistory({
+                options.onStrokeChanged({
                     id: s[0].id,
                     type: 'thickness-change',
                     page: actionPage.value,
@@ -4177,7 +4179,7 @@ export function usePageActions(pages, pagesContainer, addToHistory, options = {}
                 for (let point of stroke) {
                     point.thickness = thicknessVal;
                 }
-                addToHistory({
+                options.onStrokeChanged({
                     id: stroke[0].id,
                     type: 'thickness-change',
                     page: actionPage.value,
@@ -4210,7 +4212,7 @@ export function usePageActions(pages, pagesContainer, addToHistory, options = {}
                 const removals = sorted.map(index => ({ index, data: strokes[index] }));
                 // Splice descending to avoid reindexing issues
                 sorted.forEach(index => { strokes.splice(index, 1); });
-                addToHistory({
+                options.onStrokeChanged({
                     id: removals[0]?.data?.[0]?.id,
                     type: 'erase',
                     page: actionPage.value,
@@ -4228,7 +4230,7 @@ export function usePageActions(pages, pagesContainer, addToHistory, options = {}
         const stroke = strokes[selectedStroke.value.strokeIndex];
         if (stroke) {
             strokes.splice(selectedStroke.value.strokeIndex, 1);
-            addToHistory({
+            options.onStrokeChanged({
                 id: stroke[0].id,
                 type: 'erase',
                 page: actionPage.value,
@@ -4253,7 +4255,7 @@ export function usePageActions(pages, pagesContainer, addToHistory, options = {}
                 first.comment = '';
                 first.author = '';
                 first.updatedAt = new Date().toISOString();
-                addToHistory({
+                options.onStrokeChanged({
                     id: first.id,
                     type: 'comment-edit',
                     page,
@@ -4266,7 +4268,7 @@ export function usePageActions(pages, pagesContainer, addToHistory, options = {}
             }
 
             strokes.splice(strokeIndex, 1);
-            addToHistory({
+            options.onStrokeChanged({
                 id: stroke[0].id,
                 type: 'erase',
                 page,
@@ -4300,7 +4302,7 @@ export function usePageActions(pages, pagesContainer, addToHistory, options = {}
         
         actionPage.value.strokes.push(highlightStroke);
         
-        addToHistory({
+        options.onStrokeChanged({
             id,
             type: 'add',
             page: actionPage.value,
@@ -5109,6 +5111,38 @@ export function usePageActions(pages, pagesContainer, addToHistory, options = {}
         };
     };
 
+    const hoveredCommentPreviewEl = ref(null);
+
+    watch(
+        () => {
+            const preview = hoveredCommentPreview.value;
+            if (!preview) return '';
+            return [
+                preview.strokeType,
+                preview.author,
+                preview.comment,
+                preview.selectedText,
+                preview.downloadHint,
+            ].join('|');
+        },
+        async (key) => {
+            if (!key) {
+                setHoveredCommentPreviewSize();
+                return;
+            }
+
+            await nextTick();
+            const el = hoveredCommentPreviewEl.value;
+            if (!el) return;
+
+            const rect = el.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+                setHoveredCommentPreviewSize(rect.width, rect.height);
+            }
+        },
+        { immediate: true }
+    );
+
     const cancelCommentInput = () => {
         commentDraft.value = '';
         commentAuthorDraft.value = '';
@@ -5285,7 +5319,7 @@ export function usePageActions(pages, pagesContainer, addToHistory, options = {}
                 first.commentSource = 'app-stroke-comment';
             }
 
-            addToHistory({
+            options.onStrokeChanged({
                 id: first.id,
                 type: 'comment-edit',
                 page: editTargetPage,
@@ -5328,7 +5362,7 @@ export function usePageActions(pages, pagesContainer, addToHistory, options = {}
         }];
 
         page.strokes.push(commentStroke);
-        addToHistory({
+        options.onStrokeChanged({
             id: commentStroke[0].id,
             type: 'add',
             page,
@@ -5445,7 +5479,7 @@ export function usePageActions(pages, pagesContainer, addToHistory, options = {}
         
         if (strokesToRemove.length > 0) {
             actionPage.value.strokes = keptStrokes;
-            addToHistory({
+            options.onStrokeChanged({
                 id: strokeId,
                 type: 'erase',
                 page: actionPage.value,
@@ -5803,7 +5837,7 @@ export function usePageActions(pages, pagesContainer, addToHistory, options = {}
         commentDraft,
         commentAuthorDraft,
         hoveredCommentPreview,
-        setHoveredCommentPreviewSize,
+        hoveredCommentPreviewEl,
         beginCommentInput,
         commitComment,
         commitCommentSidebar,
