@@ -80,6 +80,22 @@ const PDF_MARKUP_SUBTYPES = new Set([
 
 const PDF_MARKUP_ANNOTATION_TYPES = new Set([3, 9, 10, 11, 12]);
 
+const getMarkupTypeFromAnnotation = (annotation) => {
+    const subtype = String(annotation?.subtype || '').trim().toLowerCase();
+    if (subtype === 'highlight') return 'highlight';
+    if (subtype === 'underline') return 'underline';
+    if (subtype === 'strikeout') return 'strikeout';
+    if (subtype === 'squiggly') return 'squiggly';
+
+    const annotationType = Number(annotation?.annotationType);
+    if (annotationType === 9) return 'highlight';
+    if (annotationType === 10) return 'underline';
+    if (annotationType === 11) return 'squiggly';
+    if (annotationType === 12) return 'strikeout';
+
+    return '';
+};
+
 const getAnnotationViewportBounds = (annotation, viewport) => {
     if (!annotation || !viewport) return null;
 
@@ -732,6 +748,7 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
             const source = subtype.toLowerCase() === 'text'
                 ? 'pdf-text-annotation'
                 : 'pdf-markup-annotation';
+            const markupType = getMarkupTypeFromAnnotation(annotation);
 
             if (source === 'pdf-text-annotation') {
                 const fixed = COMMENT_ICON_DEFAULT_SIZE;
@@ -767,6 +784,7 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
                 createdAt: annotation.creationDate || null,
                 updatedAt: annotation.modificationDate || annotation.modDate || null,
                 source,
+                markupType,
                 pdfAnnotationId: String(annotation.id || annotation.annotationId || ''),
             }];
         });
@@ -2460,7 +2478,7 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
 
     // Comment Sidebar
     const documentComments = computed(() => {
-        return pages.value
+        const flatComments = pages.value
             .flatMap((page) => (page.strokes || []).map((stroke, strokeIndex) => {
                 const first = stroke?.[0] || null;
                 if (!first) return null;
@@ -2491,6 +2509,29 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
                 const rightTime = right.updatedAt ? new Date(right.updatedAt).getTime() : 0;
                 return rightTime - leftTime;
             });
+
+        const groups = new Map();
+
+        flatComments.forEach((comment) => {
+            const groupId = `${comment.pageId}-${comment.pageIndex}`;
+            if (!groups.has(groupId)) {
+                groups.set(groupId, {
+                    id: groupId,
+                    pageId: comment.pageId,
+                    pageIndex: comment.pageIndex,
+                    comments: [],
+                });
+            }
+
+            groups.get(groupId).comments.push(comment);
+        });
+
+        return Array.from(groups.values())
+            .sort((left, right) => left.pageIndex - right.pageIndex)
+            .map((group) => ({
+                ...group,
+                count: group.comments.length,
+            }));
     });
 
     const ensureCommentPageReady = async (commentRef) => {
