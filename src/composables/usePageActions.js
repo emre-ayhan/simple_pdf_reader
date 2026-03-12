@@ -1,12 +1,12 @@
 import { ref, nextTick, computed, watch } from 'vue';
 import { useStore } from './useStore.js';
-import { enableTouchDrawing, uuid, copiedStrokes, copiedStroke, copyAsStroke, COMMENT_ICON_DEFAULT_COLOR, COMMENT_ICON_DEFAULT_SIZE } from './useAppSettings.js';
+import { enableTouchDrawing, uuid, copiedStrokes, copiedStroke, copyAsStroke, COMMENT_ICON_DEFAULT_COLOR, STROKE_ICON_DEFAULT_SIZE } from './useAppSettings.js';
 
 const colorPalette = [
     '#111827', '#1f2937', '#374151', '#6b7280', '#9ca3af',
     '#1d4ed8', '#2563eb', '#3b82f6', '#0ea5e9', '#06b6d4',
     '#0f766e', '#14b8a6', '#047857', '#10b981', '#22c55e',
-    '#84cc16', '#eab308', '#f59e0b', '#f97316', '#dc2626',
+    '#84cc16', '#eab308', '#f59e0b', '#f97316', COMMENT_ICON_DEFAULT_COLOR,
     '#ef4444', '#f43f5e', '#ec4899', '#7c3aed', '#8b5cf6',
     '#a855f7', '#d946ef', '#92400e', '#78350f', '#a16207',
 ];
@@ -328,6 +328,7 @@ const isSelectOnlyStroke = (first) => {
     return [
         'highlight-rect',
         'comment',
+        'attachment',
     ].includes(first.type);
 };
 
@@ -344,7 +345,7 @@ const hasSelectOnlyStrokeInSelection = (selections, pageIndex = null) => {
 const getCommentStrokeSize = (strokeOrFirst) => {
     const first = Array.isArray(strokeOrFirst) ? strokeOrFirst[0] : strokeOrFirst;
     const dpr = window.devicePixelRatio;
-    const defaultSize = dpr * COMMENT_ICON_DEFAULT_SIZE;
+    const defaultSize = dpr * STROKE_ICON_DEFAULT_SIZE;
     if (!first) {
         return { width: defaultSize, height: defaultSize };
     }
@@ -1159,8 +1160,11 @@ const setStrokeMeta = (el, strokeIndex) => {
     el.setAttribute('data-stroke-index', String(strokeIndex));
 };
 
-export function usePageActions(pages, pagesContainer, addToHistory) {
+export function usePageActions(pages, pagesContainer, addToHistory, options = {}) {
     const { get: storeGet, set: storeSet } = useStore();
+    const onAttachmentStrokeClick = typeof options?.onAttachmentStrokeClick === 'function'
+        ? options.onAttachmentStrokeClick
+        : null;
 
     const actionPage = ref(null);
 
@@ -2258,7 +2262,7 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
                      testY <= first.y + textHeight + threshold;
         }
 
-        if (first.type === 'comment') {
+        if (first.type === 'comment' || first.type === 'attachment') {
             const commentBox = getCommentStrokeSize(first);
             return testX >= first.x - threshold
                 && testX <= first.x + commentBox.width + threshold
@@ -2450,7 +2454,7 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
                 maxY = Math.max(maxY, ry);
             });
             return { minX: minX - pad, minY: minY - pad, maxX: maxX + pad, maxY: maxY + pad };
-        } else if (first.type === 'comment') {
+        } else if (first.type === 'comment' || first.type === 'attachment') {
             const box = getCommentStrokeSize(first);
             const angle = first.rotation || 0;
             const center = getStrokeRotationCenter(stroke) || { x: first.x + box.width / 2, y: first.y + box.height / 2 };
@@ -2577,7 +2581,7 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
         const pad = Math.max(0, padding);
         if (first.type === 'image') {
             return { minX: first.x - pad, minY: first.y - pad, maxX: first.x + first.width + pad, maxY: first.y + first.height + pad };
-        } else if (first.type === 'comment') {
+        } else if (first.type === 'comment' || first.type === 'attachment') {
             const box = getCommentStrokeSize(first);
             return { minX: first.x - pad, minY: first.y - pad, maxX: first.x + box.width + pad, maxY: first.y + box.height + pad };
         } else if (first.type === 'highlight-rect') {
@@ -2793,7 +2797,21 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
             return;
         }
 
-        if (textModesActive.value) return;
+        if (textModesActive.value) {
+            if (onAttachmentStrokeClick) {
+                const canvas = actionPage.value?.drawingCanvas || null;
+                const pt = getCanvasPointFromEvent(canvas, e);
+                if (pt) {
+                    const found = pickStrokeAtPoint(pt.x, pt.y);
+                    const foundFirst = found?.stroke?.[0] || null;
+                    if (foundFirst?.type === 'attachment' && !isSecondaryPointerAction(e)) {
+                        Promise.resolve(onAttachmentStrokeClick(foundFirst)).catch(() => {});
+                        stopEvent(e);
+                    }
+                }
+            }
+            return;
+        }
 
         // Track active pointer type
         activePointerType.value = e.pointerType;
@@ -2914,6 +2932,13 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
 
             if (found) {
                 const shift = !!e.shiftKey;
+                const foundFirst = found.stroke?.[0] || null;
+
+                if (!shift && !isSecondaryPointerAction(e) && foundFirst?.type === 'attachment' && onAttachmentStrokeClick) {
+                    Promise.resolve(onAttachmentStrokeClick(foundFirst)).catch(() => {});
+                    stopEvent(e);
+                    return;
+                }
 
                 const newSelection = {
                     pageId: page.id,
@@ -3870,13 +3895,17 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
             return;
         }
 
+        const isAttachment = first.type === 'attachment';
+
         const position = clampHoveredCommentPreviewPosition(pt.clientX + 18, pt.clientY + 18);
         hoveredCommentPreview.value = {
             x: position.x,
             y: position.y,
+            strokeType: String(first.type || ''),
             comment: String(first.comment || ''),
             author: String(first.author || ''),
-            selectedText: String(first.selectedText || '')
+            selectedText: String(first.selectedText || ''),
+            ...(isAttachment ? { downloadHint: 'Click to download' } : {})
         };
     };
 
@@ -4653,20 +4682,46 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
                 fill: first.color || COMMENT_ICON_DEFAULT_COLOR,
                 'fill-opacity': strokeOpacity
             });
-            const title = createSvgElement('title');
-            title.textContent = [
-                first.author ? `Author: ${first.author}` : '',
-                first.selectedText ? `Selected: ${first.selectedText}` : '',
-                first.comment || ''
-            ]
-                .filter(Boolean)
-                .join('\n\n');
             setStrokeMeta(bubble, strokeIndex);
             if (transform) {
                 group.setAttribute('transform', transform);
             }
-            group.appendChild(title);
             iconGroup.appendChild(bubble);
+            group.appendChild(iconGroup);
+            svgLayer.appendChild(group);
+            return;
+        }
+
+        if (first.type === 'attachment') {
+            const box = getCommentStrokeSize(first);
+            const group = createSvgElement('g', {
+                class: 'attachment-group',
+                'pointer-events': 'all',
+                cursor: 'pointer'
+            });
+            const iconGroup = createSvgElement('g', {
+                transform: `translate(${first.x} ${first.y}) scale(${box.width / 16} ${box.height / 16})`
+            });
+            const fileShape = createSvgElement('path', {
+                d: 'M4 0h6l4 4v10.5A1.5 1.5 0 0 1 12.5 16h-8A1.5 1.5 0 0 1 3 14.5v-13A1.5 1.5 0 0 1 4.5 0zM10 1.5V4h2.5z',
+                fill: first.color || '#2f7cd1',
+                'fill-opacity': strokeOpacity
+            });
+            const arrow = createSvgElement('path', {
+                d: 'M8 6.25a.65.65 0 0 1 .65.65v3.2l1.05-1.05a.65.65 0 0 1 .92.92L8.45 12.2a.65.65 0 0 1-.9 0L5.38 9.97a.65.65 0 1 1 .92-.92l1.05 1.05V6.9A.65.65 0 0 1 8 6.25z',
+                fill: '#ffffff',
+                'fill-opacity': strokeOpacity
+            });
+
+            setStrokeMeta(fileShape, strokeIndex);
+            setStrokeMeta(arrow, strokeIndex);
+
+            if (transform) {
+                group.setAttribute('transform', transform);
+            }
+
+            iconGroup.appendChild(fileShape);
+            iconGroup.appendChild(arrow);
             group.appendChild(iconGroup);
             svgLayer.appendChild(group);
             return;
@@ -5036,8 +5091,8 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
         );
         if (!anchorPoint) return null;
 
-        const width = COMMENT_ICON_DEFAULT_SIZE;
-        const height = COMMENT_ICON_DEFAULT_SIZE;
+        const width = STROKE_ICON_DEFAULT_SIZE;
+        const height = STROKE_ICON_DEFAULT_SIZE;
         const maxX = Math.max(0, canvas.width - width);
         const maxY = Math.max(0, canvas.height - height);
 
@@ -5140,8 +5195,8 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
         showCommentInput.value = true;
         if (first.type === 'comment') {
             popMenuPosition.value = {
-                x: first.x + (Number(first.width) || COMMENT_ICON_DEFAULT_SIZE),
-                y: first.y + (Number(first.height) || COMMENT_ICON_DEFAULT_SIZE)
+                x: first.x + (Number(first.width) || STROKE_ICON_DEFAULT_SIZE),
+                y: first.y + (Number(first.height) || STROKE_ICON_DEFAULT_SIZE)
             };
         }
 

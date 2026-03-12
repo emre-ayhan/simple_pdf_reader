@@ -1,7 +1,7 @@
 import { ref, nextTick, computed, watch, toRaw, onUnmounted } from "vue";
 import { GlobalWorkerOptions, getDocument } from "pdfjs-dist";
 import { PDFDocument, rgb, degrees as pdfDegrees, PDFHexString, PDFName, PDFString } from "pdf-lib";
-import { uuid, Electron, COMMENT_ICON_DEFAULT_COLOR, COMMENT_ICON_DEFAULT_SIZE } from "./useAppSettings";
+import { uuid, Electron, COMMENT_ICON_DEFAULT_COLOR, STROKE_ICON_DEFAULT_SIZE } from "./useAppSettings";
 import { useStore } from "./useStore";
 import { showModal } from "./usePageModal";
 import { fileDataCache, openNewTab, setCurrentTab } from "./useTabs";
@@ -46,6 +46,46 @@ const formatBytes = (bytes, decimals = 2) => {
     return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 };
 
+const normalizeAttachmentBytes = (value) => {
+    if (!value) return null;
+    if (value instanceof Uint8Array) return value;
+    if (value instanceof ArrayBuffer) return new Uint8Array(value);
+    if (ArrayBuffer.isView(value)) return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+
+    if (Array.isArray(value)) {
+        try {
+            return Uint8Array.from(value);
+        } catch {
+            return null;
+        }
+    }
+
+    if (typeof value === 'object') {
+        if (value.content) return normalizeAttachmentBytes(value.content);
+        if (value.data) return normalizeAttachmentBytes(value.data);
+        if (value.bytes) return normalizeAttachmentBytes(value.bytes);
+    }
+
+    return null;
+};
+
+const getAttachmentDownloadName = (item = {}, fallback = 'attachment.bin') => {
+    const rawName = String(item?.name || item?.filename || item?.title || '').trim();
+    if (!rawName) return fallback;
+    return rawName.replace(/[\\/:*?"<>|]+/g, '_');
+};
+
+const triggerBlobDownload = (blob, filename = 'attachment.bin') => {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+};
+
 const formatPdfDate = (dateStr) => {
     if (!dateStr) return '-';
     // Simple cleanup for PDF date string D:YYYYMMDDHHmmss...
@@ -79,6 +119,7 @@ const PDF_MARKUP_SUBTYPES = new Set([
 ]);
 
 const PDF_MARKUP_ANNOTATION_TYPES = new Set([3, 9, 10, 11, 12]);
+const PDF_FILE_ATTACHMENT_ANNOTATION_TYPES = new Set([17]);
 
 const getMarkupTypeFromAnnotation = (annotation) => {
     const subtype = String(annotation?.subtype || '').trim().toLowerCase();
@@ -751,7 +792,7 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
             const markupType = getMarkupTypeFromAnnotation(annotation);
 
             if (source === 'pdf-text-annotation') {
-                const fixed = COMMENT_ICON_DEFAULT_SIZE;
+                const fixed = STROKE_ICON_DEFAULT_SIZE;
                 if (bounds) {
                     const centerX = bounds.x + bounds.width / 2;
                     const centerY = bounds.y + bounds.height / 2;
@@ -796,6 +837,75 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
         });
 
         page.strokes = [...nonImportedStrokes, ...importedCommentStrokes];
+    };
+
+    const syncAttachmentStrokesFromAnnotations = (page, annotations = [], viewport = null) => {
+        if (!page || !viewport || !Array.isArray(page.strokes)) return;
+
+        const attachmentAnnotations = annotations.filter(annotation => {
+            const subtype = String(annotation?.subtype || '').trim().toLowerCase();
+            const annotationType = Number(annotation?.annotationType);
+            return subtype === 'fileattachment' || PDF_FILE_ATTACHMENT_ANNOTATION_TYPES.has(annotationType);
+        });
+
+        const importedAttachmentStrokes = attachmentAnnotations.map((annotation, index) => {
+            const bounds = getAnnotationViewportBounds(annotation, viewport);
+            const fixedSize = STROKE_ICON_DEFAULT_SIZE;
+            const centerX = bounds ? (bounds.x + (bounds.width / 2)) : 0;
+            const centerY = bounds ? (bounds.y + (bounds.height / 2)) : 0;
+            const fileEntry = annotation?.file || annotation?.attachment || annotation?.fileAttachment || null;
+            const attachmentName = getAttachmentDownloadName({
+                name: fileEntry?.filename || fileEntry?.name || annotation?.title || annotation?.id || `attachment-${index + 1}`
+            }, `attachment-${index + 1}.bin`);
+            const attachmentContent = normalizeAttachmentBytes(
+                fileEntry?.content || fileEntry?.data || fileEntry?.bytes || annotation?.content || null
+            );
+
+            return [{
+                id: String(annotation.id || annotation.annotationId || uuid()),
+                type: 'attachment',
+                x: Math.max(0, centerX - (fixedSize / 2)),
+                y: Math.max(0, centerY - (fixedSize / 2)),
+                width: fixedSize,
+                height: fixedSize,
+                color: '#2f7cd1',
+                thickness: 2,
+                opacity: 1,
+                selectedText: attachmentName,
+                comment: readAnnotationString(annotation.contents, annotation.contentsObj),
+                source: 'pdf-attachment-annotation',
+                pdfAnnotationId: String(annotation.id || annotation.annotationId || ''),
+                attachmentName,
+                attachmentContentType: String(fileEntry?.contentType || fileEntry?.mimeType || 'application/octet-stream'),
+                attachmentContent,
+            }];
+        });
+
+        const nonImportedStrokes = page.strokes.filter(stroke => {
+            const first = stroke?.[0] || null;
+            return first?.type !== 'attachment' || first?.source !== 'pdf-attachment-annotation';
+        });
+
+        page.strokes = [...nonImportedStrokes, ...importedAttachmentStrokes];
+    };
+
+    const downloadAttachment = async (attachment) => {
+        const bytes = normalizeAttachmentBytes(attachment?.content || attachment?.attachmentContent || null);
+        if (!bytes || bytes.byteLength === 0) {
+            await showModal('This attachment has no downloadable data.');
+            return false;
+        }
+
+        const contentType = String(attachment?.contentType || attachment?.attachmentContentType || 'application/octet-stream');
+        const filename = getAttachmentDownloadName(
+            {
+                name: attachment?.name || attachment?.filename || attachment?.attachmentName,
+            },
+            'attachment.bin'
+        );
+
+        triggerBlobDownload(new Blob([bytes], { type: contentType }), filename);
+        return true;
     };
 
     const removeNativeTextCommentAnnotations = (pdfLibDoc, pdfPage) => {
@@ -1014,6 +1124,7 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
                 const rawAnnotations = await pdfPage.getAnnotations();
                 setPageAnnotations(page, rawAnnotations, viewport);
                 syncCommentStrokesFromAnnotations(page, rawAnnotations, viewport);
+                syncAttachmentStrokesFromAnnotations(page, rawAnnotations, viewport);
                 page.annotationsHydrated = true;
                 updateAnnotationHydrationStatus();
             } catch (e) {
@@ -1075,6 +1186,9 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
 
     // Saved State Variables
     const fileRecentlySaved = ref(false);
+    const sidebarBookmarks = ref([]);
+    const sidebarAttachments = ref([]);
+    const sidebarLayers = ref([]);
 
     // Pagination State Variables
     const pages = ref([]);
@@ -1141,7 +1255,97 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
             hydratedPages: 0,
             totalPages: length,
         };
+        sidebarBookmarks.value = [];
+        sidebarAttachments.value = [];
+        sidebarLayers.value = [];
     }
+
+    const resolvePageIndexFromDest = async (dest) => {
+        if (!pdfDoc || !dest) return null;
+
+        let resolvedDest = dest;
+        if (typeof resolvedDest === 'string') {
+            try {
+                resolvedDest = await pdfDoc.getDestination(resolvedDest);
+            } catch {
+                return null;
+            }
+        }
+
+        if (!Array.isArray(resolvedDest) || resolvedDest.length === 0) return null;
+        const pageRef = resolvedDest[0];
+        if (!pageRef) return null;
+
+        try {
+            const pageIdx = await pdfDoc.getPageIndex(pageRef);
+            return Number.isInteger(pageIdx) ? pageIdx : null;
+        } catch {
+            return null;
+        }
+    };
+
+    const flattenOutlineItems = async (items = [], level = 0, collector = []) => {
+        if (!Array.isArray(items) || items.length === 0) return collector;
+
+        for (const item of items) {
+            const pageIndex = await resolvePageIndexFromDest(item?.dest || item?.url || null);
+            collector.push({
+                id: String(item?.title || uuid()),
+                title: String(item?.title || 'Untitled'),
+                page: Number.isInteger(pageIndex) ? pageIndex + 1 : null,
+                level,
+            });
+
+            if (Array.isArray(item?.items) && item.items.length > 0) {
+                await flattenOutlineItems(item.items, level + 1, collector);
+            }
+        }
+
+        return collector;
+    };
+
+    const loadSidebarDocumentData = async () => {
+        if (!pdfDoc) return;
+
+        try {
+            const attachmentMap = await pdfDoc.getAttachments?.();
+            const entries = Object.entries(attachmentMap || {});
+            sidebarAttachments.value = entries.map(([key, value], index) => {
+                const bytes = normalizeAttachmentBytes(value?.content || value?.data || value?.bytes || null);
+                const size = bytes?.length || bytes?.byteLength || 0;
+                return {
+                    id: String(value?.filename || value?.name || key || `attachment-${index + 1}`),
+                    name: String(value?.filename || value?.name || key || `Attachment ${index + 1}`),
+                    size: size ? formatBytes(size) : '',
+                    contentType: String(value?.contentType || value?.mimeType || 'application/octet-stream'),
+                    content: bytes || null,
+                };
+            });
+        } catch {
+            sidebarAttachments.value = [];
+        }
+
+        try {
+            const outline = await pdfDoc.getOutline?.();
+            const flattened = await flattenOutlineItems(outline || []);
+            sidebarBookmarks.value = flattened.filter(item => Number.isInteger(item.page));
+        } catch {
+            sidebarBookmarks.value = [];
+        }
+
+        try {
+            const optional = await pdfDoc.getOptionalContentConfig?.();
+            const groups = optional?.getGroups?.();
+            const layerList = Object.values(groups || {}).map((group, index) => ({
+                id: String(group?.id || `layer-${index}`),
+                name: String(group?.name || `Layer ${index + 1}`),
+                visible: group?.visible !== false,
+            }));
+            sidebarLayers.value = layerList;
+        } catch {
+            sidebarLayers.value = [];
+        }
+    };
 
     const reloadPage = (pageId) => {
         const oldPages = toRaw(pages.value);
@@ -1490,6 +1694,7 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
                     if (latestPageState) {
                         setPageAnnotations(latestPageState, rawAnnotations, viewport);
                         syncCommentStrokesFromAnnotations(latestPageState, rawAnnotations, viewport);
+                        syncAttachmentStrokesFromAnnotations(latestPageState, rawAnnotations, viewport);
                         latestPageState.annotationsHydrated = true;
                         updateAnnotationHydrationStatus(true);
                     }
@@ -1623,6 +1828,7 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
         pdfDoc = pdfDoc_;
         handleFileLoadEvent('pdf');
         await renderAllPages();
+        loadSidebarDocumentData().catch(() => {});
 
         const storedPageIndex = await getStoredPageIndex();
         scrollToPage(storedPageIndex);
@@ -2618,6 +2824,10 @@ export function useFile(loadFileCallback, lazyLoadCallback, fileSavedCallback) {
         zoom,
         documentComments,
         annotationHydrationProgress,
+        sidebarBookmarks,
+        sidebarAttachments,
+        sidebarLayers,
+        downloadAttachment,
         previewCommentSelection,
         revealCommentSourceText,
         ensureCommentPageReady,

@@ -152,5 +152,11 @@
     "No matching comments for this search.": "Bu aramayla eşleşen yorum yok.",
     "Loading annotations": "Açıklamalar yükleniyor",
     "Jump to text": "Metne git",
-    "Edit": "Düzenle"
+    "Edit": "Düzenle",
+    "Bookmarks": "Yer İmleri",
+    "Attachments": "Ekler",
+    "Layers": "Katmanlar",
+    "No bookmarks found": "Yer imi bulunamadı",
+    "No attachments found": "Ek bulunamadı",
+    "No layers found": "Katman bulunamadı"
 }

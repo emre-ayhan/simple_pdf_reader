@@ -102,6 +102,10 @@ const {
     zoom,
     documentComments,
     annotationHydrationProgress,
+    sidebarBookmarks,
+    sidebarAttachments,
+    sidebarLayers,
+    downloadAttachment,
     previewCommentSelection,
     ensureCommentPageReady,
     revealCommentSourceText
@@ -205,7 +209,9 @@ const {
     copySelection,
     hasActiveTool,
     touchAction
-} = usePageActions(activePages, pagesContainer, strokeChangeCallback);
+} = usePageActions(activePages, pagesContainer, strokeChangeCallback, {
+    onAttachmentStrokeClick: downloadAttachment,
+});
 
 // History management
 const { 
@@ -503,8 +509,14 @@ defineExpose({
                 <li class="nav-item">
                     <ToolItem class="nav-link" label="Thumbnail Sidebar" icon="layout-sidebar-inset" :active="isThumbnailSidebarVisible" :action="toggleThumbnailSidebar" />
                 </li>
+                
                 <!-- Search -->
                 <PageSearch :fileid="fileId" :pages="pages" :disabled="textActionsDisabled" :scrollToPage="scrollToPage" :search-text-index="searchTextIndex" />
+
+                <!-- Save File -->
+                <li class="nav-item">
+                    <ToolItem class="nav-link" label="Save File" icon="floppy-fill" :action="handleSaveFile" :disabled="historyStep === savedHistoryStep" />
+                </li>
 
                 <!-- Reset Form -->
                 <li class="nav-item" v-if="isTextSelectionMode && activePage.annotations?.length">
@@ -666,9 +678,6 @@ defineExpose({
                     <ToolItem class="nav-link" label="Comments" icon="chat-square-text" :active="isCommentsSidebarVisible" :action="toggleCommentsSidebar" />
                 </li>
                 <li class="nav-item">
-                    <ToolItem class="nav-link" label="Save File" icon="floppy-fill" :action="handleSaveFile" :disabled="historyStep === savedHistoryStep" />
-                </li>
-                <li class="nav-item">
                     <ToolItem class="nav-link" label="Preferences" icon="gear-fill" :action="openPreferences" />
                 </li>
             </ul>
@@ -681,6 +690,10 @@ defineExpose({
                 :pageIndex="pageIndex"
                 :scrollToPage="scrollToPage"
                 :renderPageThumbnail="renderPageThumbnail"
+                :bookmarks="sidebarBookmarks"
+                :attachments="sidebarAttachments"
+                :layers="sidebarLayers"
+                :downloadAttachment="downloadAttachment"
             />
             <div class="pages-container flex-grow-1" ref="pagesContainer" :style="{ width: `${zoomPercentage}%` }">
                 <template v-for="page in pages" :key="page.id">
@@ -702,6 +715,7 @@ defineExpose({
                                 class="annotation-layer"
                                 preserveAspectRatio="none"
                                 xmlns="http://www.w3.org/2000/svg"
+                                @pointerdown="startDrawing"
                             ></svg>
                             <canvas 
                                 :ref="el => page.drawingCanvas = el"
@@ -735,6 +749,9 @@ defineExpose({
                 </div>
                 <div v-if="hoveredCommentPreview.selectedText" class="comment-hover-tooltip-selection">
                     "{{ previewCommentSelection(hoveredCommentPreview.selectedText) }}"
+                </div>
+                <div v-if="hoveredCommentPreview.strokeType === 'attachment' && hoveredCommentPreview.downloadHint" class="comment-hover-tooltip-note">
+                    {{ hoveredCommentPreview.downloadHint }}
                 </div>
             </div>
 
@@ -809,10 +826,10 @@ defineExpose({
                                     :label="isAspectRatioLocked ? 'Unlock Aspect Ratio' : 'Lock Aspect Ratio'"
                                     :icon="isAspectRatioLocked ? 'lock-fill' : 'unlock2'"
                                     :action="toggleAspectRatioLock"
-                                    v-if="!isSelectedStrokeType('comment|highlight-rect')"
+                                    v-if="!isSelectedStrokeType('comment|highlight-rect|attachment')"
                                 />
                                 <ToolItem class="btn-pop-menu" label="Edit" icon="pencil-square" :action="editCommentStroke" v-if="isSelectedStrokeType('comment')" />
-                                <ToolItem class="btn-pop-menu" label="Add Comment" icon="chat-left-text-fill" :action="beginCommentInput" v-else-if="!isSelectedStrokeType('text')" />
+                                <ToolItem class="btn-pop-menu" label="Add Comment" icon="chat-left-text-fill" :action="beginCommentInput" v-else-if="!isSelectedStrokeType('text|attachment')" />
                                 <ToolItem class="btn-pop-menu" label="Edit" icon="pencil-square" :action="editTextStroke"  v-if="isSelectedStrokeType('text')" />
                                 <ToolItem class="btn-pop-menu" label="Delete" icon="trash3" :action="deleteSelectedStroke" />
                             </template>
@@ -823,7 +840,7 @@ defineExpose({
                                 <ToolItem class="btn-pop-menu" label="StrikeOut Text" icon="type-strikethrough" :action="strikeoutTextSelection" />
                                 <ToolItem class="btn-pop-menu" label="Squiggly Text" icon="type-squiggly" :action="squigglyTextSelection" />
                             </template>
-                            <ToolItem class="btn-pop-menu" label="Copy" shortcut="Ctrl+D" icon="files" :action="copySelection" v-if="!isSelectedStrokeType('comment|highlight-rect')"/>
+                            <ToolItem class="btn-pop-menu" label="Copy" shortcut="Ctrl+D" icon="files" :action="copySelection" v-if="!isSelectedStrokeType('comment|highlight-rect|attachment')"/>
                         </template>
                     </div>
                 </div>

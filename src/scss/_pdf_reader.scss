@@ -207,6 +207,11 @@
     max-height: 100%;
     pointer-events: none;
     z-index: 3;
+
+    .attachment-group,
+    .attachment-group * {
+        pointer-events: auto;
+    }
 }
 
 .comment-hover-tooltip {
@@ -242,6 +247,13 @@
     color: $warning-text-emphasis;
     font-style: italic;
     font-weight: 400;
+}
+
+.comment-hover-tooltip-note {
+    margin-top: 8px;
+    font-size: 12px;
+    line-height: 1.35;
+    font-weight: 600;
 }
 
 .text-layer {

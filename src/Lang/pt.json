@@ -92,5 +92,12 @@
     "Loading annotations": "Carregando anotações",
     "Jump to text": "Ir para o texto",
     "Page": "Página",
-    "Edit": "Editar"
+    "Edit": "Editar",
+    "Pages": "Páginas",
+    "Bookmarks": "Marcadores",
+    "Attachments": "Anexos",
+    "Layers": "Camadas",
+    "No bookmarks found": "Nenhum marcador encontrado",
+    "No attachments found": "Nenhum anexo encontrado",
+    "No layers found": "Nenhuma camada encontrada"
 }

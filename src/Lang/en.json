@@ -78,5 +78,12 @@
     "Loading annotations": "Loading annotations",
     "Jump to text": "Jump to text",
     "Page": "Page",
-    "Edit": "Edit"
+    "Edit": "Edit",
+    "Pages": "Pages",
+    "Bookmarks": "Bookmarks",
+    "Attachments": "Attachments",
+    "Layers": "Layers",
+    "No bookmarks found": "No bookmarks found",
+    "No attachments found": "No attachments found",
+    "No layers found": "No layers found"
 }
