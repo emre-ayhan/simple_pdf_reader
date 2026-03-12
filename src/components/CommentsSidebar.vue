@@ -202,13 +202,70 @@ const deleteComment = (comment) => {
     emit('delete-comment', comment?.pageId, comment?.strokeIndex);
 };
 
-const handleCommentClick = async (comment) => {
-    await props.ensureCommentPageReady(comment);
+const waitFrame = () => new Promise((resolve) => requestAnimationFrame(() => resolve()));
 
+const scrollToCommentOnPage = async (commentRef, attempt = 0) => {
+    const first = commentRef?.stroke?.[0] || null;
+    if (!first) return false;
+
+    await waitFrame();
+
+    const pageId = String(commentRef?.pageId || '');
+    const pageContainer = pageId
+        ? document.querySelector(`.page-container[data-page="${pageId}"]`)
+        : null;
+    const reader = pageContainer?.closest?.('.pdf-reader') || null;
+    const canvas = pageContainer?.querySelector?.('.drawing-canvas')
+        || pageContainer?.querySelector?.('.pdf-canvas')
+        || null;
+
+    if (!pageContainer || !reader || !canvas) {
+        if (attempt < 8) {
+            await new Promise(resolve => setTimeout(resolve, 60));
+            return scrollToCommentOnPage(commentRef, attempt + 1);
+        }
+        return false;
+    }
+
+    const canvasWidth = Number(canvas.width) || 0;
+    const canvasHeight = Number(canvas.height) || 0;
+    if (!canvasWidth || !canvasHeight) {
+        if (attempt < 8) {
+            await new Promise(resolve => setTimeout(resolve, 60));
+            return scrollToCommentOnPage(commentRef, attempt + 1);
+        }
+        return false;
+    }
+
+    const x = Number(first.x) || 0;
+    const y = Number(first.y) || 0;
+    const width = Math.max(1, Number(first.width) || 0);
+    const height = Math.max(1, Number(first.height) || 0);
+
+    const canvasRect = canvas.getBoundingClientRect();
+    const readerRect = reader.getBoundingClientRect();
+
+    const targetClientY = canvasRect.top + ((y + height / 2) / canvasHeight) * canvasRect.height;
+    const deltaY = targetClientY - readerRect.top;
+    const targetScrollTop = reader.scrollTop + deltaY - (reader.clientHeight * 0.35);
+
+    reader.scrollTo({
+        top: Math.max(0, targetScrollTop),
+        behavior: 'smooth'
+    });
+
+    return true;
+};
+
+const handleCommentClick = async (comment) => {
     if (comment?.source === 'pdf-text-annotation' && comment?.canJumpToText) {
         await jumpToText(comment);
         return;
     }
+
+    await props.ensureCommentPageReady(comment);
+
+    await scrollToCommentOnPage(comment);
 
     emit('update:modelValue', comment?.id || null);
 };
@@ -272,9 +329,8 @@ const handleCommentClick = async (comment) => {
                                     <div class="comments-sidebar-author" v-if="comment.author">
                                         {{ comment.author }}
                                     </div>
-
+                                    <small class="text-secondary">{{ formatTimestamp(comment.updatedAt) }}</small>
                                     <div class="comments-sidebar-meta d-flex align-items-center justify-content-between gap-2">
-                                        <small class="text-secondary">{{ formatTimestamp(comment.updatedAt) }}</small>
                                         <div class="comments-sidebar-actions btn-group-sm">
                                             <button v-if="comment.canJumpToText && comment.source !== 'pdf-text-annotation'" type="button" class="btn btn-outline-warning" @click.stop="jumpToText(comment)" :title="$t('Jump to text')">
                                                 <i class="bi bi-file-text"></i>
@@ -287,6 +343,7 @@ const handleCommentClick = async (comment) => {
                                             </button>
                                         </div>
                                     </div>
+
 
                                     <div v-if="comment.selectedText" class="comments-sidebar-selection fst-italic">
                                         "{{ previewSelection(comment.selectedText) }}"
