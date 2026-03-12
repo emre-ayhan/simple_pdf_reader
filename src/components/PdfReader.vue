@@ -183,6 +183,7 @@ const {
     activeCommentId,
     textEditorAlert,
     dragBlockedAlert,
+    hasDismissedDraggingGestureHint,
     toggleThumbnailSidebar,
     toggleCommentsSidebar,
     toggleHandTool,
@@ -773,6 +774,7 @@ defineExpose({
                 </div>
             </bs-toast>
             <bs-toast
+                v-if="!hasDismissedDraggingGestureHint"
                 ref="dragBlockedAlert"
                 :id="`drag-blocked-alert-${fileId}`"
                 position="top-50 start-50 translate-middle"

@@ -5518,11 +5518,16 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
     };
 
     const textEditorAlert = ref(null);
+    const hasDismissedDraggingGestureHint = ref(false);
     const dragBlockedAlert = ref(null);
 
     const showDragBlockedMessage = () => {
+        if (hasDismissedDraggingGestureHint.value) return;
         nextTick(() => {
             dragBlockedAlert.value?.show();
+            setTimeout(() => {
+                hasDismissedDraggingGestureHint.value = true;
+            }, 5000);
         });
     };
 
@@ -5587,6 +5592,7 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
         isCaptureSelectionMode,
         isStrokeHovering,
         isDragging,
+        hasDismissedDraggingGestureHint,
         dragBlockedAlert,
         selectedStroke,
         popMenu,
