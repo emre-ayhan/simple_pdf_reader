@@ -81,16 +81,20 @@
     border: 1px solid transparent;
     padding: 8px;
 
-    &:hover,
     &.active {
         background: $bg-sidebar-item-active;
-        .thumb-page-number {
-            color: $warning;
-        }
+        box-shadow: $box-shadow-sm;
     }
 
     &:hover {
         border: 1px solid $border-sidebar-hover;
+    }
+
+    &.active,
+    &:hover {
+        .thumb-page-number {
+            color: $warning;
+        }
     }
 }
 
@@ -143,7 +147,7 @@
 
     &:not(.static) {
         cursor: pointer;
-
+        
         &:hover {
             border-color: rgba(255, 193, 7, 0.4);
             background: rgba(255, 255, 255, 0.08);

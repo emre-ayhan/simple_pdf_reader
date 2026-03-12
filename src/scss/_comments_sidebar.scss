@@ -182,6 +182,7 @@ $top: $navtabsHeight + $toolbarHeight;
 
 .comments-sidebar-item.active .comments-sidebar-card {
     background: $bg-sidebar-item-active;
+    box-shadow: $box-shadow-sm;
 }
 
 .comments-sidebar-selection {
