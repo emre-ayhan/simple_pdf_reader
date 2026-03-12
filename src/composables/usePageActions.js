@@ -256,6 +256,30 @@ const rotatePointAround = (point, center, angle) => {
     };
 };
 
+const getAspectRatioAnchor = (bounds, handle) => {
+    if (!bounds) return null;
+    if (handle === 'nw') return { x: bounds.maxX, y: bounds.maxY };
+    if (handle === 'ne') return { x: bounds.minX, y: bounds.maxY };
+    if (handle === 'sw') return { x: bounds.maxX, y: bounds.minY };
+    if (handle === 'se') return { x: bounds.minX, y: bounds.minY };
+    if (handle === 'n') return { x: (bounds.minX + bounds.maxX) / 2, y: bounds.maxY };
+    if (handle === 's') return { x: (bounds.minX + bounds.maxX) / 2, y: bounds.minY };
+    if (handle === 'w') return { x: bounds.maxX, y: (bounds.minY + bounds.maxY) / 2 };
+    if (handle === 'e') return { x: bounds.minX, y: (bounds.minY + bounds.maxY) / 2 };
+    return { x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2 };
+};
+
+const applyUniformScaleToBounds = (bounds, anchor, scale) => {
+    if (!bounds || !anchor || !Number.isFinite(scale)) return bounds;
+
+    return {
+        minX: anchor.x + (bounds.minX - anchor.x) * scale,
+        minY: anchor.y + (bounds.minY - anchor.y) * scale,
+        maxX: anchor.x + (bounds.maxX - anchor.x) * scale,
+        maxY: anchor.y + (bounds.maxY - anchor.y) * scale
+    };
+};
+
 const TEXT_RENDER_OVERFLOW_ALLOWANCE_FACTOR = 0.2;
 
 const stopEvent = (e) => {
@@ -1187,6 +1211,7 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
     const currentStroke = ref([]); // Current stroke being drawn
     const isStrokeHovering = ref(false);
     const isBoundingBoxHovering = ref(false);
+    const isAspectRatioLocked = ref(false);
 
     const handToolActive = ref(false);
 
@@ -3093,6 +3118,8 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
                 
                 const strokes = actionPage.value.strokes || [];
                 const stroke = strokes[selectedStroke.value.strokeIndex];
+                const handle = resizeHandle.value;
+                const shouldKeepAspect = isAspectRatioLocked.value || !!e.ctrlKey;
                 
                 if (stroke && resizeStartBounds.value) {
                     const first = stroke[0];
@@ -3109,7 +3136,6 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
                         const angle = Number(originalFirstForResize.rotation || 0);
                         const fixedCenter = resizeStartBounds.value.center || getStrokeRotationCenter(originalStrokeForResize);
                         const startLocalBounds = resizeStartBounds.value.local || getUnrotatedBounds(originalStrokeForResize, 0);
-                        const handle = resizeHandle.value;
 
                         if (!fixedCenter || !startLocalBounds) return;
 
@@ -3129,6 +3155,25 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
                         if (handle.includes('s')) newLocalMaxY += localDy;
                         if (handle.includes('w')) newLocalMinX += localDx;
                         if (handle.includes('e')) newLocalMaxX += localDx;
+
+                        if (shouldKeepAspect) {
+                            const startW = Math.max(1, startLocalBounds.maxX - startLocalBounds.minX);
+                            const startH = Math.max(1, startLocalBounds.maxY - startLocalBounds.minY);
+                            const sx = (newLocalMaxX - newLocalMinX) / startW;
+                            const sy = (newLocalMaxY - newLocalMinY) / startH;
+
+                            let uniformScale;
+                            if (handle === 'e' || handle === 'w') uniformScale = sx;
+                            else if (handle === 'n' || handle === 's') uniformScale = sy;
+                            else uniformScale = Math.abs(sx - 1) >= Math.abs(sy - 1) ? sx : sy;
+
+                            const anchor = getAspectRatioAnchor(startLocalBounds, handle);
+                            const uniformBounds = applyUniformScaleToBounds(startLocalBounds, anchor, uniformScale);
+                            newLocalMinX = uniformBounds.minX;
+                            newLocalMinY = uniformBounds.minY;
+                            newLocalMaxX = uniformBounds.maxX;
+                            newLocalMaxY = uniformBounds.maxY;
+                        }
 
                         const epsilon = 0.5;
                         if (Math.abs(newLocalMaxX - newLocalMinX) < epsilon) {
@@ -3191,7 +3236,6 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
                     let newMaxX = startBounds.maxX;
                     let newMaxY = startBounds.maxY;
                     
-                    const handle = resizeHandle.value;
                     const isCornerResize = ['nw', 'ne', 'sw', 'se'].includes(handle);
                     
                     if (isCornerResize) {
@@ -3233,11 +3277,28 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
                         else adjustedRawMaxY = adjustedRawMinY + epsilon;
                     }
 
+                    const aspectAnchor = getAspectRatioAnchor(startRawBounds, handle);
+
                     const baseWidth = Math.max(1, startRawBounds.maxX - startRawBounds.minX);
                     const baseHeight = Math.max(1, startRawBounds.maxY - startRawBounds.minY);
                     
-                    const scaleXFactor = (adjustedRawMaxX - adjustedRawMinX) / baseWidth;
-                    const scaleYFactor = (adjustedRawMaxY - adjustedRawMinY) / baseHeight;
+                    let scaleXFactor = (adjustedRawMaxX - adjustedRawMinX) / baseWidth;
+                    let scaleYFactor = (adjustedRawMaxY - adjustedRawMinY) / baseHeight;
+
+                    if (shouldKeepAspect && aspectAnchor) {
+                        let uniformScale;
+                        if (handle === 'e' || handle === 'w') uniformScale = scaleXFactor;
+                        else if (handle === 'n' || handle === 's') uniformScale = scaleYFactor;
+                        else uniformScale = Math.abs(scaleXFactor - 1) >= Math.abs(scaleYFactor - 1) ? scaleXFactor : scaleYFactor;
+
+                        const uniformBounds = applyUniformScaleToBounds(startRawBounds, aspectAnchor, uniformScale);
+                        adjustedRawMinX = uniformBounds.minX;
+                        adjustedRawMinY = uniformBounds.minY;
+                        adjustedRawMaxX = uniformBounds.maxX;
+                        adjustedRawMaxY = uniformBounds.maxY;
+                        scaleXFactor = (adjustedRawMaxX - adjustedRawMinX) / baseWidth;
+                        scaleYFactor = (adjustedRawMaxY - adjustedRawMinY) / baseHeight;
+                    }
                     
                     // Get original stroke to calculate scaling from
                     const originalStroke = resizeStartBounds.value.originalStroke || selectedStroke.value.originalStroke;
@@ -5469,6 +5530,10 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
         isCommentsSidebarVisible.value = !isCommentsSidebarVisible.value;
     };
 
+    const toggleAspectRatioLock = () => {
+        isAspectRatioLocked.value = !isAspectRatioLocked.value;
+    };
+
     const toggleHandTool = () => {
         resetToolState();
         handToolActive.value = !handToolActive.value;
@@ -5632,6 +5697,7 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
         selectedText,
         textActionsDisabled,
         isViewLocked,
+        isAspectRatioLocked,
         isThumbnailSidebarVisible,
         isCommentsSidebarVisible,
         hasDismissedTextGestureHint,
@@ -5649,6 +5715,7 @@ export function usePageActions(pages, pagesContainer, addToHistory) {
         activeCommentId,
         cancelCommentStroke,
         toggleHandTool,
+        toggleAspectRatioLock,
         toggleThumbnailSidebar,
         toggleCommentsSidebar,
         lockView,

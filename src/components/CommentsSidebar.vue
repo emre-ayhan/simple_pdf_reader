@@ -143,8 +143,8 @@ const handleCommentClick = async (comment) => {
             >
                 <button type="button" class="comments-sidebar-card" @click="handleCommentClick(comment)">
                     <div class="comments-sidebar-meta d-flex align-items-center justify-content-between gap-2">
-                        <span class="badge text-bg-warning-subtle text-warning">
-                            {{ $t('Page') }} {{ comment.pageIndex + 1 }}
+                        <span class="badge text-bg-warning-subtle text-capitalize text-warning">
+                            {{ $t('page') }} {{ comment.pageIndex + 1 }}
                         </span>
                         <small class="text-secondary">{{ formatTimestamp(comment.updatedAt) }}</small>
                     </div>

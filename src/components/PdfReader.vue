@@ -166,6 +166,7 @@ const {
     selectedText,
     textActionsDisabled,
     isViewLocked,
+    isAspectRatioLocked,
     isThumbnailSidebarVisible,
     isCommentsSidebarVisible,
     hasDismissedTextGestureHint,
@@ -186,6 +187,7 @@ const {
     hasDismissedDraggingGestureHint,
     toggleThumbnailSidebar,
     toggleCommentsSidebar,
+    toggleAspectRatioLock,
     toggleHandTool,
     lockView,
     toggleTextHighlightMode,
@@ -654,7 +656,7 @@ defineExpose({
                     </select>
                 </li>
                 <li class="nav-item">
-                    <ToolItem class="nav-link" label="Lock View" icon="lock" icon-active :active="isViewLocked" :action="lockView" />
+                    <ToolItem class="nav-link" label="Lock View" :icon="isViewLocked ? 'lock-fill' : 'unlock2'" icon-active :action="lockView" />
                 </li>
             </ul>
             <ul class="navbar-nav flex-row gap-1">
@@ -810,6 +812,13 @@ defineExpose({
                         </div>
                         <template v-else>
                             <template v-if="selectedStroke">
+                                <ToolItem
+                                    class="btn-pop-menu"
+                                    :label="isAspectRatioLocked ? 'Unlock Aspect Ratio' : 'Lock Aspect Ratio'"
+                                    :icon="isAspectRatioLocked ? 'lock-fill' : 'unlock2'"
+                                    :action="toggleAspectRatioLock"
+                                    v-if="!isSelectedStrokeType('comment|highlight-rect')"
+                                />
                                 <ToolItem class="btn-pop-menu" label="Edit" icon="pencil-square" :action="editCommentStroke" v-if="isSelectedStrokeType('comment')" />
                                 <ToolItem class="btn-pop-menu" label="Add Comment" icon="chat-left-text-fill" :action="beginCommentInput" v-else-if="!isSelectedStrokeType('text')" />
                                 <ToolItem class="btn-pop-menu" label="Edit" icon="pencil-square" :action="editTextStroke"  v-if="isSelectedStrokeType('text')" />
