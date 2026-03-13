@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, computed, onMounted, onBeforeUnmount } from 'vue';
+import { ref, watch, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
 
 const props = defineProps({
     pageCount: { type: Number, required: true },
@@ -53,6 +53,25 @@ const loadThumbnail = (page) => {
     }
 };
 
+const loadVisibleThumbnails = (newIndex) => {
+    const range = 2; // Number of pages before and after to preload
+    for (let i = Math.max(1, newIndex + 1 - range); i <= Math.min(props.pageCount, newIndex + 1 + range); i++) {
+        loadThumbnail(i);
+    }
+
+    nextTick(() => {
+        const activeEl = itemRefs.get(newIndex + 1);
+        if (activeEl) {
+            activeEl.scrollIntoView();
+        }
+    });
+};
+
+watch(() => props.pageIndex, (newIndex) => {
+    // Preload thumbnails for nearby pages
+    loadVisibleThumbnails(newIndex);
+});
+
 const onIntersect = (entries) => {
     entries.forEach((entry) => {
         if (entry.isIntersecting) {
@@ -97,6 +116,7 @@ onMounted(() => {
     });
 
     checkRenderedPages();
+    loadVisibleThumbnails(props.pageIndex);
 });
 
 onBeforeUnmount(() => {

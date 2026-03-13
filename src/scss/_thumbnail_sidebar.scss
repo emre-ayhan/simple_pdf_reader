@@ -75,6 +75,7 @@
 }
 
 .thumbnail-item {
+    scroll-margin-top: 200px;
     position: relative;
     cursor: pointer;
     border-radius: $border-radius-lg;
@@ -112,6 +113,7 @@
     bottom: 0;
     text-align: center;
     font-size: 1rem;
+    width: 56px;
     font-weight: bold;
     color: $light;
     background: $secondary;
