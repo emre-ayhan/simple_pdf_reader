@@ -75,10 +75,11 @@
 }
 
 .thumbnail-item {
+    position: relative;
     cursor: pointer;
-    border-radius: $border-radius-xl;
+    border-radius: $border-radius-lg;
     background: $bg-sidebar-item;
-    border: 1px solid transparent;
+    border: 1px solid $secondary;
     padding: 8px;
 
     &.active {
@@ -87,25 +88,41 @@
     }
 
     &:hover {
-        border: 1px solid $border-sidebar-hover;
-    }
+        border-color: $border-sidebar-hover;
 
-    &.active,
-    &:hover {
         .thumb-page-number {
-            color: $warning;
+            color: $dark-bg-accent;
+            background: $border-sidebar-hover;
+        }
+    }
+    
+    &.active {
+        border-color: $warning;
+        
+        .thumb-page-number {
+            color: $dark-bg-accent;
+            background: rgba(255, 193, 7, 0.85);
         }
     }
 }
 
 .thumb-page-number {
-    font-size: 0.8rem;
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    text-align: center;
+    font-size: 1rem;
     font-weight: bold;
     color: $light;
+    background: $secondary;
+    padding: 0 10px;
+    border-bottom-right-radius: $border-radius-lg;
+    border-top-left-radius: $border-radius-lg;
+    z-index: 2;
 }
 
 .thumb-image-wrapper {
-    border-radius: $border-radius-xl;
+    border-radius: $border-radius-lg;
     overflow: hidden;
 }
 
