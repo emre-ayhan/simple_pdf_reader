@@ -55,7 +55,10 @@ const loadThumbnail = (page) => {
 
 const loadVisibleThumbnails = (newIndex) => {
     const range = 2; // Number of pages before and after to preload
-    for (let i = Math.max(1, newIndex + 1 - range); i <= Math.min(props.pageCount, newIndex + 1 + range); i++) {
+    const min = Math.max(1, newIndex + 1 - range);
+    const max = Math.min(props.pageCount, newIndex + 1 + range);
+
+    for (let i = min; i <= max; i++) {
         loadThumbnail(i);
     }
 
@@ -183,6 +186,10 @@ const layerItems = computed(() => {
 
 const setMode = (modeId) => {
     activeMode.value = modeId;
+
+    if (modeId === 'pages') {
+        loadVisibleThumbnails(props.pageIndex);
+    }
 };
 
 const toggleLayerVisibility = (layer) => {
