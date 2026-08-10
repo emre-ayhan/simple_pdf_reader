@@ -23,13 +23,7 @@ import { Electron } from '../composables/useAppSettings';
                     <div class="empty-grid row row-cols-1 row-cols-xl-4 g-3">
                         <div class="col">
                             <div class="empty-section">
-                                <div class="empty-section-title text-capitalize">{{ $t('new') }}</div>
                                 <slot></slot>
-                                <div class="empty-actions fst-italic">
-                                    <span class="empty-hint">
-                                        {{ $t('or drag and drop a file anywhere') }}
-                                    </span>
-                                </div>
                             </div>
                         </div>
                         <div class="col">

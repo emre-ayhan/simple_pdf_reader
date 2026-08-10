@@ -1,5 +1,5 @@
 <script setup>
-import { onBeforeUnmount, onMounted } from 'vue';
+import { onBeforeUnmount, onMounted, ref } from 'vue';
 import { openNewTab, closeTab, activeTabIndex, activeTab, tabs, tabHistory, openTabs, markAsActive, isLastTabOnEmptyState, fileHasUnsavedChanges, handleElectronButtonClick, fileDataCache } from '../composables/useTabs';
 import { Electron, toolbarPosition } from '../composables/useAppSettings.js';
 import EmptyState from './EmptyState.vue';
@@ -25,6 +25,8 @@ const electronButtons = [
     { action: 'close', icon: 'x-lg', title: 'Close' }
 ];
 
+const recentFiles = ref([]);
+
 const onTabClick = (tab, index) => {
     activeTabIndex.value = index;
     tabHistory.value.push(index);
@@ -32,8 +34,35 @@ const onTabClick = (tab, index) => {
 };
 
 let unsubscribeFileOpen = null;
+let unsubscribeRecentFiles = null;
+
+const syncRecentFiles = (payload = {}) => {
+    if (!payload || typeof payload !== 'object') return;
+    recentFiles.value = Array.isArray(payload.recentFiles) ? payload.recentFiles : [];
+};
+
+const loadRecentFiles = async () => {
+    if (!Electron.value?.getRecentFiles) return;
+    try {
+        const payload = await Electron.value.getRecentFiles();
+        syncRecentFiles(payload);
+    } catch (error) {
+        console.warn('Failed to load recent files:', error);
+    }
+};
+
+const openRecentFile = async (item) => {
+    if (!item?.filepath || !Electron.value?.openRecentFile) return;
+    try {
+        await Electron.value.openRecentFile(item.filepath);
+    } catch (error) {
+        console.warn('Failed to open recent file:', error);
+    }
+};
 
 onMounted(() => {
+    loadRecentFiles();
+
     if (Electron.value?.onFileOpened) {
         unsubscribeFileOpen = Electron.value.onFileOpened((fileData) => {
             if (!fileData) return;
@@ -45,11 +74,20 @@ onMounted(() => {
             };
         });
     }
+
+    if (Electron.value?.onRecentFilesUpdated) {
+        unsubscribeRecentFiles = Electron.value.onRecentFilesUpdated((payload) => {
+            syncRecentFiles(payload);
+        });
+    }
 });
 
 onBeforeUnmount(() => {
     unsubscribeFileOpen?.();
     unsubscribeFileOpen = null;
+
+    unsubscribeRecentFiles?.();
+    unsubscribeRecentFiles = null;
 });
 </script>
 <template>
@@ -86,10 +124,33 @@ onBeforeUnmount(() => {
         <template v-for="(tab, index) in tabs">
             <div class="tab-pane" :class="{ 'active show': index === activeTabIndex }" tabindex="0" v-if="!tab.closed">
                 <empty-state v-if="tab.emptyState">
+                    <div class="empty-section-title text-capitalize">{{ $t('new') }}</div>
                     <div class="d-flex flex-column gap-2 align-items-start justify-content-start">
                         <template v-for="item in fileActions">
                             <ToolItem class="text-decoration-none" show-label v-bind="item" />
                         </template>
+                    </div>
+                    <div class="empty-actions fst-italic">
+                        <span class="empty-hint">
+                            {{ $t('or drag and drop a file anywhere') }}
+                        </span>
+                    </div>
+                    <div v-if="Electron && recentFiles.length">
+                        <hr>
+                        <div class="empty-section-title text-capitalize">{{ $t('recent files') }}</div>
+                        <div class="list-group list-group-flush rounded-3 small overflow-hidden">
+                            <a
+                                v-for="item in recentFiles"
+                                :key="item.filepath"
+                                href="#"
+                                class="list-group-item bg-transparent link-primary px-0"
+                                :title="item.filepath"
+                                @click.prevent="openRecentFile(item)"
+                            >
+                                <div class="text-truncate">{{ item.filename }}</div>
+                                <div class="small text-secondary text-truncate">{{ item.filepath }}</div>
+                            </a>
+                        </div>
                     </div>
                 </empty-state>
                 <slot></slot>

@@ -3,11 +3,21 @@ import pkg from "electron-updater";
 const { autoUpdater } = pkg;
 import Store from "electron-store";
 import fs from "fs";
+import { randomUUID } from 'crypto';
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
+const READER_ID_KEY = 'simple_pdf_reader_id';
+const RECENT_FILES_BY_ID_KEY = 'recentFilesByReaderId';
+const MAX_RECENT_FILES = 3;
+
+if (!app.isPackaged) {
+    const devUserDataPath = join(app.getPath('appData'), 'simple_pdf_reader_dev');
+    app.setPath('userData', devUserDataPath);
+    app.setPath('sessionData', join(devUserDataPath, 'session'));
+}
 
 // Initialize electron-store with schema
 const store = new Store({
@@ -18,10 +28,66 @@ const store = new Store({
         zoomMode: { type: 'string', default: 'fit-width' },
         lastFilePath: { type: 'string', default: '' },
         lastFileName: { type: 'string', default: '' },
-        fileStates: { type: 'object', default: {} }
+        fileStates: { type: 'object', default: {} },
+        [READER_ID_KEY]: { type: 'string', default: '' },
+        [RECENT_FILES_BY_ID_KEY]: { type: 'object', default: {} }
     },
     clearInvalidConfig: true
 });
+
+function getOrCreateReaderId() {
+    const existingId = store.get(READER_ID_KEY);
+    if (typeof existingId === 'string' && existingId.trim().length > 0) {
+        return existingId;
+    }
+
+    const newId = randomUUID();
+    store.set(READER_ID_KEY, newId);
+    return newId;
+}
+
+function getRecentFiles(readerId = getOrCreateReaderId()) {
+    const byId = store.get(RECENT_FILES_BY_ID_KEY) || {};
+    const recentFiles = byId?.[readerId];
+    return Array.isArray(recentFiles) ? recentFiles : [];
+}
+
+function rememberRecentFile(filepath) {
+    if (!filepath || typeof filepath !== 'string') return;
+
+    const readerId = getOrCreateReaderId();
+    const filename = filepath.split(/[/\\]/).pop();
+    const byId = store.get(RECENT_FILES_BY_ID_KEY) || {};
+    const currentRecentFiles = Array.isArray(byId?.[readerId]) ? byId[readerId] : [];
+
+    const nextRecentFiles = [
+        {
+            id: readerId,
+            filename,
+            filepath,
+            openedAt: Date.now(),
+        },
+        ...currentRecentFiles.filter((item) => item && item.filepath !== filepath),
+    ].slice(0, MAX_RECENT_FILES);
+
+    store.set(RECENT_FILES_BY_ID_KEY, {
+        ...byId,
+        [readerId]: nextRecentFiles,
+    });
+
+    try {
+        if (win && !win.isDestroyed()) {
+            win.webContents.send('file:recent-updated', {
+                id: readerId,
+                recentFiles: nextRecentFiles,
+            });
+        }
+    } catch (error) {
+        console.warn('[Main] Failed to send file:recent-updated:', error);
+    }
+}
+
+getOrCreateReaderId();
 
 let win;
 let pendingFilePath = null;
@@ -180,8 +246,9 @@ if (fileFromArgs) {
     pendingFilePath = fileFromArgs;
 }
 
-// Prevent multiple instances - must be called before app.whenReady()
-const gotTheLock = app.requestSingleInstanceLock();
+// Prevent multiple instances in packaged builds; allow parallel dev runs.
+// This avoids blocking `electron .` when the installed app is already open.
+const gotTheLock = app.isPackaged ? app.requestSingleInstanceLock() : true;
 if (!gotTheLock) {
     console.log('[Main] Another instance is already running, exiting');
     app.quit();
@@ -564,6 +631,7 @@ function openFileInApp(filepath) {
     }
     
     console.log('[Main] Opening file:', filepath);
+    rememberRecentFile(filepath);
     
     const filename = filepath.split(/[/\\]/).pop();
     const ext = filename.toLowerCase().split('.').pop();
@@ -636,6 +704,7 @@ ipcMain.handle("file:open", async () => {
     if (result.canceled) return null;
 
     const filepath = result.filePaths[0];
+    rememberRecentFile(filepath);
     const filename = filepath.split(/[/\\]/).pop();
     const ext = filename.toLowerCase().split('.').pop();
     
@@ -683,6 +752,27 @@ ipcMain.handle("file:open", async () => {
             type: 'text'
         };
     }
+});
+
+ipcMain.handle('file:getRecent', async () => {
+    const readerId = getOrCreateReaderId();
+    return {
+        id: readerId,
+        recentFiles: getRecentFiles(readerId),
+    };
+});
+
+ipcMain.handle('file:openRecent', async (_event, filepath) => {
+    if (!filepath || typeof filepath !== 'string') {
+        return { success: false, error: 'Invalid file path' };
+    }
+
+    if (!fs.existsSync(filepath)) {
+        return { success: false, error: 'File does not exist' };
+    }
+
+    openFileInApp(filepath);
+    return { success: true };
 });
 
 // File save handler - overwrites existing file
