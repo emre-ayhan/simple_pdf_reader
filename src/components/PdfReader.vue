@@ -813,7 +813,6 @@ defineExpose({
                             <template v-if="selectedStroke">
                                 <ToolItem class="btn-pop-menu" label="Edit" icon="pencil-square" :action="editCommentStroke" v-if="isSelectedStrokeType('comment')" />
                                 <ToolItem class="btn-pop-menu" label="Add Comment" icon="chat-left-text-fill" :action="beginCommentInput" v-else-if="!isSelectedStrokeType('text|attachment')" />
-                                <div class="vr text-light"></div>
                                 <ToolItem class="btn-pop-menu" label="Edit" icon="pencil-square" :action="editTextStroke"  v-if="isSelectedStrokeType('text')" />
                                 <ToolItem class="btn-pop-menu" :label="isAspectRatioLocked ? 'Unlock Aspect Ratio' : 'Lock Aspect Ratio'" :icon="isAspectRatioLocked ? 'lock-fill' : 'unlock2'" :action="toggleAspectRatioLock" v-if="!isSelectedStrokeType('comment|highlight-rect|attachment')" />
                                 <ToolItem class="btn-pop-menu" label="Delete" icon="trash3" :action="deleteSelectedStroke" />
@@ -823,7 +822,6 @@ defineExpose({
                                 <ToolItem class="btn-pop-menu" label="StrikeOut" icon="type-strikethrough" :action="strikeoutTextSelection" />
                                 <ToolItem class="btn-pop-menu" label="Squiggly" icon="type-squiggly" :action="squigglyTextSelection" />
                                 <ToolItem class="btn-pop-menu" label="Highlight" shortcut="H" icon="highlighter" :action="highlightTextSelection" />
-                                <div class="vr text-light"></div>
                                 <ToolItem class="btn-pop-menu" label="Add to Bookmarks" icon="bookmark" :action="addCurrentSelectionToBookmarks" />
                                 <ToolItem class="btn-pop-menu" label="Add Comment" icon="chat-left-text-fill" :action="beginCommentInput" />
                             </template>
