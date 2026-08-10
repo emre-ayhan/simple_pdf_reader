@@ -6,7 +6,10 @@ const props = defineProps({
     showLabel: Boolean,
     shortcut: String,
     action: Function,
-    value: [String, Number, Boolean],
+    value: {
+        type: [String, Number, Boolean],
+        default: undefined,
+    },
     disabled: Boolean,
     active: Boolean,
 });
@@ -14,6 +17,11 @@ const props = defineProps({
 const onClick = () => {
     if (props.disabled) return;
     if (typeof props.action !== 'function') return;
+    if (typeof props.value === 'undefined') {
+        props.action();
+        return;
+    }
+
     props.action(props.value);
 }
 </script>

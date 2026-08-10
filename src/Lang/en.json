@@ -3,6 +3,7 @@
     "New Blank Page": "New Blank Page",
     "Open": "Open",
     "Save": "Save",
+    "Clear Draft": "Clear Draft",
     "page": "page",
     "Insert Blank Page": "Insert Blank Page",
     "First Page": "First Page",
@@ -86,4 +87,7 @@
     "No bookmarks found": "No bookmarks found",
     "No attachments found": "No attachments found",
     "No layers found": "No layers found"
+    ,"No file path available for draft cleanup.": "No file path available for draft cleanup."
+    ,"Failed to clear draft:": "Failed to clear draft:"
+    ,"Draft cleared.": "Draft cleared."
 }

@@ -1186,6 +1186,7 @@ export function useFileActions(settings = {
     const pdfReader = ref(null);
     const isFileLoaded = ref(false);
     const originalPdfData = ref(null);
+    const pendingDraftPatch = ref(null);
 
     // Zoom State Variables
     const zoomPercentage = ref(100); // 25 to 100
@@ -1883,10 +1884,18 @@ export function useFileActions(settings = {
         pdfDoc = pdfDoc_;
         handleFileLoadEvent('pdf');
         await renderAllPages();
+
+        const draftPatch = pendingDraftPatch.value;
+        pendingDraftPatch.value = null;
+        const draftState = applyDraftPatchPayload(draftPatch);
+
         loadSidebarDocumentData().catch(() => {});
 
         const storedPageIndex = await getStoredPageIndex();
-        scrollToPage(storedPageIndex);
+        const initialPageIndex = Number.isInteger(draftState?.activePageIndex)
+            ? draftState.activePageIndex
+            : storedPageIndex;
+        scrollToPage(initialPageIndex);
 
         // Hydrate annotations for all pages in the background, similar to search text indexing.
         extractAnnotationsTimeout = setTimeout(() => {
@@ -1898,6 +1907,7 @@ export function useFileActions(settings = {
 
     const loadFile = async (event) => {
         const file = event?.target?.files?.[0] || event;
+        pendingDraftPatch.value = null;
         
         if (!file) {
             await showModal('Unsupported file type. Please select a PDF file.');
@@ -1924,6 +1934,7 @@ export function useFileActions(settings = {
         if (!result) return;
         fileDataCache.value = null;
         filepath.value = result.filepath;
+        pendingDraftPatch.value = result?.draftPatch || null;
         
         // Handle PDF files
         if (result.type === 'pdf' && result.encoding === 'base64') {
@@ -1945,6 +1956,7 @@ export function useFileActions(settings = {
                 await showModal('Error loading PDF: ' + error.message);
             });
         } else {
+            pendingDraftPatch.value = null;
             await showModal('Unsupported file type. Please select a PDF file.');
         }
     };
@@ -1963,331 +1975,528 @@ export function useFileActions(settings = {
 
     let saveFileTimeout = null;
 
-    const handleSaveFile = async () => {
-        if (!pdfDoc || !isFileLoaded.value) return;
+    const showSavedBadge = () => {
+        settings.onFileSave();
+        fileRecentlySaved.value = true;
+        clearTimeout(saveFileTimeout);
+        saveFileTimeout = setTimeout(() => {
+            fileRecentlySaved.value = false;
+        }, 2000);
+    };
 
-        try {
-            // Get the original PDF data
-            let arrayBuffer;
+    const uint8ToBase64 = (bytes) => {
+        const uint8Array = new Uint8Array(bytes);
+        let base64Content = '';
+        const chunkSize = 8192;
 
-            if (originalPdfData.value) {
-                // Electron mode - use stored data (convert Uint8Array to ArrayBuffer)
-                arrayBuffer = originalPdfData.value.buffer.slice(originalPdfData.value.byteOffset, originalPdfData.value.byteOffset + originalPdfData.value.byteLength);
-            } else if (fileInput.value?.files[0]) {
-                // Browser mode - read from file input
-                const file = fileInput.value.files[0];
-                arrayBuffer = await file.arrayBuffer();
-            } else {
-                console.error('No PDF data available');
+        for (let i = 0; i < uint8Array.length; i += chunkSize) {
+            const chunk = uint8Array.subarray(i, Math.min(i + chunkSize, uint8Array.length));
+            base64Content += String.fromCharCode.apply(null, Array.from(chunk));
+        }
+
+        return btoa(base64Content);
+    };
+
+    const deepCloneDraftValue = (value) => {
+        const serialized = JSON.stringify(value, (_key, nestedValue) => {
+            if (nestedValue instanceof Uint8Array) {
+                return {
+                    __draftType: 'Uint8Array',
+                    base64: uint8ToBase64(nestedValue),
+                };
+            }
+
+            if (nestedValue instanceof ArrayBuffer) {
+                return {
+                    __draftType: 'Uint8Array',
+                    base64: uint8ToBase64(new Uint8Array(nestedValue)),
+                };
+            }
+
+            return nestedValue;
+        });
+
+        return serialized ? JSON.parse(serialized) : null;
+    };
+
+    const deepEqualDraftValue = (left, right) => {
+        return JSON.stringify(left) === JSON.stringify(right);
+    };
+
+    const getFormDelta = (page) => {
+        if (!page || !page.form || typeof page.form !== 'object') return {};
+
+        const delta = {};
+        const original = page.form.original || {};
+
+        Object.keys(page.form).forEach((key) => {
+            if (key === 'original') return;
+
+            const value = toRaw(page.form[key]);
+            const originalValue = toRaw(original[key]);
+            if (deepEqualDraftValue(value, originalValue)) return;
+
+            delta[key] = deepCloneDraftValue(value);
+        });
+
+        return delta;
+    };
+
+    const createDraftPatchPayload = () => {
+        const pagePatches = pages.value
+            .map((page) => {
+                const strokes = Array.isArray(page.strokes)
+                    ? deepCloneDraftValue(toRaw(page.strokes)) || []
+                    : [];
+                const formValues = getFormDelta(page);
+                const hasFormDelta = Object.keys(formValues).length > 0;
+
+                if (!page.deleted && strokes.length === 0 && !hasFormDelta) {
+                    return null;
+                }
+
+                return {
+                    index: Number(page.index),
+                    deleted: Boolean(page.deleted),
+                    strokes,
+                    formValues,
+                };
+            })
+            .filter(Boolean);
+
+        return {
+            version: 1,
+            type: 'pdf-delta-patch',
+            filepath: filepath.value,
+            filename: filename.value || 'document.pdf',
+            pageCount: pages.value.length,
+            activePageIndex: pageIndex.value,
+            pages: pagePatches,
+            updatedAt: Date.now(),
+        };
+    };
+
+    const reviveDraftValue = (value) => {
+        if (Array.isArray(value)) {
+            return value.map(item => reviveDraftValue(item));
+        }
+
+        if (!value || typeof value !== 'object') {
+            return value;
+        }
+
+        if (value.__draftType === 'Uint8Array' && typeof value.base64 === 'string') {
+            try {
+                const binary = atob(value.base64);
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) {
+                    bytes[i] = binary.charCodeAt(i);
+                }
+                return bytes;
+            } catch {
+                return value;
+            }
+        }
+
+        const revived = {};
+        Object.keys(value).forEach((key) => {
+            revived[key] = reviveDraftValue(value[key]);
+        });
+        return revived;
+    };
+
+    const applyDraftPatchPayload = (draftPatch) => {
+        if (!draftPatch || typeof draftPatch !== 'object') return null;
+
+        const patchedPages = Array.isArray(draftPatch.pages) ? draftPatch.pages : [];
+
+        patchedPages.forEach((pagePatch) => {
+            const targetIndex = Number(pagePatch?.index);
+            if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= pages.value.length) {
                 return;
             }
-            
-            const pdfLibDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
 
-            // Process each page with annotations
-            for (const page of pages.value) {
-                const strokes = page.strokes || [];
-                const pdfPage = pdfLibDoc.getPage(page.index);
-                const { width, height } = pdfPage.getSize();
+            const targetPage = pages.value[targetIndex];
+            if (!targetPage) return;
 
-                removeNativeTextCommentAnnotations(pdfLibDoc, pdfPage);
+            if (typeof pagePatch.deleted === 'boolean') {
+                targetPage.deleted = pagePatch.deleted;
+            }
 
-                if (!strokes || strokes.length === 0) continue;
+            if (Array.isArray(pagePatch.strokes)) {
+                targetPage.strokes = reviveDraftValue(pagePatch.strokes);
+            }
 
-                // Get the canvas dimensions for scaling
-                const canvas = page.canvas;
-                if (!canvas) continue;
+            if (pagePatch.formValues && typeof pagePatch.formValues === 'object') {
+                const formValues = reviveDraftValue(pagePatch.formValues);
+                if (!targetPage.form || typeof targetPage.form !== 'object') {
+                    targetPage.form = { original: {} };
+                }
+                if (!targetPage.form.original || typeof targetPage.form.original !== 'object') {
+                    targetPage.form.original = {};
+                }
 
-                const scaleX = width / canvas.width;
-                const scaleY = height / canvas.height;
+                Object.keys(formValues).forEach((key) => {
+                    const value = formValues[key];
+                    targetPage.form[key] = value;
 
-                // Draw each stroke on the PDF
-                for (const stroke of strokes) {
-                    if (stroke.length === 0) continue;
-
-                    const first = stroke[0];
-
-                    // Convert CSS color strings to normalized RGB for pdf-lib.
-                    const namedColorMap = {
-                        black: [0, 0, 0], dimgray: [0.41, 0.41, 0.41], gray: [0.5, 0.5, 0.5],
-                        darkgray: [0.66, 0.66, 0.66], silver: [0.75, 0.75, 0.75], white: [1, 1, 1],
-                        magenta: [1, 0, 1], red: [1, 0, 0], orangered: [1, 0.27, 0],
-                        orange: [1, 0.65, 0], gold: [1, 0.84, 0], yellow: [1, 1, 0],
-                        green: [0, 0.5, 0], darkgreen: [0, 0.39, 0], lime: [0, 1, 0],
-                        teal: [0, 0.5, 0.5], cyan: [0, 1, 1], navy: [0, 0, 0.5],
-                        blue: [0, 0, 1], darkblue: [0, 0, 0.55], royalblue: [0.25, 0.41, 0.88],
-                        purple: [0.5, 0, 0.5], pink: [1, 0.75, 0.8],
-                        brown: [0.65, 0.16, 0.16], sienna: [0.63, 0.32, 0.18],
-                        olive: [0.5, 0.5, 0], maroon: [0.5, 0, 0], coral: [1, 0.5, 0.31],
-                        salmon: [0.98, 0.5, 0.45]
-                    };
-
-                    const clamp01 = (value) => Math.max(0, Math.min(1, value));
-
-                    const parseHexColor = (value) => {
-                        const hex = String(value || '').trim().replace('#', '');
-                        if (hex.length === 3 || hex.length === 4) {
-                            const expanded = hex.split('').map((ch) => ch + ch).join('');
-                            const r = parseInt(expanded.slice(0, 2), 16);
-                            const g = parseInt(expanded.slice(2, 4), 16);
-                            const b = parseInt(expanded.slice(4, 6), 16);
-                            if ([r, g, b].every(Number.isFinite)) return [r / 255, g / 255, b / 255];
-                            return null;
-                        }
-
-                        if (hex.length === 6 || hex.length === 8) {
-                            const r = parseInt(hex.slice(0, 2), 16);
-                            const g = parseInt(hex.slice(2, 4), 16);
-                            const b = parseInt(hex.slice(4, 6), 16);
-                            if ([r, g, b].every(Number.isFinite)) return [r / 255, g / 255, b / 255];
-                        }
-
-                        return null;
-                    };
-
-                    const parseRgbColor = (value) => {
-                        const match = String(value || '').trim().match(/^rgba?\((.+)\)$/i);
-                        if (!match) return null;
-
-                        const parts = match[1]
-                            .split(',')
-                            .map((part) => part.trim())
-                            .filter(Boolean);
-                        if (parts.length < 3) return null;
-
-                        const toChannel = (part) => {
-                            if (part.endsWith('%')) {
-                                const percent = Number(part.slice(0, -1));
-                                if (!Number.isFinite(percent)) return null;
-                                return clamp01(percent / 100);
-                            }
-
-                            const numeric = Number(part);
-                            if (!Number.isFinite(numeric)) return null;
-                            return clamp01(numeric / 255);
-                        };
-
-                        const r = toChannel(parts[0]);
-                        const g = toChannel(parts[1]);
-                        const b = toChannel(parts[2]);
-                        if ([r, g, b].some((channel) => channel === null)) return null;
-                        return [r, g, b];
-                    };
-
-                    const getColor = (rawColor) => {
-                        const colorValue = String(rawColor || '').trim().toLowerCase();
-
-                        if (colorValue.startsWith('#')) {
-                            const parsedHex = parseHexColor(colorValue);
-                            if (parsedHex) return rgb(parsedHex[0], parsedHex[1], parsedHex[2]);
-                        }
-
-                        if (colorValue.startsWith('rgb')) {
-                            const parsedRgb = parseRgbColor(colorValue);
-                            if (parsedRgb) return rgb(parsedRgb[0], parsedRgb[1], parsedRgb[2]);
-                        }
-
-                        const named = namedColorMap[colorValue] || [0, 0, 0];
-                        return rgb(named[0], named[1], named[2]);
-                    };
-
-                    const color = getColor(first.color);
-                    const thickness = (first.thickness || 2) * scaleX;
-
-                    // Handle text
-                    if (first.type === 'text') {
-                        const x = first.x * scaleX;
-                        const y = height - (first.y * scaleY);
-                        const textSize = (first.fontSize || 16) * scaleX;
-                        
-                        pdfPage.drawText(first.text, {
-                            x: x,
-                            y: y - textSize,
-                            size: textSize,
-                            color: color
-                        });
+                    if (!(key in targetPage.form.original)) {
+                        targetPage.form.original[key] = deepCloneDraftValue(value);
                     }
-                    // Handle shapes
-                    else if (first.type === 'line') {
-                        const startX = first.startX * scaleX;
-                        const startY = height - (first.startY * scaleY);
-                        const endX = first.endX * scaleX;
-                        const endY = height - (first.endY * scaleY);
+                });
+            }
+        });
 
-                        pdfPage.drawLine({
-                            start: { x: startX, y: startY },
-                            end: { x: endX, y: endY },
-                            thickness: thickness,
-                            color: color,
-                            opacity: 1
-                        });
-                    } else if (first.type === 'rectangle') {
-                        const x = first.startX * scaleX;
-                        const y = height - (first.startY * scaleY);
-                        const w = (first.endX - first.startX) * scaleX;
-                        const h = (first.endY - first.startY) * scaleY;
+        const requestedIndex = Number(draftPatch.activePageIndex);
+        const maxPageIndex = Math.max(0, activePages.value.length - 1);
+        const resolvedPageIndex = Number.isInteger(requestedIndex)
+            ? Math.min(Math.max(0, requestedIndex), maxPageIndex)
+            : Math.min(Math.max(0, pageIndex.value || 0), maxPageIndex);
+
+        pageIndex.value = resolvedPageIndex;
+        pageNum.value = resolvedPageIndex + 1;
+        applyVisibleWindowForActiveIndex(resolvedPageIndex, { force: true });
+
+        return {
+            activePageIndex: resolvedPageIndex,
+        };
+    };
+
+    const buildModifiedPdfBytes = async () => {
+        let arrayBuffer;
+
+        if (originalPdfData.value) {
+            arrayBuffer = originalPdfData.value.buffer.slice(
+                originalPdfData.value.byteOffset,
+                originalPdfData.value.byteOffset + originalPdfData.value.byteLength
+            );
+        } else if (fileInput.value?.files[0]) {
+            const file = fileInput.value.files[0];
+            arrayBuffer = await file.arrayBuffer();
+        } else {
+            throw new Error('No PDF data available');
+        }
+
+        const pdfLibDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
+
+        for (const page of pages.value) {
+            const strokes = page.strokes || [];
+            const pdfPage = pdfLibDoc.getPage(page.index);
+            const { width, height } = pdfPage.getSize();
+
+            removeNativeTextCommentAnnotations(pdfLibDoc, pdfPage);
+
+            if (!strokes || strokes.length === 0) continue;
+
+            const canvas = page.canvas;
+            if (!canvas) continue;
+
+            const scaleX = width / canvas.width;
+            const scaleY = height / canvas.height;
+
+            for (const stroke of strokes) {
+                if (stroke.length === 0) continue;
+
+                const first = stroke[0];
+
+                const namedColorMap = {
+                    black: [0, 0, 0], dimgray: [0.41, 0.41, 0.41], gray: [0.5, 0.5, 0.5],
+                    darkgray: [0.66, 0.66, 0.66], silver: [0.75, 0.75, 0.75], white: [1, 1, 1],
+                    magenta: [1, 0, 1], red: [1, 0, 0], orangered: [1, 0.27, 0],
+                    orange: [1, 0.65, 0], gold: [1, 0.84, 0], yellow: [1, 1, 0],
+                    green: [0, 0.5, 0], darkgreen: [0, 0.39, 0], lime: [0, 1, 0],
+                    teal: [0, 0.5, 0.5], cyan: [0, 1, 1], navy: [0, 0, 0.5],
+                    blue: [0, 0, 1], darkblue: [0, 0, 0.55], royalblue: [0.25, 0.41, 0.88],
+                    purple: [0.5, 0, 0.5], pink: [1, 0.75, 0.8],
+                    brown: [0.65, 0.16, 0.16], sienna: [0.63, 0.32, 0.18],
+                    olive: [0.5, 0.5, 0], maroon: [0.5, 0, 0], coral: [1, 0.5, 0.31],
+                    salmon: [0.98, 0.5, 0.45]
+                };
+
+                const clamp01 = (value) => Math.max(0, Math.min(1, value));
+
+                const parseHexColor = (value) => {
+                    const hex = String(value || '').trim().replace('#', '');
+                    if (hex.length === 3 || hex.length === 4) {
+                        const expanded = hex.split('').map((ch) => ch + ch).join('');
+                        const r = parseInt(expanded.slice(0, 2), 16);
+                        const g = parseInt(expanded.slice(2, 4), 16);
+                        const b = parseInt(expanded.slice(4, 6), 16);
+                        if ([r, g, b].every(Number.isFinite)) return [r / 255, g / 255, b / 255];
+                        return null;
+                    }
+
+                    if (hex.length === 6 || hex.length === 8) {
+                        const r = parseInt(hex.slice(0, 2), 16);
+                        const g = parseInt(hex.slice(2, 4), 16);
+                        const b = parseInt(hex.slice(4, 6), 16);
+                        if ([r, g, b].every(Number.isFinite)) return [r / 255, g / 255, b / 255];
+                    }
+
+                    return null;
+                };
+
+                const parseRgbColor = (value) => {
+                    const match = String(value || '').trim().match(/^rgba?\((.+)\)$/i);
+                    if (!match) return null;
+
+                    const parts = match[1]
+                        .split(',')
+                        .map((part) => part.trim())
+                        .filter(Boolean);
+                    if (parts.length < 3) return null;
+
+                    const toChannel = (part) => {
+                        if (part.endsWith('%')) {
+                            const percent = Number(part.slice(0, -1));
+                            if (!Number.isFinite(percent)) return null;
+                            return clamp01(percent / 100);
+                        }
+
+                        const numeric = Number(part);
+                        if (!Number.isFinite(numeric)) return null;
+                        return clamp01(numeric / 255);
+                    };
+
+                    const r = toChannel(parts[0]);
+                    const g = toChannel(parts[1]);
+                    const b = toChannel(parts[2]);
+                    if ([r, g, b].some((channel) => channel === null)) return null;
+                    return [r, g, b];
+                };
+
+                const getColor = (rawColor) => {
+                    const colorValue = String(rawColor || '').trim().toLowerCase();
+
+                    if (colorValue.startsWith('#')) {
+                        const parsedHex = parseHexColor(colorValue);
+                        if (parsedHex) return rgb(parsedHex[0], parsedHex[1], parsedHex[2]);
+                    }
+
+                    if (colorValue.startsWith('rgb')) {
+                        const parsedRgb = parseRgbColor(colorValue);
+                        if (parsedRgb) return rgb(parsedRgb[0], parsedRgb[1], parsedRgb[2]);
+                    }
+
+                    const named = namedColorMap[colorValue] || [0, 0, 0];
+                    return rgb(named[0], named[1], named[2]);
+                };
+
+                const color = getColor(first.color);
+                const thickness = (first.thickness || 2) * scaleX;
+
+                if (first.type === 'text') {
+                    const x = first.x * scaleX;
+                    const y = height - (first.y * scaleY);
+                    const textSize = (first.fontSize || 16) * scaleX;
+
+                    pdfPage.drawText(first.text, {
+                        x: x,
+                        y: y - textSize,
+                        size: textSize,
+                        color: color
+                    });
+                }
+                else if (first.type === 'line') {
+                    const startX = first.startX * scaleX;
+                    const startY = height - (first.startY * scaleY);
+                    const endX = first.endX * scaleX;
+                    const endY = height - (first.endY * scaleY);
+
+                    pdfPage.drawLine({
+                        start: { x: startX, y: startY },
+                        end: { x: endX, y: endY },
+                        thickness: thickness,
+                        color: color,
+                        opacity: 1
+                    });
+                } else if (first.type === 'rectangle') {
+                    const x = first.startX * scaleX;
+                    const y = height - (first.startY * scaleY);
+                    const w = (first.endX - first.startX) * scaleX;
+                    const h = (first.endY - first.startY) * scaleY;
+
+                    pdfPage.drawRectangle({
+                        x: x,
+                        y: y - h,
+                        width: w,
+                        height: h,
+                        borderColor: color,
+                        borderWidth: thickness,
+                        opacity: 0
+                    });
+                } else if (first.type === 'circle') {
+                    const centerX = first.startX * scaleX;
+                    const centerY = height - (first.startY * scaleY);
+                    const radius = Math.sqrt(
+                        Math.pow((first.endX - first.startX) * scaleX, 2) +
+                        Math.pow((first.endY - first.startY) * scaleY, 2)
+                    );
+
+                    pdfPage.drawCircle({
+                        x: centerX,
+                        y: centerY,
+                        size: radius,
+                        borderColor: color,
+                        borderWidth: thickness,
+                        opacity: 0
+                    });
+                } else if (first.type === 'highlight-rect') {
+                    const rects = first.rects || [{ x: first.x, y: first.y, width: first.width, height: first.height }];
+
+                    for (const rect of rects) {
+                        const x = rect.x * scaleX;
+                        const h = rect.height * scaleY;
+                        const y = height - (rect.y * scaleY) - h;
+                        const w = rect.width * scaleX;
 
                         pdfPage.drawRectangle({
                             x: x,
-                            y: y - h,
+                            y: y,
                             width: w,
                             height: h,
-                            borderColor: color,
-                            borderWidth: thickness,
-                            opacity: 0
+                            color: color,
+                            opacity: 0.3,
+                            borderWidth: 0
                         });
-                    } else if (first.type === 'circle') {
-                        const centerX = first.startX * scaleX;
-                        const centerY = height - (first.startY * scaleY);
-                        const radius = Math.sqrt(
-                            Math.pow((first.endX - first.startX) * scaleX, 2) +
-                            Math.pow((first.endY - first.startY) * scaleY, 2)
-                        );
+                    }
+                } else if (first.type === 'comment') {
+                    addNativeCommentAnnotation(pdfLibDoc, pdfPage, first, scaleX, scaleY, height);
+                } else if (first.type === 'pen') {
+                    for (let i = 0; i < stroke.length - 1; i++) {
+                        const point1 = stroke[i];
+                        const point2 = stroke[i + 1];
 
-                        pdfPage.drawCircle({
-                            x: centerX,
-                            y: centerY,
-                            size: radius,
-                            borderColor: color,
-                            borderWidth: thickness,
-                            opacity: 0
+                        const x1 = point1.x * scaleX;
+                        const y1 = height - (point1.y * scaleY);
+                        const x2 = point2.x * scaleX;
+                        const y2 = height - (point2.y * scaleY);
+
+                        pdfPage.drawLine({
+                            start: { x: x1, y: y1 },
+                            end: { x: x2, y: y2 },
+                            thickness: (point1.thickness || 2) * scaleX,
+                            color: getColor(point1.color),
+                            opacity: 1
                         });
-                    } else if (first.type === 'highlight-rect') {
-                        const rects = first.rects || [{ x: first.x, y: first.y, width: first.width, height: first.height }];
-                        
-                        for (const rect of rects) {
-                            const x = rect.x * scaleX;
-                            const h = rect.height * scaleY;
-                            const y = height - (rect.y * scaleY) - h;
-                            const w = rect.width * scaleX;
+                    }
+                } else if (first.type === 'image' && first.imageData) {
+                    try {
+                        const dataUrl = first.imageData;
+                        const base64Data = dataUrl.split(',')[1];
 
-                            pdfPage.drawRectangle({
-                                x: x,
-                                y: y,
-                                width: w,
-                                height: h,
-                                color: color,
-                                opacity: 0.3,
-                                borderWidth: 0
-                            });
+                        let image;
+                        if (dataUrl.startsWith('data:image/jpeg') || dataUrl.startsWith('data:image/jpg')) {
+                            image = await pdfLibDoc.embedJpg(base64Data);
+                        } else {
+                            image = await pdfLibDoc.embedPng(base64Data);
                         }
-                    } else if (first.type === 'comment') {
-                        addNativeCommentAnnotation(pdfLibDoc, pdfPage, first, scaleX, scaleY, height);
-                    } else if (first.type === 'pen') {
-                        // Draw pen strokes as connected lines
-                        for (let i = 0; i < stroke.length - 1; i++) {
-                            const point1 = stroke[i];
-                            const point2 = stroke[i + 1];
 
-                            const x1 = point1.x * scaleX;
-                            const y1 = height - (point1.y * scaleY);
-                            const x2 = point2.x * scaleX;
-                            const y2 = height - (point2.y * scaleY);
+                        const imageWidth = first.width * scaleX;
+                        const imageHeight = first.height * scaleY;
 
-                            pdfPage.drawLine({
-                                start: { x: x1, y: y1 },
-                                end: { x: x2, y: y2 },
-                                thickness: (point1.thickness || 2) * scaleX,
-                                color: getColor(point1.color),
-                                opacity: 1
-                            });
-                        }
-                    } else if (first.type === 'image' && first.imageData) {
-                        try {
-                            const dataUrl = first.imageData;
-                            const base64Data = dataUrl.split(',')[1];
-                            
-                            let image;
-                            if (dataUrl.startsWith('data:image/jpeg') || dataUrl.startsWith('data:image/jpg')) {
-                                image = await pdfLibDoc.embedJpg(base64Data);
-                            } else {
-                                image = await pdfLibDoc.embedPng(base64Data);
-                            }
-
-                            const imageWidth = first.width * scaleX;
-                            const imageHeight = first.height * scaleY;
-                            
-                            pdfPage.drawImage(image, {
-                                x: first.x * scaleX,
-                                y: height - (first.y * scaleY) - imageHeight,
-                                width: imageWidth,
-                                height: imageHeight,
-                            });
-                        } catch (err) {
-                            console.error('Error embedding image stroke:', err);
-                        }
+                        pdfPage.drawImage(image, {
+                            x: first.x * scaleX,
+                            y: height - (first.y * scaleY) - imageHeight,
+                            width: imageWidth,
+                            height: imageHeight,
+                        });
+                    } catch (err) {
+                        console.error('Error embedding image stroke:', err);
                     }
                 }
             }
+        }
 
-            // Remove any pages that were deleted by the user before saving
-            const deletedPages = new Set(pages.value.map((p, i) => p.deleted ? i + 1 : null).filter(p => p));
+        const deletedPages = new Set(pages.value.map((p, i) => p.deleted ? i + 1 : null).filter(p => p));
 
-            // Flatten interactive form fields into the PDF if the callback is provided
-            if (typeof flattenToPdfLib === 'function') {
-                try {
-                    const pdfForm = pdfLibDoc.getForm();
-                    flattenToPdfLib(pdfForm);
-                } catch (e) {
-                    console.warn('Form flatten failed:', e);
-                }
+        if (typeof flattenToPdfLib === 'function') {
+            try {
+                const pdfForm = pdfLibDoc.getForm();
+                flattenToPdfLib(pdfForm);
+            } catch (e) {
+                console.warn('Form flatten failed:', e);
             }
-            if (deletedPages.size > 0) {
-                try {
-                    // Convert deleted page numbers to zero-based indexes and sort descending
-                    const indices = Array.from(deletedPages)
-                        .map(p => p - 1)
-                        .filter(i => Number.isInteger(i) && i >= 0)
-                        .sort((a, b) => b - a);
+        }
 
-                    // Remove pages from the PDF document in descending order
-                    indices.forEach(idx => {
-                        try {
-                            if (typeof pdfLibDoc.removePage === 'function') {
-                                pdfLibDoc.removePage(idx);
-                            }
-                        } catch (err) {
-                            console.error('Failed to remove page index', idx, err);
+        if (deletedPages.size > 0) {
+            try {
+                const indices = Array.from(deletedPages)
+                    .map(p => p - 1)
+                    .filter(i => Number.isInteger(i) && i >= 0)
+                    .sort((a, b) => b - a);
+
+                indices.forEach(idx => {
+                    try {
+                        if (typeof pdfLibDoc.removePage === 'function') {
+                            pdfLibDoc.removePage(idx);
                         }
-                    });
-                } catch (err) {
-                    console.error('Error removing deleted pages before save:', err);
-                }
+                    } catch (err) {
+                        console.error('Failed to remove page index', idx, err);
+                    }
+                });
+            } catch (err) {
+                console.error('Error removing deleted pages before save:', err);
+            }
+        }
+
+        return pdfLibDoc.save();
+    };
+
+    const handleSaveFile = async (saveMode = 'prompt') => {
+        if (!pdfDoc || !isFileLoaded.value) return;
+
+        try {
+            const supportedModes = new Set(['prompt', 'overwrite', 'draft', 'cancel']);
+            const normalizedSaveMode = typeof saveMode === 'string' ? saveMode : 'prompt';
+            let mode = supportedModes.has(normalizedSaveMode) ? normalizedSaveMode : 'prompt';
+            if (Electron.value && mode === 'prompt') {
+                const choice = await Electron.value.requestSaveChoice?.('save');
+                mode = choice?.mode || 'cancel';
             }
 
-            // Save the modified PDF
-            const pdfBytes = await pdfLibDoc.save();
+            if (mode === 'cancel') return false;
+
+            if (Electron.value && mode === 'draft') {
+                if (!filepath.value) {
+                    await showModal('Cannot save draft without a file path. Open a file from disk first.');
+                    return false;
+                }
+
+                const draftPatch = createDraftPatchPayload();
+
+                const draftPayload = {
+                    filepath: filepath.value,
+                    draftPatch,
+                };
+
+                const draftResult = await Electron.value.saveDraft?.(draftPayload);
+                if (!draftResult?.success) {
+                    await showModal('Failed to save draft: ' + (draftResult?.error || 'unknown error'));
+                    return false;
+                }
+
+                showSavedBadge();
+                return true;
+            }
+
+            const pdfBytes = await buildModifiedPdfBytes();
+            const base64Content = uint8ToBase64(pdfBytes);
             
             // If running in Electron and we have the original filepath, overwrite it
             if (Electron.value && filepath.value) {
                 try {
-                    // Convert Uint8Array to base64 in chunks to avoid call stack overflow
-                    const uint8Array = new Uint8Array(pdfBytes);
-                    let base64Content = '';
-                    const chunkSize = 8192; // Process 8KB at a time
-                    
-                    for (let i = 0; i < uint8Array.length; i += chunkSize) {
-                        const chunk = uint8Array.subarray(i, Math.min(i + chunkSize, uint8Array.length));
-                        base64Content += String.fromCharCode.apply(null, Array.from(chunk));
-                    }
-                    base64Content = btoa(base64Content);
-                    
                     const result = await Electron.value.saveFile(filepath.value, base64Content, 'base64');
                     
                     if (result.success) {
                         console.log('PDF saved successfully to:', result.filepath);
-                        settings.onFileSave();
-                        fileRecentlySaved.value = true;
-                        clearTimeout(saveFileTimeout);
-                        saveFileTimeout = setTimeout(() => {
-                            fileRecentlySaved.value = false;
-                        }, 2000);
-                        return;
+                        await Electron.value.discardDraft?.(filepath.value);
+                        showSavedBadge();
+                        return true;
                     } else {
                         console.error('Electron save failed:', result.error);
                         console.error('Error code:', result.errorCode);
                         await showModal(`Failed to save PDF: ${result.error}\nError code: ${result.errorCode || 'unknown'}\nFalling back to download.`);
-                        // Don't throw - fall through to download method
                     }
                 } catch (err) {
                     console.error('Error saving with Electron:', err);
@@ -2297,7 +2506,6 @@ export function useFileActions(settings = {
                         filepath: filepath.value
                     });
                     await showModal(`Failed to save PDF with Electron: ${err.message}\nFalling back to download.`);
-                    // Don't throw - fall through to download method
                 }
             }
         
@@ -2317,12 +2525,12 @@ export function useFileActions(settings = {
                     await writable.write(pdfBytes);
                     await writable.close();
                     console.log('PDF saved successfully with annotations to:', handle.name);
-                    settings.onFileSave();
-                    return;
+                    showSavedBadge();
+                    return true;
                 } catch (err) {
                     if (err.name === 'AbortError') {
                         console.log('Save cancelled by user');
-                        return;
+                        return false;
                     }
                     console.warn('File System Access API failed, falling back to download:', err);
                 }
@@ -2338,7 +2546,8 @@ export function useFileActions(settings = {
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
             console.log('PDF downloaded with annotations');
-            settings.onFileSave();
+            showSavedBadge();
+            return true;
         } catch (error) {
             console.error('Error saving PDF:', error);
             console.error('Error details:', {
@@ -2349,6 +2558,29 @@ export function useFileActions(settings = {
                 hasPdfData: !!originalPdfData.value
             });
             await showModal('Failed to save PDF: ' + error.message);
+            return false;
+        }
+    };
+
+    const clearDraftForCurrentFile = async () => {
+        if (!Electron.value) return false;
+        if (!filepath.value) {
+            await showModal('No file path available for draft cleanup.');
+            return false;
+        }
+
+        try {
+            const result = await Electron.value.discardDraft?.(filepath.value);
+            if (!result?.success) {
+                await showModal('Failed to clear draft: ' + (result?.error || 'unknown error'));
+                return false;
+            }
+
+            await showModal('Draft cleared.');
+            return true;
+        } catch (error) {
+            await showModal('Failed to clear draft: ' + (error?.message || error));
+            return false;
         }
     };
 
@@ -2964,6 +3196,7 @@ export function useFileActions(settings = {
         processFileOpenResult,
         handleFileOpen,
         handleSaveFile,
+        clearDraftForCurrentFile,
         intersectionObserver,
         lazyLoadObserver,
         scrollToPage,

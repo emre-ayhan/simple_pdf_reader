@@ -94,11 +94,6 @@ const closeTab = async (index) => {
 const handleElectronButtonClick = async (action) => {
     if (!Electron.value) return;
 
-    if (action === 'close' && openTabs.value.filter(tab => fileHasUnsavedChanges(tab.id)).length) {
-        const confirmed = await showModal('You have unsaved changes in one or more tabs. Are you sure you want to close the application?', true);
-        if (!confirmed) return;
-    };
-
     Electron.value[action]();
 };
 

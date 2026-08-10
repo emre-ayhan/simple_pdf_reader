@@ -55,6 +55,7 @@ const {
     processFileOpenResult,
     handleFileOpen,
     handleSaveFile,
+    clearDraftForCurrentFile,
     intersectionObserver,
     lazyLoadObserver,
     scrollToPage,
@@ -451,6 +452,8 @@ useWindowEvents(fileId, {
 
 
 let unsubscribeFileOpen = null;
+let unsubscribeBeforeCloseRequest = null;
+let closeRequestInProgress = false;
 
 onMounted(() => {
     if (Electron.value?.onFileOpened) {
@@ -460,12 +463,67 @@ onMounted(() => {
         });
     }
 
+    if (Electron.value?.onBeforeCloseRequest) {
+        unsubscribeBeforeCloseRequest = Electron.value.onBeforeCloseRequest(async () => {
+            if (closeRequestInProgress) return;
+            closeRequestInProgress = true;
+
+            const reply = async (proceed) => {
+                try {
+                    await Electron.value?.replyBeforeClose?.(proceed);
+                } catch (error) {
+                    console.warn('Failed to reply before close:', error);
+                }
+            };
+
+            try {
+                const hasUnsavedChanges = isFileLoaded.value && historyStep.value !== savedHistoryStep.value;
+                if (!hasUnsavedChanges) {
+                    await reply(true);
+                    return;
+                }
+
+                const choice = await Electron.value?.requestSaveChoice?.('close');
+                const mode = choice?.mode || 'cancel';
+
+                if (mode === 'cancel') {
+                    await reply(false);
+                    return;
+                }
+
+                if (mode === 'overwrite') {
+                    const saved = await handleSaveFile('overwrite');
+                    await reply(Boolean(saved));
+                    return;
+                }
+
+                if (mode === 'draft') {
+                    const drafted = await handleSaveFile('draft');
+                    await reply(Boolean(drafted));
+                    return;
+                }
+
+                if (mode === 'discard') {
+                    await reply(true);
+                    return;
+                }
+
+                await reply(false);
+            } finally {
+                closeRequestInProgress = false;
+            }
+        });
+    }
+
     document.addEventListener('mouseup', handleTextSelectionMouseUp);
 });
 
 onBeforeUnmount(() => {
     unsubscribeFileOpen?.();
     unsubscribeFileOpen = null;
+
+    unsubscribeBeforeCloseRequest?.();
+    unsubscribeBeforeCloseRequest = null;
 });
 
 onUnmounted(() => {
@@ -505,6 +563,11 @@ defineExpose({
                 <!-- Save File -->
                 <li class="nav-item">
                     <ToolItem class="nav-link" label="Save File" icon="floppy-fill" :action="handleSaveFile" :disabled="historyStep === savedHistoryStep" />
+                </li>
+
+                <!-- Clear Draft -->
+                <li class="nav-item" v-if="Electron">
+                    <ToolItem class="nav-link" label="Clear Draft" icon="eraser" :action="clearDraftForCurrentFile" />
                 </li>
 
                 <!-- Reset Form -->

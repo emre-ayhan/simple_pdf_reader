@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 let pendingFiles = [];
 let fileOpenedListeners = [];
 let recentFilesUpdatedListeners = [];
+let appBeforeCloseListeners = [];
 
 ipcRenderer.on('file:opened', (event, fileData) => {
     console.log('[Preload] Received file:opened:', fileData?.filename);
@@ -27,6 +28,16 @@ ipcRenderer.on('file:recent-updated', (_event, payload) => {
     });
 });
 
+ipcRenderer.on('app:before-close', () => {
+    appBeforeCloseListeners.forEach((callback) => {
+        try {
+            callback();
+        } catch (error) {
+            console.warn('[Preload] app:before-close listener failed:', error);
+        }
+    });
+});
+
 contextBridge.exposeInMainWorld("electronAPI", {
     fullscreen: () => ipcRenderer.invoke("window:fullscreen"),
     minimize: () => ipcRenderer.invoke("window:minimize"),
@@ -40,6 +51,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     openRecentFile: (filepath) => ipcRenderer.invoke('file:openRecent', filepath),
     saveFile: (filepath, content, encoding) =>
         ipcRenderer.invoke("file:save", filepath, content, encoding),
+    requestSaveChoice: (context) => ipcRenderer.invoke('dialog:save-choice', context),
+    saveDraft: (payload) => ipcRenderer.invoke('draft:save', payload),
+    discardDraft: (filepath) => ipcRenderer.invoke('draft:discard', filepath),
+    replyBeforeClose: (proceed) => ipcRenderer.invoke('app:close-response', proceed),
 
     // Store API
     store: {
@@ -69,6 +84,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
         recentFilesUpdatedListeners.push(callback);
         return () => {
             recentFilesUpdatedListeners = recentFilesUpdatedListeners.filter(cb => cb !== callback);
+        };
+    },
+
+    onBeforeCloseRequest: (callback) => {
+        if (typeof callback !== 'function') return () => {};
+        appBeforeCloseListeners.push(callback);
+        return () => {
+            appBeforeCloseListeners = appBeforeCloseListeners.filter(cb => cb !== callback);
         };
     },
 

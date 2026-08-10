@@ -3,7 +3,7 @@ import pkg from "electron-updater";
 const { autoUpdater } = pkg;
 import Store from "electron-store";
 import fs from "fs";
-import { randomUUID } from 'crypto';
+import { randomUUID, createHash } from 'crypto';
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 
@@ -11,12 +11,27 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 const READER_ID_KEY = 'simple_pdf_reader_id';
 const RECENT_FILES_BY_ID_KEY = 'recentFilesByReaderId';
-const MAX_RECENT_FILES = 3;
+const DRAFTS_BY_READER_KEY = 'draftsByReaderId';
+const DRAFTS_DIR_NAME = 'drafts';
+const MAX_RECENT_FILES = 5;
 
 if (!app.isPackaged) {
     const devUserDataPath = join(app.getPath('appData'), 'simple_pdf_reader_dev');
+    const devSessionPath = join(devUserDataPath, 'session');
+    const devCachePath = join(devUserDataPath, 'cache');
+
+    if (!fs.existsSync(devSessionPath)) {
+        fs.mkdirSync(devSessionPath, { recursive: true });
+    }
+
+    if (!fs.existsSync(devCachePath)) {
+        fs.mkdirSync(devCachePath, { recursive: true });
+    }
+
     app.setPath('userData', devUserDataPath);
-    app.setPath('sessionData', join(devUserDataPath, 'session'));
+    app.setPath('sessionData', devSessionPath);
+    app.commandLine.appendSwitch('disk-cache-dir', devCachePath);
+    app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
 }
 
 // Initialize electron-store with schema
@@ -30,7 +45,8 @@ const store = new Store({
         lastFileName: { type: 'string', default: '' },
         fileStates: { type: 'object', default: {} },
         [READER_ID_KEY]: { type: 'string', default: '' },
-        [RECENT_FILES_BY_ID_KEY]: { type: 'object', default: {} }
+        [RECENT_FILES_BY_ID_KEY]: { type: 'object', default: {} },
+        [DRAFTS_BY_READER_KEY]: { type: 'object', default: {} }
     },
     clearInvalidConfig: true
 });
@@ -50,6 +66,219 @@ function getRecentFiles(readerId = getOrCreateReaderId()) {
     const byId = store.get(RECENT_FILES_BY_ID_KEY) || {};
     const recentFiles = byId?.[readerId];
     return Array.isArray(recentFiles) ? recentFiles : [];
+}
+
+function getDraftDirPath() {
+    const dir = join(app.getPath('userData'), DRAFTS_DIR_NAME);
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+    }
+    return dir;
+}
+
+function getDraftFileKey(filepath) {
+    return createHash('sha256').update(String(filepath || '').toLowerCase()).digest('hex');
+}
+
+function getDraftsByReader(readerId = getOrCreateReaderId()) {
+    const byReader = store.get(DRAFTS_BY_READER_KEY) || {};
+    const drafts = byReader?.[readerId];
+    return drafts && typeof drafts === 'object' ? drafts : {};
+}
+
+function setDraftsByReader(drafts, readerId = getOrCreateReaderId()) {
+    const byReader = store.get(DRAFTS_BY_READER_KEY) || {};
+    store.set(DRAFTS_BY_READER_KEY, {
+        ...byReader,
+        [readerId]: drafts,
+    });
+}
+
+function getDraftRecord(filepath, readerId = getOrCreateReaderId()) {
+    if (!filepath) return null;
+    const drafts = getDraftsByReader(readerId);
+    return drafts[getDraftFileKey(filepath)] || null;
+}
+
+function saveDraftForFile(filepath, draftPatch) {
+    const resolvedFilepath = filepath || draftPatch?.filepath;
+    if (!resolvedFilepath || typeof resolvedFilepath !== 'string') {
+        throw new Error('Invalid draft save payload: missing filepath');
+    }
+
+    if (!draftPatch || typeof draftPatch !== 'object') {
+        throw new Error('Invalid draft save payload: missing draftPatch object');
+    }
+
+    const readerId = getOrCreateReaderId();
+    const fileKey = getDraftFileKey(resolvedFilepath);
+    const draftPath = join(getDraftDirPath(), `${readerId}-${fileKey}.json`);
+    const updatedAt = Date.now();
+
+    const payload = {
+        version: 2,
+        updatedAt,
+        source: {
+            filepath: resolvedFilepath,
+            filename: draftPatch.filename || resolvedFilepath.split(/[/\\]/).pop() || 'document.pdf',
+        },
+        draftPatch,
+    };
+
+    fs.writeFileSync(draftPath, JSON.stringify(payload), 'utf-8');
+
+    const drafts = getDraftsByReader(readerId);
+    drafts[fileKey] = {
+        filepath: resolvedFilepath,
+        filename: payload.source.filename,
+        draftPath,
+        updatedAt,
+    };
+    setDraftsByReader(drafts, readerId);
+
+    return drafts[fileKey];
+}
+
+function discardDraftForFile(filepath) {
+    if (!filepath) return false;
+
+    const readerId = getOrCreateReaderId();
+    const drafts = getDraftsByReader(readerId);
+    const fileKey = getDraftFileKey(filepath);
+    const record = drafts[fileKey];
+
+    if (record?.draftPath && fs.existsSync(record.draftPath)) {
+        try {
+            fs.unlinkSync(record.draftPath);
+        } catch (error) {
+            console.warn('[Main] Failed to delete draft file:', error);
+        }
+    }
+
+    if (drafts[fileKey]) {
+        delete drafts[fileKey];
+        setDraftsByReader(drafts, readerId);
+        return true;
+    }
+
+    return false;
+}
+
+function loadDraftForFile(filepath) {
+    const record = getDraftRecord(filepath);
+    if (!record?.draftPath) return null;
+
+    if (!fs.existsSync(record.draftPath)) {
+        discardDraftForFile(filepath);
+        return null;
+    }
+
+    try {
+        const raw = fs.readFileSync(record.draftPath, 'utf-8');
+        const parsed = JSON.parse(raw);
+
+        // New format: delta-only patch payload.
+        if (parsed?.draftPatch && typeof parsed.draftPatch === 'object') {
+            return {
+                kind: 'patch',
+                patch: parsed.draftPatch,
+                filepath,
+                filename: parsed?.source?.filename || filepath.split(/[/\\]/).pop() || 'document.pdf',
+            };
+        }
+
+        // Legacy format: full serialized file payload.
+        const data = parsed?.fileData;
+        if (data && typeof data === 'object') {
+            return {
+                kind: 'legacy-file',
+                fileData: {
+                    ...data,
+                    filepath,
+                    filename: data.filename || filepath.split(/[/\\]/).pop() || 'document.pdf',
+                },
+                filepath,
+                filename: data.filename || filepath.split(/[/\\]/).pop() || 'document.pdf',
+            };
+        }
+
+        discardDraftForFile(filepath);
+        return null;
+    } catch (error) {
+        console.warn('[Main] Failed to load draft file:', error);
+        discardDraftForFile(filepath);
+        return null;
+    }
+}
+
+function resolveOpenFileData(filepath) {
+    const filename = filepath.split(/[/\\]/).pop();
+    const ext = filename.toLowerCase().split('.').pop();
+
+    if (ext === 'pdf') {
+        const buffer = fs.readFileSync(filepath);
+        return {
+            filepath,
+            filename,
+            content: buffer.toString('base64'),
+            type: 'pdf',
+            encoding: 'base64'
+        };
+    }
+
+    if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'].includes(ext)) {
+        const buffer = fs.readFileSync(filepath);
+        const mimeTypes = {
+            'png': 'image/png',
+            'jpg': 'image/jpeg',
+            'jpeg': 'image/jpeg',
+            'gif': 'image/gif',
+            'webp': 'image/webp',
+            'bmp': 'image/bmp',
+            'svg': 'image/svg+xml'
+        };
+        return {
+            filepath,
+            filename,
+            content: buffer.toString('base64'),
+            type: 'image',
+            mimeType: mimeTypes[ext] || 'image/png',
+            encoding: 'base64'
+        };
+    }
+
+    return {
+        filepath,
+        filename,
+        content: fs.readFileSync(filepath, 'utf-8'),
+        type: 'text'
+    };
+}
+
+function maybeResolveDraftForOpen(filepath) {
+    const draft = loadDraftForFile(filepath);
+    if (!draft) return null;
+
+    if (draft.kind === 'legacy-file') {
+        return draft.fileData;
+    }
+
+    if (draft.kind === 'patch') {
+        const baseFileData = resolveOpenFileData(filepath);
+        if (baseFileData?.type === 'pdf') {
+            return {
+                ...baseFileData,
+                draftPatch: draft.patch,
+                draftMeta: {
+                    source: 'delta-patch',
+                },
+            };
+        }
+
+        return baseFileData;
+    }
+
+    return null;
 }
 
 function rememberRecentFile(filepath) {
@@ -96,6 +325,8 @@ let autoUpdaterInitialized = false;
 let lastUpdateInfo = null;
 let updateDownloaded = false;
 let updateDownloadInProgress = false;
+let closeRequestPending = false;
+let forceClosingWindow = false;
 
 function sendUpdateStatus(payload) {
     try {
@@ -263,6 +494,32 @@ function createWindow() {
         webPreferences: {
             preload: join(__dirname, "preload.js"),
         },
+    });
+
+    win.on('close', (event) => {
+        if (forceClosingWindow) return;
+        if (!win || win.isDestroyed()) return;
+
+        event.preventDefault();
+        if (closeRequestPending) return;
+        closeRequestPending = true;
+
+        try {
+            win.webContents.send('app:before-close');
+        } catch (error) {
+            console.warn('[Main] Failed to send app:before-close:', error);
+            closeRequestPending = false;
+            forceClosingWindow = true;
+            win.close();
+            return;
+        }
+
+        setTimeout(() => {
+            if (!closeRequestPending || !win || win.isDestroyed()) return;
+            closeRequestPending = false;
+            forceClosingWindow = true;
+            win.close();
+        }, 12000);
     });
 
     // Load from Vite dev server in development, built files in production
@@ -632,61 +889,21 @@ function openFileInApp(filepath) {
     
     console.log('[Main] Opening file:', filepath);
     rememberRecentFile(filepath);
-    
-    const filename = filepath.split(/[/\\]/).pop();
-    const ext = filename.toLowerCase().split('.').pop();
-    
-    // For PDFs, read as binary (base64)
-    if (ext === 'pdf') {
-        try {
-            console.log('[Main] Reading PDF file...');
-            const buffer = fs.readFileSync(filepath);
-            const base64 = buffer.toString('base64');
-            const fileData = {
-                filepath,
-                filename,
-                content: base64,
-                type: 'pdf',
-                encoding: 'base64'
-            };
-            console.log('[Main] Sending file:opened event for PDF:', filename);
-            win.webContents.send('file:opened', fileData);
-        } catch (error) {
-            console.error('[Main] Error reading PDF file:', error);
-            win.webContents.send('file:opened', null);
-        }
+
+    const draftData = maybeResolveDraftForOpen(filepath);
+    if (draftData) {
+        console.log('[Main] Sending file:opened event for draft:', draftData.filename);
+        win.webContents.send('file:opened', draftData);
+        return;
     }
-    // For images, read as base64
-    else if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'].includes(ext)) {
-        try {
-            console.log('[Main] Reading image file...');
-            const buffer = fs.readFileSync(filepath);
-            const base64 = buffer.toString('base64');
-            const mimeTypes = {
-                'png': 'image/png',
-                'jpg': 'image/jpeg',
-                'jpeg': 'image/jpeg',
-                'gif': 'image/gif',
-                'webp': 'image/webp',
-                'bmp': 'image/bmp',
-                'svg': 'image/svg+xml'
-            };
-            const fileData = {
-                filepath,
-                filename,
-                content: base64,
-                type: 'image',
-                mimeType: mimeTypes[ext] || 'image/png',
-                encoding: 'base64'
-            };
-            console.log('[Main] Sending file:opened event for image:', filename);
-            win.webContents.send('file:opened', fileData);
-        } catch (error) {
-            console.error('[Main] Error reading image file:', error);
-            win.webContents.send('file:opened', null);
-        }
-    } else {
-        console.warn('[Main] Unsupported file type:', ext);
+    
+    try {
+        const fileData = resolveOpenFileData(filepath);
+        console.log('[Main] Sending file:opened event:', fileData?.filename);
+        win.webContents.send('file:opened', fileData);
+    } catch (error) {
+        console.error('[Main] Error reading file:', error);
+        win.webContents.send('file:opened', null);
     }
 }
 
@@ -705,53 +922,75 @@ ipcMain.handle("file:open", async () => {
 
     const filepath = result.filePaths[0];
     rememberRecentFile(filepath);
-    const filename = filepath.split(/[/\\]/).pop();
-    const ext = filename.toLowerCase().split('.').pop();
-    
-    // For PDFs, read as binary (base64)
-    if (ext === 'pdf') {
-        const buffer = fs.readFileSync(filepath);
-        const base64 = buffer.toString('base64');
-        return {
-            filepath,
-            filename,
-            content: base64,
-            type: 'pdf',
-            encoding: 'base64'
-        };
+
+    const draftData = maybeResolveDraftForOpen(filepath);
+    if (draftData) return draftData;
+
+    return resolveOpenFileData(filepath);
+});
+
+ipcMain.handle('dialog:save-choice', async (_event, context = 'save') => {
+    const isCloseRequest = context === 'close';
+    const buttons = isCloseRequest
+        ? ['Overwrite File', 'Save as Draft', 'Discard Changes', 'Cancel']
+        : ['Overwrite File', 'Save as Draft', 'Cancel'];
+    const cancelId = isCloseRequest ? 3 : 2;
+    const result = await dialog.showMessageBox(win, {
+        type: 'question',
+        buttons,
+        defaultId: 0,
+        cancelId,
+        title: isCloseRequest ? 'Save before closing' : 'Save options',
+        message: isCloseRequest
+            ? 'You have unsaved changes. How do you want to save?'
+            : 'How do you want to save this file?',
+        detail: isCloseRequest
+            ? 'Overwrite updates the original file. Draft keeps your changes for next open. Discard closes without saving.'
+            : 'Overwrite updates the original file. Draft keeps your changes for next open.',
+    });
+
+    if (result.response === 0) return { mode: 'overwrite' };
+    if (result.response === 1) return { mode: 'draft' };
+    if (isCloseRequest && result.response === 2) return { mode: 'discard' };
+    return { mode: 'cancel' };
+});
+
+ipcMain.handle('draft:save', async (_event, payload = {}) => {
+    try {
+        const draftPatch =
+            (payload?.draftPatch && typeof payload.draftPatch === 'object' && payload.draftPatch)
+            || (payload?.fileData && typeof payload.fileData === 'object' && payload.fileData)
+            || (payload && typeof payload === 'object' ? payload : null);
+        const filepath = payload?.filepath || draftPatch?.filepath;
+        const record = saveDraftForFile(filepath, draftPatch);
+        return { success: true, record };
+    } catch (error) {
+        console.error('[Main] draft:save failed:', error);
+        return { success: false, error: String(error?.message || error) };
     }
-    // For images, read as base64
-    else if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'].includes(ext)) {
-        const buffer = fs.readFileSync(filepath);
-        const base64 = buffer.toString('base64');
-        const mimeTypes = {
-            'png': 'image/png',
-            'jpg': 'image/jpeg',
-            'jpeg': 'image/jpeg',
-            'gif': 'image/gif',
-            'webp': 'image/webp',
-            'bmp': 'image/bmp',
-            'svg': 'image/svg+xml'
-        };
-        return {
-            filepath,
-            filename,
-            content: base64,
-            type: 'image',
-            mimeType: mimeTypes[ext] || 'image/png',
-            encoding: 'base64'
-        };
+});
+
+ipcMain.handle('draft:discard', async (_event, filepath) => {
+    try {
+        const discarded = discardDraftForFile(filepath);
+        return { success: true, discarded };
+    } catch (error) {
+        console.error('[Main] draft:discard failed:', error);
+        return { success: false, error: String(error?.message || error) };
     }
-    // Fallback for other files
-    else {
-        const content = fs.readFileSync(filepath, "utf-8");
-        return {
-            filepath,
-            filename,
-            content,
-            type: 'text'
-        };
+});
+
+ipcMain.handle('app:close-response', async (_event, proceed) => {
+    closeRequestPending = false;
+
+    if (proceed) {
+        forceClosingWindow = true;
+        if (win && !win.isDestroyed()) {
+            win.close();
+        }
     }
+
+    return true;
 });
 
 ipcMain.handle('file:getRecent', async () => {
