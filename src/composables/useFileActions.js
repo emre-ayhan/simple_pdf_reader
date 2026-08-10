@@ -2007,24 +2007,88 @@ export function useFileActions(settings = {
 
                     const first = stroke[0];
 
-                    // Convert color string to RGB
-                    const colorMap = {
-                        'black': [0, 0, 0], 'dimgray': [0.41, 0.41, 0.41], 'gray': [0.5, 0.5, 0.5],
-                        'darkgray': [0.66, 0.66, 0.66], 'silver': [0.75, 0.75, 0.75], 'white': [1, 1, 1],
-                        'magenta': [1, 0, 1], 'red': [1, 0, 0], 'orangered': [1, 0.27, 0],
-                        'orange': [1, 0.65, 0], 'gold': [1, 0.84, 0], 'yellow': [1, 1, 0],
-                        'green': [0, 0.5, 0], 'darkgreen': [0, 0.39, 0], 'lime': [0, 1, 0],
-                        'teal': [0, 0.5, 0.5], 'cyan': [0, 1, 1], 'navy': [0, 0, 0.5],
-                        'blue': [0, 0, 1], 'darkblue': [0, 0, 0.55], 'royalblue': [0.25, 0.41, 0.88],
-                        'purple': [0.5, 0, 0.5], 'pink': [1, 0.75, 0.8],
-                        'brown': [0.65, 0.16, 0.16], 'sienna': [0.63, 0.32, 0.18],
-                        'olive': [0.5, 0.5, 0], 'maroon': [0.5, 0, 0], 'coral': [1, 0.5, 0.31],
-                        'salmon': [0.98, 0.5, 0.45]
+                    // Convert CSS color strings to normalized RGB for pdf-lib.
+                    const namedColorMap = {
+                        black: [0, 0, 0], dimgray: [0.41, 0.41, 0.41], gray: [0.5, 0.5, 0.5],
+                        darkgray: [0.66, 0.66, 0.66], silver: [0.75, 0.75, 0.75], white: [1, 1, 1],
+                        magenta: [1, 0, 1], red: [1, 0, 0], orangered: [1, 0.27, 0],
+                        orange: [1, 0.65, 0], gold: [1, 0.84, 0], yellow: [1, 1, 0],
+                        green: [0, 0.5, 0], darkgreen: [0, 0.39, 0], lime: [0, 1, 0],
+                        teal: [0, 0.5, 0.5], cyan: [0, 1, 1], navy: [0, 0, 0.5],
+                        blue: [0, 0, 1], darkblue: [0, 0, 0.55], royalblue: [0.25, 0.41, 0.88],
+                        purple: [0.5, 0, 0.5], pink: [1, 0.75, 0.8],
+                        brown: [0.65, 0.16, 0.16], sienna: [0.63, 0.32, 0.18],
+                        olive: [0.5, 0.5, 0], maroon: [0.5, 0, 0], coral: [1, 0.5, 0.31],
+                        salmon: [0.98, 0.5, 0.45]
                     };
 
-                    const getColor = (colorName) => {
-                        const rgbArray = colorMap[colorName] || [0, 0, 0];
-                        return rgb(rgbArray[0], rgbArray[1], rgbArray[2]);
+                    const clamp01 = (value) => Math.max(0, Math.min(1, value));
+
+                    const parseHexColor = (value) => {
+                        const hex = String(value || '').trim().replace('#', '');
+                        if (hex.length === 3 || hex.length === 4) {
+                            const expanded = hex.split('').map((ch) => ch + ch).join('');
+                            const r = parseInt(expanded.slice(0, 2), 16);
+                            const g = parseInt(expanded.slice(2, 4), 16);
+                            const b = parseInt(expanded.slice(4, 6), 16);
+                            if ([r, g, b].every(Number.isFinite)) return [r / 255, g / 255, b / 255];
+                            return null;
+                        }
+
+                        if (hex.length === 6 || hex.length === 8) {
+                            const r = parseInt(hex.slice(0, 2), 16);
+                            const g = parseInt(hex.slice(2, 4), 16);
+                            const b = parseInt(hex.slice(4, 6), 16);
+                            if ([r, g, b].every(Number.isFinite)) return [r / 255, g / 255, b / 255];
+                        }
+
+                        return null;
+                    };
+
+                    const parseRgbColor = (value) => {
+                        const match = String(value || '').trim().match(/^rgba?\((.+)\)$/i);
+                        if (!match) return null;
+
+                        const parts = match[1]
+                            .split(',')
+                            .map((part) => part.trim())
+                            .filter(Boolean);
+                        if (parts.length < 3) return null;
+
+                        const toChannel = (part) => {
+                            if (part.endsWith('%')) {
+                                const percent = Number(part.slice(0, -1));
+                                if (!Number.isFinite(percent)) return null;
+                                return clamp01(percent / 100);
+                            }
+
+                            const numeric = Number(part);
+                            if (!Number.isFinite(numeric)) return null;
+                            return clamp01(numeric / 255);
+                        };
+
+                        const r = toChannel(parts[0]);
+                        const g = toChannel(parts[1]);
+                        const b = toChannel(parts[2]);
+                        if ([r, g, b].some((channel) => channel === null)) return null;
+                        return [r, g, b];
+                    };
+
+                    const getColor = (rawColor) => {
+                        const colorValue = String(rawColor || '').trim().toLowerCase();
+
+                        if (colorValue.startsWith('#')) {
+                            const parsedHex = parseHexColor(colorValue);
+                            if (parsedHex) return rgb(parsedHex[0], parsedHex[1], parsedHex[2]);
+                        }
+
+                        if (colorValue.startsWith('rgb')) {
+                            const parsedRgb = parseRgbColor(colorValue);
+                            if (parsedRgb) return rgb(parsedRgb[0], parsedRgb[1], parsedRgb[2]);
+                        }
+
+                        const named = namedColorMap[colorValue] || [0, 0, 0];
+                        return rgb(named[0], named[1], named[2]);
                     };
 
                     const color = getColor(first.color);
