@@ -1,6 +1,6 @@
 .pop-menu {
     position: absolute;
-    z-index: 1045 !important;
+    z-index: 1000 !important;
     pointer-events: all;
     transform: translate(-50%, 10px);
 
@@ -20,7 +20,7 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
 
         &:has(.comment-input) {
             background-color: $warning-bg-subtle !important;

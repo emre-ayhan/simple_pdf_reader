@@ -1341,6 +1341,7 @@ export function usePageActions(pages, pagesContainer, options = {
 
     const updateStrokeStyle = (index, style, value) => {
         if (index < 0 || index >= strokeStyles.value.length) return;
+        changeSelectedStrokeStyle(style, value);
         strokeStyles.value[index][style] = value;
 
         drawStyle.value = {
@@ -1364,6 +1365,7 @@ export function usePageActions(pages, pagesContainer, options = {
         drawStyle.value = normalizeDrawStyle(style);
         selectedStrokeIndex.value = index;
         storeSet('selectedStrokeIndex', index);
+        changeSelectedStrokeStyle('color', style.color);
     }
 
 
@@ -4100,59 +4102,16 @@ export function usePageActions(pages, pagesContainer, options = {
         clearPendingCommentSelection();
     };
 
-    const changeStrokeColor = (newColor) => {
+    const changeSelectedStrokeStyle = (styleKey, value) => {
         if (!selectedStroke.value) return;
         const pageId = selectedStroke.value.pageId;
         const strokes = actionPage.value.strokes || [];
 
-        const isMulti = Array.isArray(selectedStrokes.value) && selectedStrokes.value.length > 1;
-        if (isMulti) {
-            // Apply color to all selected strokes on the same page
-            selectedStrokes.value.forEach(sel => {
-                if (sel.pageId !== pageId) return;
-                const s = strokes[sel.strokeIndex];
-                if (!s) return;
-                const originalStroke = JSON.parse(JSON.stringify(s));
-                for (let point of s) {
-                    point.color = newColor;
-                }
-                options.onStrokeChanged({
-                    id: s[0].id,
-                    type: 'color-change',
-                    page: actionPage.value,
-                    strokeIndex: sel.strokeIndex,
-                    stroke: JSON.parse(JSON.stringify(s)),
-                    previousStroke: originalStroke
-                });
-            });
-        } else {
-            const stroke = strokes[selectedStroke.value.strokeIndex];
-            if (stroke) {
-                const originalStroke = JSON.parse(JSON.stringify(stroke));
-                for (let point of stroke) {
-                    point.color = newColor;
-                }
-                options.onStrokeChanged({
-                    id: stroke[0].id,
-                    type: 'color-change',
-                    page: actionPage.value,
-                    strokeIndex: selectedStroke.value.strokeIndex,
-                    stroke: JSON.parse(JSON.stringify(stroke)),
-                    previousStroke: originalStroke
-                });
-            }
+        let parsedValue = value;
+        if (styleKey === 'thickness') {
+            parsedValue = parseInt(value, 10);
         }
 
-        // Redraw and bbox reflect multi or single
-        redrawAllStrokes();
-    };
-
-    const changeStrokeThickness = (newThickness) => {
-        if (!selectedStroke.value) return;
-        const pageId = selectedStroke.value.pageId;
-        const strokes = actionPage.value.strokes || [];
-        const thicknessVal = parseInt(newThickness, 10);
-
         const isMulti = Array.isArray(selectedStrokes.value) && selectedStrokes.value.length > 1;
         if (isMulti) {
             selectedStrokes.value.forEach(sel => {
@@ -4161,11 +4120,11 @@ export function usePageActions(pages, pagesContainer, options = {
                 if (!s) return;
                 const originalStroke = JSON.parse(JSON.stringify(s));
                 for (let point of s) {
-                    point.thickness = thicknessVal;
+                    point[styleKey] = parsedValue;
                 }
                 options.onStrokeChanged({
                     id: s[0].id,
-                    type: 'thickness-change',
+                    type: `${styleKey}-change`,
                     page: actionPage.value,
                     strokeIndex: sel.strokeIndex,
                     stroke: JSON.parse(JSON.stringify(s)),
@@ -4177,11 +4136,11 @@ export function usePageActions(pages, pagesContainer, options = {
             if (stroke) {
                 const originalStroke = JSON.parse(JSON.stringify(stroke));
                 for (let point of stroke) {
-                    point.thickness = thicknessVal;
+                    point[styleKey] = parsedValue;
                 }
                 options.onStrokeChanged({
                     id: stroke[0].id,
-                    type: 'thickness-change',
+                    type: `${styleKey}-change`,
                     page: actionPage.value,
                     strokeIndex: selectedStroke.value.strokeIndex,
                     stroke: JSON.parse(JSON.stringify(stroke)),
@@ -5580,8 +5539,8 @@ export function usePageActions(pages, pagesContainer, options = {
                 URL.revokeObjectURL(svgUrl);
             }
         }
-        // Draw temporary freehand canvas preview layer
-        tempCtx.drawImage(drawCanvas, 0, 0);
+        // Do not draw the temporay drawCanvas, because during capture mode it contains the blue selection box
+        // tempCtx.drawImage(drawCanvas, 0, 0);
         
         // Extract the selected region
         try {
